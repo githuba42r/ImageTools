@@ -17,26 +17,25 @@
     </div>
 
     <div class="image-info">
-      <div class="info-row">
+      <span class="info-item">
         <span class="label">Size:</span>
-        <span class="value">{{ formatSize(image.current_size) }}</span>
-      </div>
-      <div class="info-row">
-        <span class="label">Original:</span>
-        <span class="value">{{ formatSize(image.original_size) }}</span>
-      </div>
-      <div class="info-row">
-        <span class="label">Dimensions:</span>
+        <span class="value">{{ formatSize(image.current_size) }} / {{ formatSize(image.original_size) }}</span>
+      </span>
+      <span class="info-separator">•</span>
+      <span class="info-item">
+        <span class="label">Dim:</span>
         <span class="value">{{ image.width }} × {{ image.height }}</span>
-      </div>
-      <div v-if="compressionRatio" class="info-row compression-ratio">
+      </span>
+      <span v-if="compressionRatio" class="info-separator">•</span>
+      <span v-if="compressionRatio" class="info-item compression-ratio">
         <span class="label">Saved:</span>
         <span class="value">{{ compressionRatio }}%</span>
-      </div>
+      </span>
     </div>
 
     <div class="card-actions" @click.stop>
       <div class="icon-buttons" v-if="!showDeleteConfirm">
+          <!-- Compress Preset Button -->
           <div class="preset-selector-wrapper">
             <button 
               @click="togglePresetMenu" 
@@ -64,87 +63,8 @@
               </button>
             </div>
           </div>
-          
-          <button 
-            @click="openResizeModal" 
-            class="btn-icon btn-resize"
-            :disabled="isProcessing"
-            :title="'Resize image'"
-          >
-            <span class="icon">⇲</span>
-            <span class="tooltip">Resize</span>
-          </button>
 
-          <button 
-            @click="handleRotate" 
-            class="btn-icon"
-            :disabled="isProcessing"
-            :title="'Rotate 90° clockwise'"
-          >
-            <span class="icon">↻</span>
-            <span class="tooltip">Rotate 90°</span>
-          </button>
-
-          <button 
-            @click="handleFlipHorizontal" 
-            class="btn-icon"
-            :disabled="isProcessing"
-            :title="'Flip horizontally'"
-          >
-            <span class="icon">⇄</span>
-            <span class="tooltip">Flip H</span>
-          </button>
-
-          <button 
-            @click="handleFlipVertical" 
-            class="btn-icon"
-            :disabled="isProcessing"
-            :title="'Flip vertically'"
-          >
-            <span class="icon">⇅</span>
-            <span class="tooltip">Flip V</span>
-          </button>
-
-          <button 
-            @click="handleEdit" 
-            class="btn-icon btn-edit"
-            :disabled="isProcessing"
-            :title="'Open advanced editor'"
-          >
-            <span class="icon">✏️</span>
-            <span class="tooltip">Edit</span>
-          </button>
-
-          <button 
-            @click="handleRemoveBackground" 
-            class="btn-icon btn-ai"
-            :disabled="isProcessing"
-            :title="'Remove background (AI)'"
-          >
-            <span class="icon">🎨</span>
-            <span class="tooltip">Remove BG</span>
-          </button>
-
-          <button 
-            @click="openChatInterface" 
-            class="btn-icon btn-ai"
-            :disabled="isProcessing"
-            :title="'AI Chat - Ask AI to modify image'"
-          >
-            <span class="icon">💬</span>
-            <span class="tooltip">AI Chat</span>
-          </button>
-
-          <button 
-            @click="handleUndo" 
-            class="btn-icon"
-            :disabled="!canUndo || isProcessing"
-            :title="'Undo last operation'"
-          >
-            <span class="icon">↶</span>
-            <span class="tooltip">Undo</span>
-          </button>
-
+          <!-- Download Button -->
           <button 
             @click="handleDownload" 
             class="btn-icon"
@@ -155,6 +75,18 @@
             <span class="tooltip">Download</span>
           </button>
 
+          <!-- AI Chat Button -->
+          <button 
+            @click="openChatInterface" 
+            class="btn-icon btn-ai"
+            :disabled="isProcessing"
+            :title="'AI Chat - Ask AI to modify image'"
+          >
+            <span class="icon">💬</span>
+            <span class="tooltip">AI Chat</span>
+          </button>
+
+          <!-- Delete Button -->
           <button 
             @click="showDeleteConfirm = true" 
             class="btn-icon btn-danger-icon"
@@ -164,6 +96,84 @@
             <span class="icon">🗑</span>
             <span class="tooltip">Remove</span>
           </button>
+
+          <!-- More Actions Menu Button -->
+          <div class="more-actions-wrapper">
+            <button 
+              @click="toggleMoreActionsMenu" 
+              class="btn-icon btn-more"
+              :disabled="isProcessing"
+              :title="'More actions'"
+            >
+              <span class="icon">⋯</span>
+              <span class="tooltip">More</span>
+            </button>
+            
+            <div v-if="showMoreActionsMenu" class="more-actions-menu" @click.stop>
+              <button 
+                @click="handleMenuAction(openResizeModal)" 
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">⇲</span>
+                <span class="menu-label">Resize</span>
+              </button>
+
+              <button 
+                @click="handleMenuAction(handleRotate)" 
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">↻</span>
+                <span class="menu-label">Rotate</span>
+              </button>
+
+              <button 
+                @click="handleMenuAction(handleFlipHorizontal)" 
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">⇄</span>
+                <span class="menu-label">Flip H</span>
+              </button>
+
+              <button 
+                @click="handleMenuAction(handleFlipVertical)" 
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">⇅</span>
+                <span class="menu-label">Flip V</span>
+              </button>
+
+              <button 
+                @click="handleMenuAction(handleEdit)" 
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">✏️</span>
+                <span class="menu-label">Editor</span>
+              </button>
+
+              <button 
+                @click="handleMenuAction(handleRemoveBackground)" 
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">🎨</span>
+                <span class="menu-label">Remove BG</span>
+              </button>
+
+              <button 
+                @click="handleMenuAction(handleUndo)" 
+                class="menu-action"
+                :disabled="!canUndo || isProcessing"
+              >
+                <span class="menu-icon">↶</span>
+                <span class="menu-label">Undo</span>
+              </button>
+            </div>
+          </div>
         </div>
       
         <!-- Remove confirmation -->
@@ -197,6 +207,8 @@
       :isConnected="isOpenRouterConnected"
       @close="closeChatInterface"
       @operationsApplied="handleOperationsApplied"
+      @switchModel="handleSwitchModel"
+      @showModelDetails="handleShowModelDetails"
     />
 
     <!-- Resize Modal -->
@@ -326,7 +338,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['image-click', 'edit-click']);
+const emit = defineEmits(['image-click', 'edit-click', 'switchModel', 'showModelDetails']);
 
 const imageStore = useImageStore();
 const selectedPreset = ref('');
@@ -334,6 +346,7 @@ const isProcessing = ref(false);
 const processingMessage = ref('');
 const canUndo = ref(false);
 const showPresetMenu = ref(false);
+const showMoreActionsMenu = ref(false);
 const imageRefreshKey = ref(Date.now());
 const showDeleteConfirm = ref(false);
 const showChatInterface = ref(false);
@@ -419,6 +432,15 @@ const getPresetLabel = (presetName) => {
 
 const togglePresetMenu = () => {
   showPresetMenu.value = !showPresetMenu.value;
+};
+
+const toggleMoreActionsMenu = () => {
+  showMoreActionsMenu.value = !showMoreActionsMenu.value;
+};
+
+const handleMenuAction = (action) => {
+  showMoreActionsMenu.value = false;
+  action();
 };
 
 const selectPreset = async (presetName) => {
@@ -552,6 +574,16 @@ const handleOperationsApplied = (operations) => {
   imageRefreshKey.value = Date.now(); // Force reload
 };
 
+// Handle model switch from chat recommendations
+const handleSwitchModel = (modelId) => {
+  emit('switchModel', modelId);
+};
+
+// Handle show model details from chat recommendations
+const handleShowModelDetails = (modelId) => {
+  emit('showModelDetails', modelId);
+};
+
 const confirmDelete = async () => {
   isProcessing.value = true;
   try {
@@ -680,6 +712,9 @@ const handleClickOutside = (event) => {
   if (showPresetMenu.value) {
     showPresetMenu.value = false;
   }
+  if (showMoreActionsMenu.value) {
+    showMoreActionsMenu.value = false;
+  }
 };
 
 // Watch for image changes and update refresh key to bust cache
@@ -720,7 +755,7 @@ onBeforeUnmount(() => {
 .image-card {
   border: 2px solid #ddd;
   border-radius: 8px;
-  padding: 1rem;
+  padding: 0.75rem;
   background-color: #fff;
   transition: all 0.2s ease;
   cursor: pointer;
@@ -751,7 +786,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   cursor: zoom-in;
   position: relative;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .image-preview:hover {
@@ -812,26 +847,37 @@ onBeforeUnmount(() => {
 }
 
 .image-info {
-  margin-bottom: 1rem;
-  font-size: 0.85rem;
-}
-
-.info-row {
+  margin-bottom: 0.5rem;
+  font-size: 0.55rem;
   display: flex;
-  justify-content: space-between;
-  padding: 0.25rem 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
 }
 
-.info-row .label {
+.info-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
+
+.info-separator {
+  color: #999;
+  font-weight: normal;
+  padding: 0 0.1rem;
+}
+
+.info-item .label {
   color: #666;
 }
 
-.info-row .value {
+.info-item .value {
   font-weight: 500;
   color: #333;
 }
 
-.info-row.compression-ratio .value {
+.info-item.compression-ratio .value {
   color: #4CAF50;
   font-weight: 600;
 }
@@ -848,7 +894,11 @@ onBeforeUnmount(() => {
 .preset-selector-wrapper {
   position: relative;
   overflow: visible;
-  grid-column: span 1;
+}
+
+.more-actions-wrapper {
+  position: relative;
+  overflow: visible;
 }
 
 .btn-preset {
@@ -928,10 +978,87 @@ onBeforeUnmount(() => {
   color: #666;
 }
 
+.more-actions-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 0.25rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000000;
+  min-width: 140px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.menu-action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: none;
+  background: white;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid #f0f0f0;
+  color: #333;
+}
+
+.menu-action:last-child {
+  border-bottom: none;
+}
+
+.menu-action:hover:not(:disabled) {
+  background-color: #f5f5f5;
+}
+
+.menu-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background-color: #fafafa;
+}
+
+.menu-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+}
+
+.menu-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.menu-action:disabled .menu-label {
+  color: #999;
+}
+
+.btn-more {
+  background-color: white;
+  color: #333;
+  border-color: #ddd;
+}
+
+.btn-more:hover:not(:disabled) {
+  background-color: #f5f5f5;
+  border-color: #bbb;
+}
+
+.btn-more .icon {
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
 .icon-buttons {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.35rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
   position: relative;
   overflow: visible;
   z-index: 10;
@@ -939,7 +1066,7 @@ onBeforeUnmount(() => {
 
 .btn-icon {
   position: relative;
-  padding: 0.5rem;
+  padding: 0;
   border: 1px solid #ddd;
   border-radius: 4px;
   background-color: white;
@@ -948,8 +1075,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 40px;
-  min-height: 40px;
+  width: 35px;
+  height: 35px;
   z-index: 100;
 }
 
@@ -970,7 +1097,7 @@ onBeforeUnmount(() => {
 }
 
 .btn-icon .icon {
-  font-size: 1rem;
+  font-size: 1.006rem;
   display: block;
   color: #333;
 }
