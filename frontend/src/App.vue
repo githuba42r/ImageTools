@@ -177,6 +177,7 @@
     <ImageEditor
       v-if="editingImage"
       :image="editingImage"
+      :is-saving="isSavingEdit"
       @save="handleEditorSave"
       @close="handleEditorClose"
     />
@@ -210,6 +211,7 @@ const showClearAllConfirm = ref(false);
 const isClearingAll = ref(false);
 const viewerImage = ref(null);
 const editingImage = ref(null);
+const isSavingEdit = ref(false);
 
 const initializeApp = async () => {
   isLoading.value = true;
@@ -257,56 +259,58 @@ const handleEditClick = (image) => {
 };
 
 const handleEditorSave = async (blob) => {
+  console.log('[Editor Save] Starting save process...', {
+    hasEditingImage: !!editingImage.value,
+    blobSize: blob?.size,
+    blobType: blob?.type
+  });
+
   if (!editingImage.value) {
-    console.error('No editing image found');
+    console.error('[Editor Save] No image being edited');
+    alert('No image to save');
     return;
   }
 
-  console.log('Starting save process...');
-  console.log('Editing image:', editingImage.value);
-  console.log('Blob received:', blob);
-
-  if (!blob) {
-    alert('No image data received from editor. Please try editing the image first.');
-    return;
-  }
-
-  if (blob.size === 0) {
+  if (!blob || blob.size === 0) {
+    console.error('[Editor Save] Invalid blob received');
     alert('Empty image data received. Please try again.');
     return;
   }
 
+  isSavingEdit.value = true;
+
   try {
-    console.log('Saving edited image...', {
+    console.log('[Editor Save] Preparing FormData...', {
       imageId: editingImage.value.id,
       filename: editingImage.value.original_filename,
       blobSize: blob.size,
       blobType: blob.type
     });
 
-    // Create FormData with the edited image blob
     const formData = new FormData();
     formData.append('file', blob, editingImage.value.original_filename);
 
-    console.log('FormData created, calling API...');
+    console.log('[Editor Save] Calling API...');
+    const startTime = Date.now();
 
     // Call backend API to save edited image
     const response = await imageService.saveEditedImage(editingImage.value.id, formData);
     
-    console.log('API response received:', response);
+    const elapsed = Date.now() - startTime;
+    console.log(`[Editor Save] API response received in ${elapsed}ms:`, response);
     
-    // Refresh the image in the store
-    console.log('Refreshing image list...');
-    await imageStore.loadSessionImages();
+    // Update the specific image in the store
+    console.log('[Editor Save] Updating image in store...');
+    await imageStore.updateImage(editingImage.value.id, response);
     
     // Close the editor
+    console.log('[Editor Save] Closing editor...');
     editingImage.value = null;
     
-    console.log('Image edited successfully:', response);
-    alert('Image saved successfully!');
+    console.log('[Editor Save] Save complete!');
   } catch (error) {
-    console.error('Failed to save edited image:', error);
-    console.error('Error details:', {
+    console.error('[Editor Save] Failed:', error);
+    console.error('[Editor Save] Error details:', {
       message: error.message,
       response: error.response?.data,
       status: error.response?.status,
@@ -318,11 +322,11 @@ const handleEditorSave = async (blob) => {
       errorMessage += error.response.data.detail;
     } else if (error.message) {
       errorMessage += error.message;
-    } else {
-      errorMessage += 'Please check console for details.';
     }
     
     alert(errorMessage);
+  } finally {
+    isSavingEdit.value = false;
   }
 };
 
@@ -494,6 +498,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: visible;
 }
 
 .app-header {
@@ -503,6 +508,8 @@ body {
   text-align: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   transition: padding 0.3s ease;
+  overflow: visible;
+  position: relative;
 }
 
 .app-header.compact {
@@ -515,11 +522,15 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  overflow: visible;
+  position: relative;
 }
 
 .header-left {
   text-align: left;
   flex: 1;
+  overflow: visible;
+  position: relative;
 }
 
 .header-right {
@@ -555,22 +566,23 @@ body {
   border-radius: 6px;
   padding: 8px 12px;
   position: absolute;
-  z-index: 1000;
+  z-index: 999999;
   top: 125%;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  transform: none;
   white-space: nowrap;
   font-size: 0.85rem;
   font-weight: normal;
   transition: opacity 0.3s, visibility 0.3s;
   pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .has-tooltip .tooltip-text::after {
   content: "";
   position: absolute;
   bottom: 100%;
-  left: 50%;
+  left: 20px;
   margin-left: -5px;
   border-width: 5px;
   border-style: solid;
@@ -763,7 +775,7 @@ body {
   border-radius: 6px;
   padding: 8px 12px;
   position: absolute;
-  z-index: 1000;
+  z-index: 999999;
   top: 100%;
   left: 0;
   margin-top: 0.5rem;
@@ -772,13 +784,14 @@ body {
   font-weight: normal;
   transition: opacity 0.3s, visibility 0.3s;
   pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .has-tooltip .tooltip-text::after {
   content: "";
   position: absolute;
   bottom: 100%;
-  left: 1rem;
+  left: 20px;
   margin-left: 0;
   border-width: 5px;
   border-style: solid;
@@ -826,11 +839,13 @@ body {
 .app-main {
   flex: 1;
   padding: 2rem 1rem;
+  overflow: visible;
 }
 
 .container {
   max-width: 1400px;
   margin: 0 auto;
+  overflow: visible;
 }
 
 .loading-state,
@@ -866,18 +881,22 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1.5rem;
+  padding-top: 2rem;
+  overflow: visible;
 }
 
 .content-with-images {
   display: flex;
   gap: 1.5rem;
   align-items: flex-start;
+  overflow: visible;
 }
 
 .main-content {
   flex: 1;
   min-width: 0;
   width: 100%;
+  overflow: visible;
 }
 
 .btn {

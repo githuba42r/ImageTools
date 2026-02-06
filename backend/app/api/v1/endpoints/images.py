@@ -253,17 +253,22 @@ async def save_edited_image(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to save edited image: {str(e)}")
     
+    # Refresh image to get updated timestamp and all fields
+    await db.refresh(image)
+    
+    print(f"[EDIT] Returning response with dimensions: {image.width}x{image.height}")
+    
     return ImageResponse(
         id=image.id,
         session_id=image.session_id,
         original_filename=image.original_filename,
         original_size=image.original_size,
-        current_size=new_size,
-        width=width,
-        height=height,
+        current_size=image.current_size,
+        width=image.width,
+        height=image.height,
         format=image.format,
-        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
-        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
+        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail?t={int(image.updated_at.timestamp() * 1000)}",
+        image_url=f"{settings.API_PREFIX}/images/{image.id}/current?t={int(image.updated_at.timestamp() * 1000)}",
         created_at=image.created_at,
         updated_at=image.updated_at
     )

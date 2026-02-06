@@ -152,7 +152,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useImageStore } from '../stores/imageStore';
 import { historyService } from '../services/api';
 
@@ -336,6 +336,22 @@ const handleClickOutside = (event) => {
   }
 };
 
+// Watch for image changes and update refresh key to bust cache
+watch(() => props.image.current_path, (newPath, oldPath) => {
+  if (newPath !== oldPath) {
+    console.log('[ImageCard] Image path changed, updating cache key');
+    imageRefreshKey.value = Date.now();
+  }
+});
+
+// Also watch thumbnail_path in case it changes independently
+watch(() => props.image.thumbnail_path, (newPath, oldPath) => {
+  if (newPath !== oldPath) {
+    console.log('[ImageCard] Thumbnail path changed, updating cache key');
+    imageRefreshKey.value = Date.now();
+  }
+});
+
 onMounted(() => {
   checkCanUndo();
   document.addEventListener('click', handleClickOutside);
@@ -356,6 +372,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
   position: relative;
   overflow: visible;
+  isolation: isolate;
 }
 
 .image-card:hover {
@@ -423,10 +440,12 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
   position: relative;
   overflow: visible;
+  z-index: 1;
 }
 
 .preset-selector-wrapper {
   position: relative;
+  overflow: visible;
 }
 
 .btn-preset {
@@ -511,6 +530,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   position: relative;
   overflow: visible;
+  z-index: 10;
 }
 
 .btn-icon {
@@ -526,12 +546,14 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   min-width: 0;
+  z-index: 100;
 }
 
 .btn-icon:hover:not(:disabled) {
   background-color: #f5f5f5;
   border-color: #4CAF50;
   transform: translateY(-2px);
+  z-index: 999998;
 }
 
 .btn-icon:active:not(:disabled) {
@@ -575,19 +597,36 @@ onBeforeUnmount(() => {
 
 .tooltip {
   position: absolute;
+  top: auto;
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%) translateY(-8px);
-  background-color: #333;
+  background-color: rgba(0, 0, 0, 0.9);
   color: white;
-  padding: 0.3rem 0.5rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 4px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s ease, transform 0.2s ease;
-  z-index: 1000;
+  z-index: 999999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.9);
+}
+
+.btn-icon:hover:not(:disabled) .tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-12px);
 }
 
 .tooltip::after {

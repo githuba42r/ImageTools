@@ -174,6 +174,34 @@ export const useImageStore = defineStore('image', {
       }
     },
 
+    async updateImage(imageId, updatedImageData) {
+      try {
+        console.log('[Store] Updating image in store:', imageId);
+        console.log('[Store] Updated data received:', {
+          width: updatedImageData.width,
+          height: updatedImageData.height,
+          current_size: updatedImageData.current_size,
+          thumbnail_url: updatedImageData.thumbnail_url
+        });
+        const index = this.images.findIndex(img => img.id === imageId);
+        if (index !== -1) {
+          // Use the provided data directly (it's already the full updated image)
+          this.images[index] = updatedImageData;
+          console.log('[Store] Image updated in store at index:', index);
+          console.log('[Store] New image data:', {
+            width: this.images[index].width,
+            height: this.images[index].height,
+            current_size: this.images[index].current_size
+          });
+        } else {
+          console.warn('[Store] Image not found in store:', imageId);
+        }
+      } catch (error) {
+        console.error('[Store] Failed to update image:', error);
+        throw error;
+      }
+    },
+
     async loadPresets() {
       try {
         const data = await compressionService.getPresets();

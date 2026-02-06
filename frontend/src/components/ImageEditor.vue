@@ -4,11 +4,21 @@
       <div class="editor-header">
         <h2>Edit: {{ image.original_filename }}</h2>
         <div class="editor-actions">
-          <button @click="handleCancel" class="btn-cancel">Cancel</button>
-          <button @click="handleSave" class="btn-save">Save</button>
+          <button @click="handleCancel" class="btn-cancel" :disabled="isSaving">Cancel</button>
+          <button @click="handleSave" class="btn-save" :disabled="isSaving">
+            {{ isSaving ? 'Saving...' : 'Save' }}
+          </button>
         </div>
       </div>
       <div ref="editorContainer" class="editor-body"></div>
+      
+      <!-- Saving Overlay -->
+      <div v-if="isSaving" class="saving-overlay">
+        <div class="saving-content">
+          <div class="spinner-large"></div>
+          <p>Saving changes...</p>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -22,6 +32,10 @@ const props = defineProps({
   image: {
     type: Object,
     default: null
+  },
+  isSaving: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -269,12 +283,17 @@ watch(() => props.image, () => {
   transition: all 0.2s;
 }
 
+.editor-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-cancel {
   background-color: #3a3a3a;
   color: #ffffff;
 }
 
-.btn-cancel:hover {
+.btn-cancel:hover:not(:disabled) {
   background-color: #4a4a4a;
 }
 
@@ -283,7 +302,7 @@ watch(() => props.image, () => {
   color: white;
 }
 
-.btn-save:hover {
+.btn-save:hover:not(:disabled) {
   background-color: #45a049;
 }
 
@@ -291,6 +310,45 @@ watch(() => props.image, () => {
   flex: 1;
   overflow: hidden;
   position: relative;
+}
+
+/* Saving overlay */
+.saving-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.saving-content {
+  text-align: center;
+  color: white;
+}
+
+.saving-content p {
+  margin-top: 20px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.spinner-large {
+  width: 60px;
+  height: 60px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #4CAF50;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Override some Toast UI styles for better appearance */

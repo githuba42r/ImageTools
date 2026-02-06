@@ -95,6 +95,20 @@ class ImageService:
                 # Image has no EXIF data or malformed EXIF, use as-is
                 pass
             img.thumbnail((settings.THUMBNAIL_SIZE, settings.THUMBNAIL_SIZE), PILImage.Resampling.LANCZOS)
+            
+            # Determine output format from file extension
+            file_ext = os.path.splitext(output_path)[1].upper().replace('.', '')
+            img_format = file_ext if file_ext else 'JPEG'
+            
+            # Convert RGBA to RGB for JPEG format (JPEG doesn't support transparency)
+            if img.mode == 'RGBA' and img_format in ['JPEG', 'JPG']:
+                rgb_img = PILImage.new('RGB', img.size, (255, 255, 255))
+                rgb_img.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+                img = rgb_img
+            elif img.mode not in ['RGB', 'L'] and img_format in ['JPEG', 'JPG']:
+                # Convert any other non-RGB mode to RGB for JPEG
+                img = img.convert('RGB')
+            
             img.save(output_path, quality=settings.THUMBNAIL_QUALITY, optimize=True)
     
     @staticmethod
@@ -344,9 +358,15 @@ class ImageService:
         Returns:
             Tuple of (output_path, new_size, width, height)
         """
+        import time
+        start_time = time.time()
+        
+        print(f"[EDIT TIMING] Starting save_edited_image for {image_id}")
+        
         image = await ImageService.get_image(db, image_id)
         if not image:
             raise ValueError("Image not found")
+        print(f"[EDIT TIMING] Got image from DB: {time.time() - start_time:.2f}s")
         
         ImageService._ensure_storage_dirs()
         
@@ -358,11 +378,14 @@ class ImageService:
         )
         
         # Save edited image to temporary file first
+        temp_start = time.time()
         temp_path = os.path.join(settings.TEMP_STORAGE_PATH, f"temp_{uuid.uuid4()}{ext}")
         with open(temp_path, "wb") as f:
             shutil.copyfileobj(file, f)
+        print(f"[EDIT TIMING] Saved to temp file: {time.time() - temp_start:.2f}s")
         
         # Open and process the edited image
+        process_start = time.time()
         with PILImage.open(temp_path) as img:
             # Apply EXIF orientation if present
             try:
@@ -394,10 +417,13 @@ class ImageService:
                 save_kwargs = {"quality": 95}
             else:
                 save_kwargs = {"quality": 95}
-                
+            
+            save_start = time.time()
             img.save(output_path, format=img_format, **save_kwargs)
+            print(f"[EDIT TIMING] Saved main image: {time.time() - save_start:.2f}s")
             
             new_width, new_height = img.size
+        print(f"[EDIT TIMING] Processed image: {time.time() - process_start:.2f}s")
         
         # Remove temporary file
         if os.path.exists(temp_path):
@@ -407,6 +433,7 @@ class ImageService:
         new_size = os.path.getsize(output_path)
         
         # Create history entry
+        history_start = time.time()
         history_entry = History(
             id=str(uuid.uuid4()),
             image_id=image_id,
@@ -418,8 +445,10 @@ class ImageService:
             sequence=await ImageService._get_next_sequence(db, image_id)
         )
         db.add(history_entry)
+        print(f"[EDIT TIMING] Created history entry: {time.time() - history_start:.2f}s")
         
         # Update image record
+        update_start = time.time()
         image.current_path = output_path
         image.current_size = new_size
         image.width = new_width
@@ -427,14 +456,19 @@ class ImageService:
         
         await db.commit()
         await db.refresh(image)
+        print(f"[EDIT TIMING] Updated image record: {time.time() - update_start:.2f}s")
         
         # Recreate thumbnail
+        thumb_start = time.time()
         if image.thumbnail_path and os.path.exists(image.thumbnail_path):
             os.remove(image.thumbnail_path)
         thumbnail_path = os.path.join(settings.STORAGE_PATH, f"{image_id}_thumb{ext}")
         ImageService._create_thumbnail(output_path, thumbnail_path)
         image.thumbnail_path = thumbnail_path
         await db.commit()
+        print(f"[EDIT TIMING] Created thumbnail: {time.time() - thumb_start:.2f}s")
+        
+        print(f"[EDIT TIMING] Total time: {time.time() - start_time:.2f}s")
         
         return output_path, new_size, new_width, new_height
     
