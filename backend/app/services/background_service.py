@@ -9,7 +9,8 @@ import os
 import uuid
 from typing import Dict, Any, Optional
 from datetime import datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from PIL import Image as PILImage
 from rembg import remove, new_session
 import logging
@@ -33,7 +34,7 @@ class BackgroundRemovalService:
     
     DEFAULT_MODEL = "u2net"
     
-    def __init__(self, db: Session, model: str = DEFAULT_MODEL):
+    def __init__(self, db: AsyncSession, model: str = DEFAULT_MODEL):
         """
         Initialize background removal service
         
@@ -72,7 +73,10 @@ class BackgroundRemovalService:
             Dict with result information
         """
         # Get image from database
-        image = self.db.query(Image).filter(Image.id == image_id).first()
+        result = await self.db.execute(
+            select(Image).where(Image.id == image_id)
+        )
+        image = result.scalar_one_or_none()
         if not image:
             raise ValueError(f"Image {image_id} not found")
         
@@ -104,11 +108,20 @@ class BackgroundRemovalService:
         # Generate new filename (always PNG for transparency)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         new_filename = f"{image.id}_nobg_{timestamp}.png"
-        new_path = os.path.join(settings.UPLOAD_DIR, new_filename)
+        new_path = os.path.join(settings.STORAGE_PATH, new_filename)
         
         # Save output as PNG with transparency
         output_image.save(new_path, 'PNG')
         new_size = os.path.getsize(new_path)
+        
+        # Regenerate thumbnail with transparency (PNG format)
+        thumbnail_filename = f"{image.id}_thumb.png"
+        thumbnail_path = os.path.join(settings.STORAGE_PATH, thumbnail_filename)
+        
+        # Create thumbnail from the output image
+        thumb = output_image.copy()
+        thumb.thumbnail((300, 300), PILImage.Resampling.LANCZOS)
+        thumb.save(thumbnail_path, 'PNG', quality=80, optimize=True)
         
         logger.info(f"Background removed successfully. Output: {new_path}")
         
@@ -118,10 +131,11 @@ class BackgroundRemovalService:
             image_id=image_id,
             operation_type="background_removal",
             operation_params=f"model={self.model},alpha_matting={alpha_matting}",
-            file_path=current_path,
-            file_size=original_size,
+            input_path=current_path,
+            output_path=new_path,
+            file_size=new_size,
             created_at=datetime.utcnow(),
-            sequence=self._get_next_sequence(image_id)
+            sequence=await self._get_next_sequence(image_id)
         )
         self.db.add(history_entry)
         
@@ -129,6 +143,7 @@ class BackgroundRemovalService:
         image.current_path = new_path
         image.current_size = new_size
         image.format = "PNG"
+        image.thumbnail_path = thumbnail_path
         image.updated_at = datetime.utcnow()
         
         # Update dimensions if changed
@@ -136,8 +151,8 @@ class BackgroundRemovalService:
         image.width = width
         image.height = height
         
-        self.db.commit()
-        self.db.refresh(image)
+        await self.db.commit()
+        await self.db.refresh(image)
         
         return {
             "image_id": image_id,
@@ -152,11 +167,14 @@ class BackgroundRemovalService:
             "image_url": f"/api/v1/images/{image_id}/current"
         }
     
-    def _get_next_sequence(self, image_id: str) -> int:
+    async def _get_next_sequence(self, image_id: str) -> int:
         """Get next sequence number for history"""
-        last_entry = self.db.query(History).filter(
-            History.image_id == image_id
-        ).order_by(History.sequence.desc()).first()
+        result = await self.db.execute(
+            select(History)
+            .where(History.image_id == image_id)
+            .order_by(History.sequence.desc())
+        )
+        last_entry = result.scalar_one_or_none()
         
         return (last_entry.sequence + 1) if last_entry else 1
     

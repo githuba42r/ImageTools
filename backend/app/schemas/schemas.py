@@ -103,6 +103,23 @@ class FlipResponse(BaseModel):
     image_url: str
 
 
+# Resize Schemas
+
+class ResizeRequest(BaseModel):
+    width: int = Field(..., gt=0, description="Target width in pixels")
+    height: int = Field(..., gt=0, description="Target height in pixels")
+
+
+class ResizeResponse(BaseModel):
+    image_id: str
+    original_width: int
+    original_height: int
+    new_width: int
+    new_height: int
+    new_size: int
+    image_url: str
+
+
 # Background Removal Schemas
 
 class BackgroundRemovalRequest(BaseModel):

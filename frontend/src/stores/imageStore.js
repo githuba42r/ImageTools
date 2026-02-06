@@ -195,6 +195,26 @@ export const useImageStore = defineStore('image', {
       }
     },
 
+    async resizeImage(imageId, width, height) {
+      try {
+        const result = await imageService.resizeImage(imageId, width, height);
+        
+        // Refresh image data
+        const updatedImage = await imageService.getImage(imageId);
+        const index = this.images.findIndex(img => img.id === imageId);
+        if (index !== -1) {
+          this.images[index] = updatedImage;
+        }
+
+        console.log(`Image resized to ${width}x${height}`);
+        return result;
+      } catch (error) {
+        this.error = error.response?.data?.detail || error.message;
+        console.error('Failed to resize image:', error);
+        throw error;
+      }
+    },
+
     async updateImage(imageId, updatedImageData) {
       try {
         console.log('[Store] Updating image in store:', imageId);

@@ -45,17 +45,18 @@ class ImageService:
                 # Image has no EXIF data or malformed EXIF, use as-is
                 pass
             
+            # Get format and dimensions before any modifications
+            img_format = img.format or 'JPEG'  # Default to JPEG if format is None
+            width, height = img.size
+            
             # Save corrected image
             save_kwargs = {"quality": 95, "optimize": True}
-            if img.format == "PNG":
+            if img_format == "PNG":
                 save_kwargs = {"optimize": True}
-            elif img.format == "WEBP":
+            elif img_format == "WEBP":
                 save_kwargs = {"quality": 95}
             
-            img.save(original_path, **save_kwargs)
-            
-            width, height = img.size
-            img_format = img.format
+            img.save(original_path, format=img_format, **save_kwargs)
         
         # Create thumbnail
         thumbnail_path = os.path.join(settings.STORAGE_PATH, f"{image_id}_thumb{ext}")
@@ -315,6 +316,98 @@ class ImageService:
             image_id=image_id,
             operation_type="flip",
             operation_params=json.dumps({"direction": direction}),
+            input_path=image.current_path,
+            output_path=output_path,
+            file_size=new_size,
+            sequence=await ImageService._get_next_sequence(db, image_id)
+        )
+        db.add(history_entry)
+        
+        # Update image record
+        image.current_path = output_path
+        image.current_size = new_size
+        image.width = new_width
+        image.height = new_height
+        
+        await db.commit()
+        await db.refresh(image)
+        
+        # Recreate thumbnail
+        if image.thumbnail_path and os.path.exists(image.thumbnail_path):
+            os.remove(image.thumbnail_path)
+        thumbnail_path = os.path.join(settings.STORAGE_PATH, f"{image_id}_thumb{ext}")
+        ImageService._create_thumbnail(output_path, thumbnail_path)
+        image.thumbnail_path = thumbnail_path
+        await db.commit()
+        
+        return output_path, new_size, new_width, new_height
+    
+    @staticmethod
+    async def resize_image(
+        db: AsyncSession,
+        image_id: str,
+        width: int,
+        height: int
+    ) -> tuple[str, int, int, int]:
+        """
+        Resize an image to specified dimensions.
+        
+        Args:
+            db: Database session
+            image_id: Image ID
+            width: Target width in pixels
+            height: Target height in pixels
+            
+        Returns:
+            Tuple of (output_path, new_size, width, height)
+        """
+        if width <= 0 or height <= 0:
+            raise ValueError("Width and height must be greater than 0")
+        
+        image = await ImageService.get_image(db, image_id)
+        if not image:
+            raise ValueError("Image not found")
+        
+        ImageService._ensure_storage_dirs()
+        
+        # Generate output path
+        ext = Path(image.current_path).suffix
+        output_path = os.path.join(
+            settings.STORAGE_PATH,
+            f"{image_id}_resized_{uuid.uuid4()}{ext}"
+        )
+        
+        # Resize image
+        with PILImage.open(image.current_path) as img:
+            # Convert EXIF rotation to actual rotation
+            try:
+                img = ImageOps.exif_transpose(img)
+            except (AttributeError, KeyError, ZeroDivisionError, ValueError):
+                pass
+            
+            # Resize using high-quality resampling
+            resized = img.resize((width, height), PILImage.Resampling.LANCZOS)
+            
+            # Save resized image
+            save_kwargs = {"quality": 95, "optimize": True}
+            if img.format == "PNG":
+                save_kwargs = {"optimize": True}
+            elif img.format == "WEBP":
+                save_kwargs = {"quality": 95}
+                
+            resized.save(output_path, **save_kwargs)
+            
+            new_width, new_height = resized.size
+        
+        # Get file size
+        new_size = os.path.getsize(output_path)
+        
+        # Create history entry
+        history_entry = History(
+            id=str(uuid.uuid4()),
+            image_id=image_id,
+            operation_type="resize",
+            operation_params=json.dumps({"width": width, "height": height}),
             input_path=image.current_path,
             output_path=output_path,
             file_size=new_size,

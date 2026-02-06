@@ -7,7 +7,7 @@ import zipfile
 import os
 from app.core.database import get_db
 from app.core.config import settings
-from app.schemas.schemas import ImageResponse, RotateRequest, RotateResponse, FlipRequest, FlipResponse
+from app.schemas.schemas import ImageResponse, RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse
 from app.services.image_service import ImageService
 from app.services.session_service import SessionService
 
@@ -219,6 +219,42 @@ async def flip_image(
         new_size=new_size,
         width=width,
         height=height,
+        image_url=f"{settings.API_PREFIX}/images/{image_id}/current"
+    )
+
+
+@router.post("/{image_id}/resize", response_model=ResizeResponse)
+async def resize_image(
+    image_id: str,
+    request: ResizeRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Resize an image to specified dimensions."""
+    # Verify image exists
+    image = await ImageService.get_image(db, image_id)
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    original_width = image.width
+    original_height = image.height
+    
+    # Resize image
+    try:
+        output_path, new_size, width, height = await ImageService.resize_image(
+            db, image_id, request.width, request.height
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Resize failed: {str(e)}")
+    
+    return ResizeResponse(
+        image_id=image_id,
+        original_width=original_width,
+        original_height=original_height,
+        new_width=width,
+        new_height=height,
+        new_size=new_size,
         image_url=f"{settings.API_PREFIX}/images/{image_id}/current"
     )
 

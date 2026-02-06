@@ -75,6 +75,11 @@ export const imageService = {
     return response.data;
   },
 
+  async resizeImage(imageId, width, height) {
+    const response = await api.post(`/images/${imageId}/resize`, { width, height });
+    return response.data;
+  },
+
   async getExifData(imageId) {
     const response = await api.get(`/images/${imageId}/exif`);
     return response.data;
