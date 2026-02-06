@@ -18,6 +18,16 @@
           </div>
         </div>
         
+        <!-- Settings button - always visible -->
+        <button 
+          @click="showSettingsModal = true" 
+          class="btn-icon btn-header btn-settings"
+          title="Settings"
+        >
+          <span class="icon">⚙️</span>
+          <span class="tooltip">Settings</span>
+        </button>
+        
         <div v-if="imageCount > 0" class="header-right">
           <!-- Toolbar actions -->
           <div class="toolbar-actions">
@@ -182,6 +192,85 @@
       @close="handleEditorClose"
     />
 
+    <!-- Settings Modal -->
+    <div v-if="showSettingsModal" class="modal-overlay" @click="showSettingsModal = false">
+      <div class="settings-modal" @click.stop>
+        <div class="modal-header">
+          <h2>⚙️ Settings</h2>
+          <button class="close-btn" @click="showSettingsModal = false">✕</button>
+        </div>
+        
+        <div class="settings-content">
+          <!-- OpenRouter AI Connection Section -->
+          <div class="settings-section">
+            <h3>🤖 AI Features (OpenRouter)</h3>
+            <p class="section-description">
+              Connect your OpenRouter account to enable AI-powered image manipulation features.
+            </p>
+            
+            <div class="openrouter-status">
+              <div class="status-indicator" :class="{ 'connected': false }">
+                <span class="status-dot"></span>
+                <span class="status-text">Not Connected</span>
+              </div>
+              
+              <button class="btn-connect" @click="handleConnectOpenRouter">
+                Connect OpenRouter Account
+              </button>
+            </div>
+            
+            <div class="info-box">
+              <p><strong>What is OpenRouter?</strong></p>
+              <p>OpenRouter provides access to multiple AI models including GPT-4, Claude, and more. You'll need an OpenRouter account with credits to use AI features.</p>
+              <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer">
+                Create an account at openrouter.ai →
+              </a>
+            </div>
+          </div>
+
+          <!-- LLM Model Selection Section -->
+          <div class="settings-section">
+            <h3>🧠 AI Model Selection</h3>
+            <p class="section-description">
+              Choose which AI model to use for image manipulation.
+            </p>
+            
+            <div class="model-selector">
+              <label for="model-select">Model:</label>
+              <select id="model-select" class="model-dropdown" disabled>
+                <option value="">Connect OpenRouter to select a model</option>
+              </select>
+            </div>
+            
+            <div class="info-box">
+              <p><strong>Recommended Models:</strong></p>
+              <ul>
+                <li><strong>gemini-2.0-flash-exp:free</strong> - Free, fast, good for most tasks</li>
+                <li><strong>gpt-4.1-turbo</strong> - High quality, vision-capable</li>
+                <li><strong>claude-4.7-sonnet</strong> - Excellent reasoning and vision</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- App Information Section -->
+          <div class="settings-section">
+            <h3>ℹ️ About</h3>
+            <div class="app-info">
+              <p><strong>Image Tools</strong> v1.2</p>
+              <p>Session ID: {{ sessionId ? sessionId.substring(0, 16) + '...' : 'None' }}</p>
+              <p>Stage 4: AI Features (OpenRouter OAuth2)</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-modal btn-primary" @click="showSettingsModal = false">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -212,6 +301,7 @@ const isClearingAll = ref(false);
 const viewerImage = ref(null);
 const editingImage = ref(null);
 const isSavingEdit = ref(false);
+const showSettingsModal = ref(false);
 
 const initializeApp = async () => {
   isLoading.value = true;
@@ -332,6 +422,13 @@ const handleEditorSave = async (blob) => {
 
 const handleEditorClose = () => {
   editingImage.value = null;
+};
+
+// OpenRouter OAuth handlers
+const handleConnectOpenRouter = () => {
+  console.log('Connect OpenRouter clicked');
+  // TODO: Implement OAuth flow
+  alert('OpenRouter OAuth connection coming soon!\n\nThis will:\n1. Generate PKCE code challenge\n2. Redirect to OpenRouter for authorization\n3. Handle callback and store API key securely');
 };
 
 // Toolbar actions
@@ -1038,5 +1135,260 @@ body {
   background-color: #d32f2f;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
+}
+
+.btn-modal.btn-primary {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.btn-modal.btn-primary:hover:not(:disabled) {
+  background-color: #45a049;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+/* Settings Modal */
+.btn-settings {
+  margin-left: auto;
+}
+
+.settings-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  max-width: 700px;
+  width: 90%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease;
+}
+
+.settings-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-modal .close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #666;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.settings-modal .close-btn:hover {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.settings-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.settings-section {
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.settings-section h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+.section-description {
+  margin: 0 0 1.5rem 0;
+  color: #666;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.openrouter-status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #fff3e0;
+  border: 1px solid #ff9800;
+  border-radius: 6px;
+}
+
+.status-indicator.connected {
+  background-color: #e8f5e9;
+  border-color: #4CAF50;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ff9800;
+}
+
+.status-indicator.connected .status-dot {
+  background-color: #4CAF50;
+}
+
+.status-text {
+  font-weight: 600;
+  color: #e65100;
+  font-size: 0.9rem;
+}
+
+.status-indicator.connected .status-text {
+  color: #2e7d32;
+}
+
+.btn-connect {
+  padding: 0.75rem 1.5rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-connect:hover {
+  background-color: #1976D2;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+}
+
+.btn-connect:disabled {
+  background-color: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.info-box {
+  background-color: #f5f5f5;
+  border-left: 3px solid #2196F3;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+}
+
+.info-box p {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  color: #555;
+  line-height: 1.5;
+}
+
+.info-box p:last-child {
+  margin-bottom: 0;
+}
+
+.info-box strong {
+  color: #333;
+}
+
+.info-box ul {
+  margin: 0.5rem 0 0 0;
+  padding-left: 1.5rem;
+}
+
+.info-box li {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: #555;
+  line-height: 1.5;
+}
+
+.info-box a {
+  color: #2196F3;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.info-box a:hover {
+  text-decoration: underline;
+}
+
+.model-selector {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.model-selector label {
+  font-weight: 600;
+  color: #333;
+  min-width: 60px;
+}
+
+.model-dropdown {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.model-dropdown:focus {
+  outline: none;
+  border-color: #2196F3;
+}
+
+.model-dropdown:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.app-info {
+  padding: 1rem;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+}
+
+.app-info p {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.app-info p:first-child {
+  margin-top: 0;
+}
+
+.app-info p:last-child {
+  margin-bottom: 0;
 }
 </style>
