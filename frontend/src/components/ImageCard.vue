@@ -355,6 +355,7 @@ onBeforeUnmount(() => {
   transition: all 0.2s ease;
   cursor: pointer;
   position: relative;
+  overflow: visible;
 }
 
 .image-card:hover {
@@ -420,6 +421,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  position: relative;
+  overflow: visible;
 }
 
 .preset-selector-wrapper {
@@ -506,6 +509,8 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 0.35rem;
   justify-content: space-between;
+  position: relative;
+  overflow: visible;
 }
 
 .btn-icon {
@@ -582,7 +587,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.2s ease, transform 0.2s ease;
-  z-index: 10;
+  z-index: 1000;
 }
 
 .tooltip::after {
