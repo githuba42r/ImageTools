@@ -200,6 +200,13 @@
           <button class="close-btn" @click="showSettingsModal = false">✕</button>
         </div>
         
+        <!-- OAuth Notification Banner -->
+        <div v-if="oauthNotification" class="oauth-notification" :class="'notification-' + oauthNotification.type">
+          <span class="notification-icon">{{ oauthNotification.type === 'success' ? '✓' : '✕' }}</span>
+          <span class="notification-message">{{ oauthNotification.message }}</span>
+          <button class="notification-close" @click="oauthNotification = null">✕</button>
+        </div>
+        
         <div class="settings-content">
           <!-- OpenRouter AI Connection Section -->
           <div class="settings-section">
@@ -234,12 +241,9 @@
             </div>
             
             <!-- Show credits info when connected -->
-            <div v-if="openRouterConnected" class="credits-info">
-              <p v-if="openRouterCredits !== null">
+            <div v-if="openRouterConnected && openRouterCredits !== null" class="credits-info">
+              <p>
                 <strong>Credits Remaining:</strong> ${{ openRouterCredits.toFixed(4) }}
-              </p>
-              <p v-if="openRouterKeyLabel">
-                <strong>Key Label:</strong> {{ openRouterKeyLabel }}
               </p>
             </div>
             
@@ -261,8 +265,20 @@
             
             <div class="model-selector">
               <label for="model-select">Model:</label>
-              <select id="model-select" class="model-dropdown" disabled>
-                <option value="">Connect OpenRouter to select a model</option>
+              <select 
+                id="model-select" 
+                class="model-dropdown" 
+                :disabled="!openRouterConnected"
+                v-model="selectedModel"
+              >
+                <option value="" disabled>
+                  {{ openRouterConnected ? 'Select a model' : 'Connect OpenRouter to select a model' }}
+                </option>
+                <option value="google/gemini-2.0-flash-exp:free">gemini-2.0-flash-exp:free (Free)</option>
+                <option value="openai/gpt-4-turbo">gpt-4-turbo</option>
+                <option value="anthropic/claude-3.5-sonnet">claude-3.5-sonnet</option>
+                <option value="anthropic/claude-3-opus">claude-3-opus</option>
+                <option value="meta-llama/llama-3.1-70b-instruct">llama-3.1-70b-instruct</option>
               </select>
             </div>
             
@@ -299,7 +315,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useSessionStore } from './stores/sessionStore';
 import { useImageStore } from './stores/imageStore';
 import { storeToRefs } from 'pinia';
@@ -331,7 +347,8 @@ const showSettingsModal = ref(false);
 // OpenRouter OAuth state
 const openRouterConnected = ref(false);
 const openRouterCredits = ref(null);
-const openRouterKeyLabel = ref(null);
+const oauthNotification = ref(null); // { type: 'success' | 'error', message: string }
+const selectedModel = ref('');
 
 const initializeApp = async () => {
   isLoading.value = true;
@@ -354,6 +371,12 @@ const initializeApp = async () => {
     
     // Load OpenRouter connection status
     await loadOpenRouterStatus();
+    
+    // Load saved model selection from localStorage
+    const savedModel = localStorage.getItem('openrouter_selected_model');
+    if (savedModel) {
+      selectedModel.value = savedModel;
+    }
   } catch (err) {
     error.value = 'Failed to initialize application: ' + err.message;
     console.error('Initialization error:', err);
@@ -471,7 +494,6 @@ const loadOpenRouterStatus = async () => {
     const status = await openRouterService.getStatus();
     openRouterConnected.value = status.connected;
     openRouterCredits.value = status.credits_remaining;
-    openRouterKeyLabel.value = status.key_label;
   } catch (error) {
     console.error('Failed to load OpenRouter status:', error);
   }
@@ -519,7 +541,6 @@ const handleOAuthCallback = async () => {
       // Update connection status
       openRouterConnected.value = true;
       openRouterCredits.value = result.credits_remaining;
-      openRouterKeyLabel.value = result.key_label;
       
       // Clean up
       sessionStorage.removeItem('pkce_code_verifier');
@@ -527,22 +548,46 @@ const handleOAuthCallback = async () => {
       // Remove code from URL
       window.history.replaceState({}, document.title, window.location.pathname);
       
-      // Show success message
-      alert(`Successfully connected to OpenRouter!\n\nCredits: ${result.credits_remaining || 'N/A'}`);
+      // Show success notification in modal
+      const creditsText = result.credits_remaining !== null 
+        ? `$${result.credits_remaining.toFixed(4)}` 
+        : 'N/A';
+      oauthNotification.value = {
+        type: 'success',
+        message: `Successfully connected to OpenRouter! Credits: ${creditsText}`
+      };
       
       // Open settings modal to show connection
       showSettingsModal.value = true;
+      
+      // Auto-dismiss notification after 5 seconds
+      setTimeout(() => {
+        oauthNotification.value = null;
+      }, 5000);
     } else {
       throw new Error('OAuth exchange failed');
     }
     
   } catch (error) {
     console.error('OAuth callback error:', error);
-    alert('Failed to complete OpenRouter connection: ' + error.message);
+    
+    // Show error notification in modal
+    oauthNotification.value = {
+      type: 'error',
+      message: `Failed to connect: ${error.message}`
+    };
+    
+    // Open settings modal to show error
+    showSettingsModal.value = true;
     
     // Clean up
     sessionStorage.removeItem('pkce_code_verifier');
     window.history.replaceState({}, document.title, window.location.pathname);
+    
+    // Auto-dismiss notification after 8 seconds (longer for errors)
+    setTimeout(() => {
+      oauthNotification.value = null;
+    }, 8000);
   }
 };
 
@@ -556,12 +601,31 @@ const handleDisconnectOpenRouter = async () => {
     if (result.success) {
       openRouterConnected.value = false;
       openRouterCredits.value = null;
-      openRouterKeyLabel.value = null;
-      alert('Disconnected from OpenRouter');
+      
+      // Show success notification
+      oauthNotification.value = {
+        type: 'success',
+        message: 'Disconnected from OpenRouter'
+      };
+      
+      // Auto-dismiss notification after 3 seconds
+      setTimeout(() => {
+        oauthNotification.value = null;
+      }, 3000);
     }
   } catch (error) {
     console.error('Failed to disconnect:', error);
-    alert('Failed to disconnect: ' + error.message);
+    
+    // Show error notification
+    oauthNotification.value = {
+      type: 'error',
+      message: `Failed to disconnect: ${error.message}`
+    };
+    
+    // Auto-dismiss notification after 5 seconds
+    setTimeout(() => {
+      oauthNotification.value = null;
+    }, 5000);
   }
 };
 
@@ -709,6 +773,14 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
   document.removeEventListener('keydown', handleKeyboardShortcuts);
+});
+
+// Watch for model selection changes and persist to localStorage
+watch(selectedModel, (newModel) => {
+  if (newModel) {
+    localStorage.setItem('openrouter_selected_model', newModel);
+    console.log('Selected model saved:', newModel);
+  }
 });
 </script>
 
@@ -1324,6 +1396,74 @@ body {
 .settings-modal .close-btn:hover {
   background-color: #f5f5f5;
   color: #333;
+}
+
+.oauth-notification {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  margin: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.notification-success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border-left: 4px solid #4CAF50;
+}
+
+.notification-error {
+  background-color: #ffebee;
+  color: #c62828;
+  border-left: 4px solid #f44336;
+}
+
+.notification-icon {
+  font-size: 1.2rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.notification-close:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.1);
 }
 
 .settings-content {
