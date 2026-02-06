@@ -4,12 +4,11 @@
       <button class="modal-close-btn" @click="$emit('close')">✕</button>
       
       <div class="chat-header">
-        <div class="header-info">
+        <div class="header-left">
           <h2>🤖 AI Chat</h2>
-          <div class="header-meta">
-            <p class="image-name">{{ image.original_filename }}</p>
-            <p class="model-info">Model: {{ modelDisplayName }}</p>
-          </div>
+        </div>
+        <div class="header-right">
+          <p class="model-info">{{ modelDisplayName }}</p>
         </div>
       </div>
       
@@ -25,16 +24,6 @@
             />
             <div v-if="hasUnsavedChanges" class="unsaved-badge">
               ⚠️ Modified (unsaved)
-            </div>
-          </div>
-          <div class="image-info">
-            <div class="info-row">
-              <span class="label">Dimensions:</span>
-              <span class="value">{{ image.width }} × {{ image.height }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">Size:</span>
-              <span class="value">{{ formatSize(image.current_size) }}</span>
             </div>
           </div>
           <div class="image-actions">
@@ -66,13 +55,13 @@
             <div v-if="messages.length === 0" class="welcome-message">
               <span class="welcome-icon">💬</span>
               <h3>AI Image Manipulation</h3>
-              <p>Ask me to modify your image! For example:</p>
-              <ul>
-                <li>"Make it brighter"</li>
-                <li>"Add more contrast and saturation"</li>
-                <li>"Rotate it 90 degrees"</li>
-                <li>"Make it grayscale"</li>
-              </ul>
+              <p>Ask me to modify your image:</p>
+              <div class="example-prompts">
+                <span class="prompt-chip">"Make it brighter"</span>
+                <span class="prompt-chip">"Add contrast"</span>
+                <span class="prompt-chip">"Rotate 90°"</span>
+                <span class="prompt-chip">"Grayscale"</span>
+              </div>
             </div>
             
             <div 
@@ -404,39 +393,33 @@ watch(() => messages.value.length, () => {
 }
 
 .chat-header {
-  padding: 1.5rem 2rem;
+  padding: 1rem 2rem;
   border-bottom: 1px solid #e0e0e0;
   background-color: #fafafa;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.header-info h2 {
-  margin: 0 0 0.5rem 0;
+.header-left h2 {
+  margin: 0;
   font-size: 1.5rem;
   color: #333;
 }
 
-.header-meta {
+.header-right {
   display: flex;
-  gap: 1.5rem;
   align-items: center;
-  flex-wrap: wrap;
-}
-
-.image-name {
-  margin: 0;
-  color: #666;
-  font-size: 0.9rem;
-  font-weight: 500;
 }
 
 .model-info {
   margin: 0;
   color: #9C27B0;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   background-color: #f3e5f5;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
 }
 
 .chat-body {
@@ -448,9 +431,9 @@ watch(() => messages.value.length, () => {
 
 /* Left Panel - Image Preview */
 .image-panel {
-  width: 40%;
-  min-width: 350px;
-  max-width: 500px;
+  width: 50%;
+  min-width: 400px;
+  max-width: 650px;
   border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
@@ -462,7 +445,7 @@ watch(() => messages.value.length, () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  padding: 2.5rem;
   position: relative;
   overflow: hidden;
   background-color: #f5f5f5;
@@ -493,29 +476,6 @@ watch(() => messages.value.length, () => {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
-}
-
-.image-info {
-  padding: 1rem 2rem;
-  border-bottom: 1px solid #e0e0e0;
-  background-color: white;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.4rem 0;
-  font-size: 0.9rem;
-}
-
-.info-row .label {
-  color: #666;
-  font-weight: 500;
-}
-
-.info-row .value {
-  color: #333;
-  font-weight: 600;
 }
 
 .image-actions {
@@ -599,38 +559,44 @@ watch(() => messages.value.length, () => {
 
 .welcome-message {
   text-align: center;
-  padding: 3rem 2rem;
+  padding: 2rem 1.5rem;
   color: #666;
 }
 
 .welcome-icon {
-  font-size: 3rem;
+  font-size: 2.5rem;
   display: block;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .welcome-message h3 {
-  margin: 0 0 1rem 0;
+  margin: 0 0 0.5rem 0;
   color: #333;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
 }
 
 .welcome-message p {
   margin: 0 0 1rem 0;
-  font-size: 0.95rem;
-}
-
-.welcome-message ul {
-  text-align: left;
-  max-width: 400px;
-  margin: 0 auto;
-  padding-left: 1.5rem;
-}
-
-.welcome-message li {
-  margin: 0.5rem 0;
   font-size: 0.9rem;
+}
+
+.example-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.prompt-chip {
+  background-color: #f0f0f0;
   color: #555;
+  padding: 0.4rem 0.9rem;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid #e0e0e0;
 }
 
 .message {
@@ -853,8 +819,8 @@ watch(() => messages.value.length, () => {
   }
   
   .image-panel {
-    width: 35%;
-    min-width: 280px;
+    width: 45%;
+    min-width: 320px;
   }
 }
 
@@ -879,10 +845,19 @@ watch(() => messages.value.length, () => {
     height: 60%;
   }
   
-  .header-meta {
+  .chat-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+  }
+  
+  .header-right {
+    width: 100%;
+  }
+  
+  .model-info {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
   }
 }
 </style>
