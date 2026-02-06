@@ -21,7 +21,7 @@
         <!-- Settings button - always visible -->
         <div class="settings-menu-container">
           <button 
-            @click="showSettingsMenu = !showSettingsMenu" 
+            @click.stop="showSettingsMenu = !showSettingsMenu" 
             class="btn-icon btn-header btn-settings"
             title="Settings"
           >
@@ -1035,7 +1035,41 @@ const confirmClearAll = async () => {
 };
 
 const handleKeyboardShortcuts = (event) => {
-  // Don't trigger shortcuts if viewer is open or in an input field
+  // Handle Escape key for modals and menus (highest priority)
+  if (event.key === 'Escape') {
+    // Close modals in order of priority
+    if (showModelSelectorModal.value) {
+      showModelSelectorModal.value = false;
+      return;
+    }
+    if (showAISettingsModal.value) {
+      showAISettingsModal.value = false;
+      return;
+    }
+    if (showPresetSettingsModal.value) {
+      showPresetSettingsModal.value = false;
+      return;
+    }
+    if (showAboutModal.value) {
+      showAboutModal.value = false;
+      return;
+    }
+    if (showSettingsMenu.value) {
+      showSettingsMenu.value = false;
+      return;
+    }
+    if (showClearAllConfirm.value) {
+      showClearAllConfirm.value = false;
+      return;
+    }
+    // If no modals open and there are selected images, clear selection
+    if (selectedCount.value > 0) {
+      clearSelection();
+      return;
+    }
+  }
+
+  // Don't trigger other shortcuts if viewer is open or in an input field
   if (viewerImage.value || event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
     return;
   }
@@ -1044,11 +1078,6 @@ const handleKeyboardShortcuts = (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key === 'a' && imageCount.value > 0) {
     event.preventDefault();
     selectAll();
-  }
-
-  // Escape: Clear selection
-  if (event.key === 'Escape' && selectedCount.value > 0) {
-    clearSelection();
   }
 
   // Delete: Delete selected images (with confirmation would be better, but for now just log)
@@ -2455,5 +2484,135 @@ body {
 
 .app-info p:last-child {
   margin-bottom: 0;
+}
+
+/* Responsive Design - Mobile Optimization */
+@media (max-width: 768px) {
+  /* Header adjustments */
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .settings-menu-container {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    margin-left: 0;
+  }
+
+  .header-right {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .toolbar-actions {
+    flex-wrap: wrap;
+  }
+
+  /* Settings dropdown positioning for mobile */
+  .settings-dropdown {
+    right: 0;
+    left: auto;
+    min-width: 260px;
+  }
+
+  /* Modal adjustments */
+  .settings-modal,
+  .modal-content {
+    width: 95%;
+    max-width: 100%;
+    max-height: 90vh;
+    margin: 1rem;
+  }
+
+  /* Model grid - single column on mobile */
+  .model-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .model-card {
+    padding: 1rem;
+  }
+
+  /* Buttons and text sizing */
+  .btn-icon {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .settings-modal h2 {
+    font-size: 1.3rem;
+  }
+
+  .modal-header h2 {
+    font-size: 1.25rem;
+  }
+
+  /* Image grid - 2 columns on mobile */
+  .image-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Extra small devices */
+  .app-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .app-header.compact h1 {
+    font-size: 1.2rem;
+  }
+
+  /* Even smaller modals */
+  .settings-modal,
+  .modal-content {
+    width: 100%;
+    max-height: 95vh;
+    margin: 0.5rem;
+    border-radius: 8px;
+  }
+
+  /* Settings dropdown full width on tiny screens */
+  .settings-dropdown {
+    min-width: 240px;
+  }
+
+  .settings-menu-item {
+    padding: 0.75rem 1rem;
+  }
+
+  .menu-icon {
+    font-size: 1.5rem;
+  }
+
+  /* Model cards more compact */
+  .model-icon-large {
+    font-size: 2rem;
+  }
+
+  .model-card-name {
+    font-size: 1rem;
+  }
+
+  /* Image grid - single column on very small screens */
+  .image-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet landscape */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .model-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+
+  .settings-modal {
+    max-width: 600px;
+  }
 }
 </style>
