@@ -54,7 +54,7 @@ const initializeEditor = () => {
         'common.border': '0px'
       },
       menu: ['crop', 'flip', 'rotate', 'draw', 'shape', 'icon', 'text', 'mask', 'filter'],
-      initMenu: 'filter',
+      initMenu: '',
       uiSize: {
         width: '100%',
         height: '100%'
@@ -72,16 +72,47 @@ const initializeEditor = () => {
 
   // Hide the load and download buttons with a slight delay to ensure DOM is ready
   setTimeout(() => {
-    const loadBtn = editorContainer.value?.querySelector('.tie-btn-load');
-    const downloadBtn = editorContainer.value?.querySelector('.tie-btn-download');
-    const deleteBtn = editorContainer.value?.querySelector('.tie-btn-delete');
-    const resetBtn = editorContainer.value?.querySelector('.tie-btn-reset');
+    // Try multiple possible selectors for these buttons
+    const buttonsToHide = [
+      '.tie-btn-load',
+      '.tie-btn-download',
+      '.tie-btn-delete',
+      '.tie-btn-reset',
+      'button[title="Load"]',
+      'button[title="Download"]',
+      '.tui-image-editor-header-buttons button:first-child', // Load button
+      '.tui-image-editor-header-buttons button:last-child',  // Download button
+    ];
     
-    if (loadBtn) loadBtn.style.display = 'none';
-    if (downloadBtn) downloadBtn.style.display = 'none';
-    if (deleteBtn) deleteBtn.style.display = 'none';
-    if (resetBtn) resetBtn.style.display = 'none';
-  }, 100);
+    buttonsToHide.forEach(selector => {
+      const elements = editorContainer.value?.querySelectorAll(selector);
+      elements?.forEach(el => {
+        el.style.display = 'none';
+        el.style.visibility = 'hidden';
+      });
+    });
+
+    // Also try to hide the entire header buttons container if it exists
+    const headerButtons = editorContainer.value?.querySelector('.tui-image-editor-header-buttons');
+    if (headerButtons) {
+      headerButtons.style.display = 'none';
+    }
+
+    // Try to hide buttons in the main header
+    const mainHeader = editorContainer.value?.querySelector('.tui-image-editor-header');
+    if (mainHeader) {
+      const buttons = mainHeader.querySelectorAll('button');
+      buttons.forEach(btn => {
+        const text = btn.textContent?.toLowerCase() || '';
+        const title = btn.getAttribute('title')?.toLowerCase() || '';
+        if (text.includes('load') || text.includes('download') || 
+            title.includes('load') || title.includes('download')) {
+          btn.style.display = 'none';
+          btn.style.visibility = 'hidden';
+        }
+      });
+    }
+  }, 200);
 };
 
 const handleSave = async () => {
@@ -233,11 +264,15 @@ watch(() => props.image, () => {
   background-color: #2c2c2c;
 }
 
-/* Hide unwanted buttons */
+/* Hide unwanted buttons - try multiple selectors */
 :deep(.tie-btn-load),
 :deep(.tie-btn-download),
 :deep(.tie-btn-delete),
-:deep(.tie-btn-reset) {
+:deep(.tie-btn-reset),
+:deep(.tui-image-editor-header-buttons),
+:deep(.tui-image-editor-header button[title="Load"]),
+:deep(.tui-image-editor-header button[title="Download"]) {
   display: none !important;
+  visibility: hidden !important;
 }
 </style>
