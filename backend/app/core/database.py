@@ -28,5 +28,10 @@ async def get_db() -> AsyncSession:
 
 async def init_db():
     """Initialize database tables."""
+    from app.core.migrate import migrate_database
+    
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    # Run migrations to add any missing columns
+    await migrate_database()
