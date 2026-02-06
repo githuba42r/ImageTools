@@ -97,6 +97,16 @@
         </button>
 
         <button 
+          @click="handleRemoveBackground" 
+          class="btn-icon btn-ai"
+          :disabled="isProcessing"
+          :title="'Remove background (AI)'"
+        >
+          <span class="icon">🎨</span>
+          <span class="tooltip">Remove BG</span>
+        </button>
+
+        <button 
           @click="handleUndo" 
           class="btn-icon"
           :disabled="!canUndo || isProcessing"
@@ -307,6 +317,19 @@ const handleDownload = () => {
 
 const handleEdit = () => {
   emit('edit-click', props.image);
+};
+
+const handleRemoveBackground = async () => {
+  isProcessing.value = true;
+  try {
+    await imageStore.removeBackground(props.image.id);
+    imageRefreshKey.value = Date.now(); // Force image refresh
+    await checkCanUndo();
+  } catch (error) {
+    console.error('Background removal failed:', error);
+  } finally {
+    isProcessing.value = false;
+  }
 };
 
 const confirmDelete = async () => {
@@ -587,6 +610,21 @@ onBeforeUnmount(() => {
 }
 
 .btn-edit .icon {
+  color: white;
+}
+
+.btn-ai {
+  background-color: #9C27B0;
+  color: white;
+  border-color: #9C27B0;
+}
+
+.btn-ai:hover:not(:disabled) {
+  background-color: #7B1FA2;
+  border-color: #7B1FA2;
+}
+
+.btn-ai .icon {
   color: white;
 }
 

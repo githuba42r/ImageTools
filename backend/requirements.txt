@@ -5,6 +5,7 @@ python-multipart==0.0.9
 
 # Image Processing
 Pillow==11.0.0
+rembg[cpu]==2.0.72
 
 # Database
 sqlalchemy==2.0.46

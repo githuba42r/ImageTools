@@ -103,6 +103,28 @@ class FlipResponse(BaseModel):
     image_url: str
 
 
+# Background Removal Schemas
+
+class BackgroundRemovalRequest(BaseModel):
+    alpha_matting: bool = Field(default=False, description="Use alpha matting for better edge quality")
+    alpha_matting_foreground_threshold: int = Field(default=240, ge=0, le=255, description="Foreground threshold (0-255)")
+    alpha_matting_background_threshold: int = Field(default=10, ge=0, le=255, description="Background threshold (0-255)")
+    model: Optional[str] = Field(default="u2net", description="rembg model (u2net, u2net_human_seg, isnet-general-use, isnet-anime)")
+
+
+class BackgroundRemovalResponse(BaseModel):
+    image_id: str
+    original_size: int
+    new_size: int
+    format: str
+    has_transparency: bool
+    model_used: str
+    compression_ratio: float
+    width: int
+    height: int
+    image_url: str
+
+
 # AI Chat Schemas
 
 class MessageCreate(BaseModel):

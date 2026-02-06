@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { imageService, compressionService, historyService } from '../services/api';
+import { backgroundService } from '../services/backgroundService';
 import { useSessionStore } from './sessionStore';
 
 export const useImageStore = defineStore('image', {
@@ -170,6 +171,26 @@ export const useImageStore = defineStore('image', {
       } catch (error) {
         this.error = error.response?.data?.detail || error.message;
         console.error('Failed to flip:', error);
+        throw error;
+      }
+    },
+
+    async removeBackground(imageId, options = {}) {
+      try {
+        const result = await backgroundService.removeBackground(imageId, options);
+        
+        // Refresh image data
+        const updatedImage = await imageService.getImage(imageId);
+        const index = this.images.findIndex(img => img.id === imageId);
+        if (index !== -1) {
+          this.images[index] = updatedImage;
+        }
+
+        console.log('Background removed successfully');
+        return result;
+      } catch (error) {
+        this.error = error.response?.data?.detail || error.message;
+        console.error('Failed to remove background:', error);
         throw error;
       }
     },
