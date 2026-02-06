@@ -4,7 +4,7 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   const env = loadEnv(mode, process.cwd(), '')
-  const apiUrl = env.VITE_API_URL || 'http://localhost:8001'
+  const apiUrl = env.VITE_API_URL || 'http://localhost:8081'
 
   return {
     plugins: [vue()],

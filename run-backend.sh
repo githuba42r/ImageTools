@@ -42,11 +42,11 @@ echo ""
 
 # Run the backend
 echo "=========================================="
-echo "Backend starting on http://localhost:8001"
-echo "API docs: http://localhost:8001/api/v1/docs"
+echo "Backend starting on http://localhost:8081"
+echo "API docs: http://localhost:8081/docs"
 echo "=========================================="
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-python -m app.main
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload

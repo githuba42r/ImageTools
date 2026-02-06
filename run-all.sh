@@ -45,7 +45,7 @@ start_in_terminal() {
 }
 
 echo "Starting backend..."
-start_in_terminal "Image Tools - Backend" "cd backend && source venv/bin/activate 2>/dev/null || python3 -m venv venv && source venv/bin/activate && pip install -q -r requirements.txt && mkdir -p storage/temp && echo 'Backend ready on http://localhost:8001' && python -m app.main"
+start_in_terminal "Image Tools - Backend" "cd backend && source venv/bin/activate 2>/dev/null || python3 -m venv venv && source venv/bin/activate && pip install -q -r requirements.txt && mkdir -p storage/temp && echo 'Backend ready on http://localhost:8081' && python -m uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload"
 
 echo "Waiting 3 seconds for backend to initialize..."
 sleep 3
@@ -58,8 +58,8 @@ echo "=========================================="
 echo "Image Tools is starting!"
 echo "=========================================="
 echo ""
-echo "Backend:  http://localhost:8001"
-echo "API Docs: http://localhost:8001/api/v1/docs"
+echo "Backend:  http://localhost:8081"
+echo "API Docs: http://localhost:8081/docs"
 echo "Frontend: http://localhost:5173"
 echo ""
 echo "Check the new terminal windows for logs."

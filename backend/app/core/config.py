@@ -4,7 +4,7 @@ from typing import List
 
 class Settings(BaseSettings):
     # Server
-    SERVER_PORT: int = 8001
+    SERVER_PORT: int = 8081
     SERVER_HOST: str = "0.0.0.0"
     API_PREFIX: str = "/api/v1"
     DEBUG: bool = False

@@ -28,7 +28,7 @@ echo "=========================================="
 echo "Frontend starting on http://localhost:5173"
 echo "=========================================="
 echo ""
-echo "Make sure the backend is running on http://localhost:8001"
+echo "Make sure the backend is running on http://localhost:8081"
 echo "Press Ctrl+C to stop the server"
 echo ""
 
