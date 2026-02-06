@@ -70,11 +70,18 @@ const initializeEditor = () => {
     }
   });
 
-  // Hide the load and download buttons
-  const loadBtn = editorContainer.value.querySelector('.tie-btn-load');
-  const downloadBtn = editorContainer.value.querySelector('.tie-btn-download');
-  if (loadBtn) loadBtn.style.display = 'none';
-  if (downloadBtn) downloadBtn.style.display = 'none';
+  // Hide the load and download buttons with a slight delay to ensure DOM is ready
+  setTimeout(() => {
+    const loadBtn = editorContainer.value?.querySelector('.tie-btn-load');
+    const downloadBtn = editorContainer.value?.querySelector('.tie-btn-download');
+    const deleteBtn = editorContainer.value?.querySelector('.tie-btn-delete');
+    const resetBtn = editorContainer.value?.querySelector('.tie-btn-reset');
+    
+    if (loadBtn) loadBtn.style.display = 'none';
+    if (downloadBtn) downloadBtn.style.display = 'none';
+    if (deleteBtn) deleteBtn.style.display = 'none';
+    if (resetBtn) resetBtn.style.display = 'none';
+  }, 100);
 };
 
 const handleSave = async () => {
@@ -224,5 +231,13 @@ watch(() => props.image, () => {
 
 :deep(.tui-image-editor-submenu) {
   background-color: #2c2c2c;
+}
+
+/* Hide unwanted buttons */
+:deep(.tie-btn-load),
+:deep(.tie-btn-download),
+:deep(.tie-btn-delete),
+:deep(.tie-btn-reset) {
+  display: none !important;
 }
 </style>
