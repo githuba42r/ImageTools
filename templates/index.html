@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImageTools - Quick Image Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .sidebar {
+            border-right: 1px solid #e0e0e0;
+            padding-right: 20px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section h3 {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            width: 100%;
+            margin-bottom: 10px;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #764ba2;
+        }
+
+        .btn-secondary:hover {
+            background: #653a8a;
+        }
+
+        .btn-success {
+            background: #10b981;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.95em;
+        }
+
+        .preset-buttons {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .preset-btn {
+            flex: 1;
+            padding: 8px;
+            background: #f3f4f6;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+
+        .preset-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .preset-list {
+            display: none;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 5px;
+        }
+
+        .preset-list.active {
+            display: block;
+        }
+
+        .preset-item {
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 3px;
+            margin-bottom: 3px;
+            background: #f9fafb;
+        }
+
+        .preset-item:hover {
+            background: #e5e7eb;
+        }
+
+        .canvas-area {
+            position: relative;
+            background: #f9fafb;
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .canvas-area.has-image {
+            border-style: solid;
+            background: #fff;
+        }
+
+        #imageCanvas {
+            max-width: 100%;
+            max-height: 600px;
+            display: none;
+        }
+
+        #imageCanvas.visible {
+            display: block;
+        }
+
+        .placeholder {
+            text-align: center;
+            color: #9ca3af;
+        }
+
+        .placeholder svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .image-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f3f4f6;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+
+        .image-info div {
+            margin-bottom: 5px;
+        }
+
+        .crop-controls {
+            display: none;
+            padding: 15px;
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .crop-controls.active {
+            display: block;
+        }
+
+        .crop-instructions {
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            color: #92400e;
+        }
+
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading.active {
+            display: flex;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #cameraModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #cameraModal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 600px;
+            width: 90%;
+        }
+
+        #cameraPreview {
+            width: 100%;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+                padding-right: 0;
+                padding-bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🖼️ ImageTools</h1>
+            <p>Quickly crop, resize, and optimize images for web and email</p>
+        </header>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="section">
+                    <h3>1. Load Image</h3>
+                    <input type="file" id="fileInput" accept="image/*">
+                    <button class="btn" onclick="document.getElementById('fileInput').click()">
+                        📁 Upload Image
+                    </button>
+                    <button class="btn btn-secondary" onclick="openCamera()">
+                        📷 Use Camera
+                    </button>
+                </div>
+
+                <div class="section">
+                    <h3>2. Crop (Optional)</h3>
+                    <button class="btn" id="cropBtn" onclick="enableCrop()" disabled>
+                        ✂️ Enable Crop
+                    </button>
+                    <div class="crop-controls" id="cropControls">
+                        <div class="crop-instructions">
+                            Click and drag on the image to select crop area
+                        </div>
+                        <button class="btn btn-success" onclick="applyCrop()">
+                            ✓ Apply Crop
+                        </button>
+                        <button class="btn" onclick="cancelCrop()">
+                            ✕ Cancel
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>3. Resize</h3>
+                    <div class="preset-buttons">
+                        <button class="preset-btn active" onclick="selectPresetType('email')">Email</button>
+                        <button class="preset-btn" onclick="selectPresetType('web')">Web</button>
+                        <button class="preset-btn" onclick="selectPresetType('social')">Social</button>
+                    </div>
+                    <div class="preset-list active" id="emailPresets"></div>
+                    <div class="preset-list" id="webPresets"></div>
+                    <div class="preset-list" id="socialPresets"></div>
+                    
+                    <div class="form-group">
+                        <label>Custom Width (px):</label>
+                        <input type="number" id="resizeWidth" placeholder="Auto">
+                    </div>
+                    <div class="form-group">
+                        <label>Custom Height (px):</label>
+                        <input type="number" id="resizeHeight" placeholder="Auto">
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>4. Optimize</h3>
+                    <div class="form-group">
+                        <label>Format:</label>
+                        <select id="outputFormat">
+                            <option value="JPEG">JPEG (smaller)</option>
+                            <option value="PNG">PNG (lossless)</option>
+                            <option value="WEBP">WebP (modern)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Quality (1-100):</label>
+                        <input type="range" id="quality" min="1" max="100" value="85" 
+                               oninput="document.getElementById('qualityValue').textContent = this.value">
+                        <span id="qualityValue">85</span>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <button class="btn btn-success" id="processBtn" onclick="processImage()" disabled>
+                        ⚡ Process & Download
+                    </button>
+                </div>
+            </div>
+
+            <div class="canvas-area" id="canvasArea">
+                <div class="placeholder" id="placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <h3>No Image Loaded</h3>
+                    <p>Upload an image or capture from camera to get started</p>
+                </div>
+                <canvas id="imageCanvas"></canvas>
+                <div class="image-info" id="imageInfo" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="cameraModal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 15px;">Camera Capture</h3>
+            <video id="cameraPreview" autoplay></video>
+            <div class="modal-buttons">
+                <button class="btn btn-success" onclick="captureFromCamera()">📸 Capture</button>
+                <button class="btn" onclick="closeCamera()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentImage = null;
+        let canvas = document.getElementById('imageCanvas');
+        let ctx = canvas.getContext('2d');
+        let cropMode = false;
+        let cropStart = null;
+        let cropEnd = null;
+        let cameraStream = null;
+
+        // Load presets
+        async function loadPresets() {
+            const types = ['email', 'web', 'social'];
+            for (const type of types) {
+                const response = await fetch(`/presets/${type}`);
+                const presets = await response.json();
+                const container = document.getElementById(`${type}Presets`);
+                container.innerHTML = presets.map(p => 
+                    `<div class="preset-item" onclick="applyPreset(${p.width}, ${p.height})">
+                        ${p.name} (${p.width}x${p.height})
+                    </div>`
+                ).join('');
+            }
+        }
+
+        function selectPresetType(type) {
+            document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.preset-list').forEach(list => list.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(`${type}Presets`).classList.add('active');
+        }
+
+        function applyPreset(width, height) {
+            document.getElementById('resizeWidth').value = width;
+            document.getElementById('resizeHeight').value = height;
+        }
+
+        // File upload
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await uploadImage(file);
+            }
+        });
+
+        async function uploadImage(file) {
+            showLoading(true);
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.success) {
+                    displayImage(data.image, data.width, data.height);
+                } else {
+                    alert('Error uploading image: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error uploading image: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Camera functions
+        async function openCamera() {
+            try {
+                cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                document.getElementById('cameraPreview').srcObject = cameraStream;
+                document.getElementById('cameraModal').classList.add('active');
+            } catch (error) {
+                alert('Error accessing camera: ' + error.message);
+            }
+        }
+
+        function closeCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+            document.getElementById('cameraModal').classList.remove('active');
+        }
+
+        async function captureFromCamera() {
+            const video = document.getElementById('cameraPreview');
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            const captureCtx = captureCanvas.getContext('2d');
+            captureCtx.drawImage(video, 0, 0);
+            
+            const imageData = captureCanvas.toDataURL('image/jpeg');
+            closeCamera();
+            
+            showLoading(true);
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imageData })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    displayImage(data.image, data.width, data.height);
+                } else {
+                    alert('Error processing camera image: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error processing camera image: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayImage(imageDataUrl, width, height) {
+            currentImage = imageDataUrl;
+            
+            const img = new Image();
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                
+                canvas.classList.add('visible');
+                document.getElementById('placeholder').style.display = 'none';
+                document.getElementById('canvasArea').classList.add('has-image');
+                
+                updateImageInfo(width, height, imageDataUrl);
+                
+                document.getElementById('cropBtn').disabled = false;
+                document.getElementById('processBtn').disabled = false;
+            };
+            img.src = imageDataUrl;
+        }
+
+        function updateImageInfo(width, height, dataUrl) {
+            const sizeInBytes = Math.round((dataUrl.length * 3) / 4);
+            const sizeInKB = (sizeInBytes / 1024).toFixed(2);
+            
+            document.getElementById('imageInfo').innerHTML = `
+                <div><strong>Dimensions:</strong> ${width} × ${height} px</div>
+                <div><strong>Size:</strong> ${sizeInKB} KB</div>
+            `;
+            document.getElementById('imageInfo').style.display = 'block';
+        }
+
+        // Crop functionality
+        function enableCrop() {
+            cropMode = true;
+            document.getElementById('cropControls').classList.add('active');
+            canvas.style.cursor = 'crosshair';
+        }
+
+        function cancelCrop() {
+            cropMode = false;
+            cropStart = null;
+            cropEnd = null;
+            document.getElementById('cropControls').classList.remove('active');
+            canvas.style.cursor = 'default';
+            // Redraw image to remove crop rectangle
+            const img = new Image();
+            img.onload = () => ctx.drawImage(img, 0, 0);
+            img.src = currentImage;
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!cropMode) return;
+            const rect = canvas.getBoundingClientRect();
+            cropStart = {
+                x: (e.clientX - rect.left) * (canvas.width / rect.width),
+                y: (e.clientY - rect.top) * (canvas.height / rect.height)
+            };
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!cropMode || !cropStart) return;
+            const rect = canvas.getBoundingClientRect();
+            cropEnd = {
+                x: (e.clientX - rect.left) * (canvas.width / rect.width),
+                y: (e.clientY - rect.top) * (canvas.height / rect.height)
+            };
+            
+            // Redraw image and crop rectangle
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0);
+                ctx.strokeStyle = '#667eea';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(
+                    cropStart.x,
+                    cropStart.y,
+                    cropEnd.x - cropStart.x,
+                    cropEnd.y - cropStart.y
+                );
+            };
+            img.src = currentImage;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (cropMode && cropStart && cropEnd) {
+                // Crop is ready
+            }
+        });
+
+        async function applyCrop() {
+            if (!cropStart || !cropEnd) {
+                alert('Please select a crop area first');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const cropData = {
+                    x: Math.min(cropStart.x, cropEnd.x),
+                    y: Math.min(cropStart.y, cropEnd.y),
+                    width: Math.abs(cropEnd.x - cropStart.x),
+                    height: Math.abs(cropEnd.y - cropStart.y)
+                };
+
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image: currentImage,
+                        crop: cropData
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    displayImage(data.image, data.width, data.height);
+                    cancelCrop();
+                } else {
+                    alert('Error cropping image: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error cropping image: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Process and download
+        async function processImage() {
+            if (!currentImage) {
+                alert('Please load an image first');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const processData = {
+                    image: currentImage,
+                    quality: parseInt(document.getElementById('quality').value),
+                    format: document.getElementById('outputFormat').value,
+                    optimize: true
+                };
+
+                const width = document.getElementById('resizeWidth').value;
+                const height = document.getElementById('resizeHeight').value;
+                
+                if (width || height) {
+                    processData.resize = {};
+                    if (width) processData.resize.width = parseInt(width);
+                    if (height) processData.resize.height = parseInt(height);
+                }
+
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(processData)
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    // Update display
+                    displayImage(data.image, data.width, data.height);
+                    
+                    // Trigger download
+                    const link = document.createElement('a');
+                    link.href = data.image;
+                    link.download = `processed_image.${processData.format.toLowerCase()}`;
+                    link.click();
+                    
+                    const sizeInKB = (data.size / 1024).toFixed(2);
+                    alert(`Image processed successfully!\nSize: ${sizeInKB} KB\nDimensions: ${data.width}×${data.height}px`);
+                } else {
+                    alert('Error processing image: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error processing image: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('active', show);
+        }
+
+        // Initialize
+        loadPresets();
+    </script>
+</body>
+</html>
