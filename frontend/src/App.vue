@@ -608,7 +608,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useSessionStore } from './stores/sessionStore';
 import { useImageStore } from './stores/imageStore';
 import { storeToRefs } from 'pinia';
