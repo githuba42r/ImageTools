@@ -71,23 +71,13 @@
             </div>
 
             <button 
-              @click="handleBulkRotate" 
-              class="btn-icon btn-header"
-              :disabled="selectedCount === 0 || isBulkProcessing"
-              title="Rotate selected images 90° clockwise"
-            >
-              <span class="icon">↻</span>
-              <span class="tooltip">Rotate Selected</span>
-            </button>
-
-            <button 
-              @click="handleDownloadSelected" 
+              @click="handleDownloadZip" 
               class="btn-icon btn-header"
               :disabled="selectedCount === 0"
-              title="Download selected images"
+              title="Download selected images as ZIP"
             >
               <span class="icon">⬇</span>
-              <span class="tooltip">Download Selected</span>
+              <span class="tooltip">Download ZIP</span>
             </button>
 
             <button 
@@ -190,6 +180,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useSessionStore } from './stores/sessionStore';
 import { useImageStore } from './stores/imageStore';
 import { storeToRefs } from 'pinia';
+import { imageService } from './services/api';
 import UploadArea from './components/UploadArea.vue';
 import ImageCard from './components/ImageCard.vue';
 import ImageViewer from './components/ImageViewer.vue';
@@ -303,20 +294,31 @@ const handleDownloadSelected = () => {
   });
 };
 
-const handleBulkRotate = async () => {
+const handleDownloadZip = async () => {
   if (selectedCount.value === 0) return;
 
-  isBulkProcessing.value = true;
   try {
-    const rotatePromises = imageStore.selectedImages.map(imageId => 
-      imageStore.rotateImage(imageId, 90)
-    );
-    await Promise.all(rotatePromises);
-    console.log(`Rotated ${rotatePromises.length} images`);
+    // Get the blob from the API
+    const blob = await imageService.downloadImagesAsZip(imageStore.selectedImages);
+    
+    // Create download link with date in filename
+    const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    const filename = `Images-${date}.zip`;
+    
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    console.log(`Downloaded ${imageStore.selectedImages.length} images as ${filename}`);
   } catch (error) {
-    console.error('Bulk rotation failed:', error);
-  } finally {
-    isBulkProcessing.value = false;
+    console.error('Download ZIP failed:', error);
   }
 };
 
@@ -661,12 +663,49 @@ body {
   color: #666;
 }
 
-/* Tooltip */
-.tooltip {
+/* Tooltip for title */
+.has-tooltip .tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 8px 12px;
+  position: absolute;
+  z-index: 1000;
+  top: 100%;
+  left: 0;
+  margin-top: 0.5rem;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-weight: normal;
+  transition: opacity 0.3s, visibility 0.3s;
+  pointer-events: none;
+}
+
+.has-tooltip .tooltip-text::after {
+  content: "";
   position: absolute;
   bottom: 100%;
+  left: 1rem;
+  margin-left: 0;
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent transparent #333 transparent;
+}
+
+.has-tooltip:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Tooltip for action buttons */
+.tooltip {
+  position: absolute;
+  top: 100%;
   left: 50%;
-  transform: translateX(-50%) translateY(-8px);
+  transform: translateX(-50%) translateY(8px);
   background-color: #333;
   color: white;
   padding: 0.4rem 0.6rem;
@@ -682,16 +721,16 @@ body {
 .tooltip::after {
   content: '';
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   border: 4px solid transparent;
-  border-top-color: #333;
+  border-bottom-color: #333;
 }
 
 .btn-icon:hover:not(:disabled) .tooltip {
   opacity: 1;
-  transform: translateX(-50%) translateY(-4px);
+  transform: translateX(-50%) translateY(4px);
 }
 
 .app-main {

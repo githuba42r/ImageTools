@@ -79,6 +79,14 @@ export const imageService = {
     const response = await api.get(`/images/${imageId}/exif`);
     return response.data;
   },
+
+  async downloadImagesAsZip(imageIds) {
+    const response = await api.post('/images/download-zip', 
+      { image_ids: imageIds },
+      { responseType: 'blob' }
+    );
+    return response.data;
+  },
 };
 
 // Compression API

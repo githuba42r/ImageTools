@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
+from datetime import datetime
+import zipfile
+import os
 from app.core.database import get_db
 from app.core.config import settings
 from app.schemas.schemas import ImageResponse, RotateRequest, RotateResponse, FlipRequest, FlipResponse
@@ -235,3 +238,46 @@ async def get_image_exif(
         return {"image_id": image_id, "exif": exif_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to extract EXIF: {str(e)}")
+
+
+@router.post("/download-zip")
+async def download_images_as_zip(
+    image_ids: List[str] = Body(..., embed=True),
+    db: AsyncSession = Depends(get_db)
+):
+    """Download multiple images as a ZIP file."""
+    if not image_ids:
+        raise HTTPException(status_code=400, detail="No images specified")
+    
+    # Get all images
+    images = []
+    for image_id in image_ids:
+        image = await ImageService.get_image(db, image_id)
+        if image:
+            images.append(image)
+    
+    if not images:
+        raise HTTPException(status_code=404, detail="No valid images found")
+    
+    # Create ZIP file with date in filename
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    zip_filename = f"Images-{date_str}.zip"
+    zip_path = os.path.join(settings.TEMP_STORAGE_PATH, f"temp_{zip_filename}")
+    
+    # Ensure temp directory exists
+    os.makedirs(settings.TEMP_STORAGE_PATH, exist_ok=True)
+    
+    # Create ZIP file
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for image in images:
+            if os.path.exists(image.current_path):
+                # Use original filename in the ZIP
+                zipf.write(image.current_path, arcname=image.original_filename)
+    
+    # Return ZIP file and schedule cleanup
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=zip_filename,
+        background=lambda: os.remove(zip_path) if os.path.exists(zip_path) else None
+    )
