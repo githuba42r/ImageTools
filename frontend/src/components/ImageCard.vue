@@ -67,6 +67,26 @@
         </button>
 
         <button 
+          @click="handleFlipHorizontal" 
+          class="btn-icon"
+          :disabled="isProcessing"
+          :title="'Flip horizontally'"
+        >
+          <span class="icon">⇄</span>
+          <span class="tooltip">Flip H</span>
+        </button>
+
+        <button 
+          @click="handleFlipVertical" 
+          class="btn-icon"
+          :disabled="isProcessing"
+          :title="'Flip vertically'"
+        >
+          <span class="icon">⇅</span>
+          <span class="tooltip">Flip V</span>
+        </button>
+
+        <button 
           @click="handleUndo" 
           class="btn-icon"
           :disabled="!canUndo || isProcessing"
@@ -226,6 +246,32 @@ const handleRotate = async () => {
     await checkCanUndo();
   } catch (error) {
     console.error('Rotate failed:', error);
+  } finally {
+    isProcessing.value = false;
+  }
+};
+
+const handleFlipHorizontal = async () => {
+  isProcessing.value = true;
+  try {
+    await imageStore.flipImage(props.image.id, 'horizontal');
+    imageRefreshKey.value = Date.now(); // Force image refresh
+    await checkCanUndo();
+  } catch (error) {
+    console.error('Flip failed:', error);
+  } finally {
+    isProcessing.value = false;
+  }
+};
+
+const handleFlipVertical = async () => {
+  isProcessing.value = true;
+  try {
+    await imageStore.flipImage(props.image.id, 'vertical');
+    imageRefreshKey.value = Date.now(); // Force image refresh
+    await checkCanUndo();
+  } catch (error) {
+    console.error('Flip failed:', error);
   } finally {
     isProcessing.value = false;
   }

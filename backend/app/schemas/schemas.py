@@ -88,3 +88,16 @@ class RotateResponse(BaseModel):
     width: int
     height: int
     image_url: str
+
+
+class FlipRequest(BaseModel):
+    direction: str = Field(..., description="Flip direction: horizontal or vertical")
+
+
+class FlipResponse(BaseModel):
+    image_id: str
+    direction: str
+    new_size: int
+    width: int
+    height: int
+    image_url: str

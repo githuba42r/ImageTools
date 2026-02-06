@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.core.database import get_db
 from app.core.config import settings
-from app.schemas.schemas import ImageResponse, RotateRequest, RotateResponse
+from app.schemas.schemas import ImageResponse, RotateRequest, RotateResponse, FlipRequest, FlipResponse
 from app.services.image_service import ImageService
 from app.services.session_service import SessionService
 
@@ -188,3 +188,50 @@ async def rotate_image(
         height=height,
         image_url=f"{settings.API_PREFIX}/images/{image_id}/current"
     )
+
+
+@router.post("/{image_id}/flip", response_model=FlipResponse)
+async def flip_image(
+    image_id: str,
+    request: FlipRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Flip an image horizontally or vertically."""
+    # Verify image exists
+    image = await ImageService.get_image(db, image_id)
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Flip image
+    try:
+        output_path, new_size, width, height = await ImageService.flip_image(
+            db, image_id, request.direction
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    return FlipResponse(
+        image_id=image_id,
+        direction=request.direction,
+        new_size=new_size,
+        width=width,
+        height=height,
+        image_url=f"{settings.API_PREFIX}/images/{image_id}/current"
+    )
+
+
+@router.get("/{image_id}/exif")
+async def get_image_exif(
+    image_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get EXIF metadata for an image."""
+    image = await ImageService.get_image(db, image_id)
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    try:
+        exif_data = ImageService.extract_exif(image.current_path)
+        return {"image_id": image_id, "exif": exif_data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to extract EXIF: {str(e)}")

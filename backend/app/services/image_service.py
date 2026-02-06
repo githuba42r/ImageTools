@@ -239,6 +239,95 @@ class ImageService:
         return output_path, new_size, new_width, new_height
     
     @staticmethod
+    async def flip_image(db: AsyncSession, image_id: str, direction: str) -> tuple[str, int, int, int]:
+        """
+        Flip an image horizontally or vertically.
+        
+        Args:
+            db: Database session
+            image_id: Image ID
+            direction: "horizontal" or "vertical"
+            
+        Returns:
+            Tuple of (output_path, new_size, width, height)
+        """
+        if direction not in ["horizontal", "vertical"]:
+            raise ValueError("Direction must be 'horizontal' or 'vertical'")
+        
+        image = await ImageService.get_image(db, image_id)
+        if not image:
+            raise ValueError("Image not found")
+        
+        ImageService._ensure_storage_dirs()
+        
+        # Generate output path
+        ext = Path(image.current_path).suffix
+        output_path = os.path.join(
+            settings.STORAGE_PATH,
+            f"{image_id}_flipped_{uuid.uuid4()}{ext}"
+        )
+        
+        # Flip image
+        with PILImage.open(image.current_path) as img:
+            # Convert EXIF rotation to actual rotation
+            try:
+                img = ImageOps.exif_transpose(img)
+            except (AttributeError, KeyError, ZeroDivisionError, ValueError):
+                pass
+            
+            # Flip the image
+            if direction == "horizontal":
+                flipped = img.transpose(PILImage.FLIP_LEFT_RIGHT)
+            else:  # vertical
+                flipped = img.transpose(PILImage.FLIP_TOP_BOTTOM)
+            
+            # Save flipped image
+            save_kwargs = {"quality": 95, "optimize": True}
+            if img.format == "PNG":
+                save_kwargs = {"optimize": True}
+            elif img.format == "WEBP":
+                save_kwargs = {"quality": 95}
+                
+            flipped.save(output_path, **save_kwargs)
+            
+            new_width, new_height = flipped.size
+        
+        # Get file size
+        new_size = os.path.getsize(output_path)
+        
+        # Create history entry
+        history_entry = History(
+            id=str(uuid.uuid4()),
+            image_id=image_id,
+            operation_type="flip",
+            operation_params=json.dumps({"direction": direction}),
+            input_path=image.current_path,
+            output_path=output_path,
+            file_size=new_size,
+            sequence=await ImageService._get_next_sequence(db, image_id)
+        )
+        db.add(history_entry)
+        
+        # Update image record
+        image.current_path = output_path
+        image.current_size = new_size
+        image.width = new_width
+        image.height = new_height
+        
+        await db.commit()
+        await db.refresh(image)
+        
+        # Recreate thumbnail
+        if image.thumbnail_path and os.path.exists(image.thumbnail_path):
+            os.remove(image.thumbnail_path)
+        thumbnail_path = os.path.join(settings.STORAGE_PATH, f"{image_id}_thumb{ext}")
+        ImageService._create_thumbnail(output_path, thumbnail_path)
+        image.thumbnail_path = thumbnail_path
+        await db.commit()
+        
+        return output_path, new_size, new_width, new_height
+    
+    @staticmethod
     async def _get_next_sequence(db: AsyncSession, image_id: str) -> int:
         """Get next sequence number for history."""
         result = await db.execute(
@@ -248,3 +337,53 @@ class ImageService:
         )
         last_entry = result.scalars().first()
         return (last_entry.sequence + 1) if last_entry else 1
+    
+    @staticmethod
+    def extract_exif(image_path: str) -> dict:
+        """Extract EXIF metadata from an image."""
+        try:
+            with PILImage.open(image_path) as img:
+                exif_data = {}
+                
+                # Get basic EXIF data
+                exif = img._getexif() if hasattr(img, '_getexif') else None
+                
+                if exif:
+                    from PIL.ExifTags import TAGS
+                    
+                    # Common EXIF tags to extract
+                    interesting_tags = {
+                        'Make', 'Model', 'DateTime', 'DateTimeOriginal',
+                        'ExposureTime', 'FNumber', 'ISO', 'ISOSpeedRatings',
+                        'FocalLength', 'Flash', 'WhiteBalance', 'Software',
+                        'Orientation', 'XResolution', 'YResolution'
+                    }
+                    
+                    for tag_id, value in exif.items():
+                        tag_name = TAGS.get(tag_id, tag_id)
+                        if tag_name in interesting_tags:
+                            # Convert value to string representation
+                            if isinstance(value, bytes):
+                                try:
+                                    value = value.decode('utf-8')
+                                except:
+                                    value = str(value)
+                            elif isinstance(value, tuple):
+                                # Handle rational numbers (like exposure time)
+                                if len(value) == 2 and value[1] != 0:
+                                    value = f"{value[0]}/{value[1]}"
+                                else:
+                                    value = str(value)
+                            
+                            exif_data[tag_name] = str(value)
+                
+                # Add basic image info
+                exif_data['Format'] = img.format
+                exif_data['Mode'] = img.mode
+                exif_data['Size'] = f"{img.size[0]}x{img.size[1]}"
+                
+                return exif_data
+                
+        except Exception as e:
+            return {'error': f'Failed to extract EXIF: {str(e)}'}
+

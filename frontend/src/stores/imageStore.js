@@ -154,6 +154,26 @@ export const useImageStore = defineStore('image', {
       }
     },
 
+    async flipImage(imageId, direction) {
+      try {
+        const result = await imageService.flipImage(imageId, direction);
+        
+        // Refresh image data
+        const updatedImage = await imageService.getImage(imageId);
+        const index = this.images.findIndex(img => img.id === imageId);
+        if (index !== -1) {
+          this.images[index] = updatedImage;
+        }
+
+        console.log(`Image flipped: ${direction}`);
+        return result;
+      } catch (error) {
+        this.error = error.response?.data?.detail || error.message;
+        console.error('Failed to flip:', error);
+        throw error;
+      }
+    },
+
     async loadPresets() {
       try {
         const data = await compressionService.getPresets();

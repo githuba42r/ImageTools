@@ -69,6 +69,16 @@ export const imageService = {
     const response = await api.post(`/images/${imageId}/rotate`, { degrees });
     return response.data;
   },
+
+  async flipImage(imageId, direction) {
+    const response = await api.post(`/images/${imageId}/flip`, { direction });
+    return response.data;
+  },
+
+  async getExifData(imageId) {
+    const response = await api.get(`/images/${imageId}/exif`);
+    return response.data;
+  },
 };
 
 // Compression API

@@ -71,6 +71,16 @@
             </div>
 
             <button 
+              @click="handleBulkRotate" 
+              class="btn-icon btn-header"
+              :disabled="selectedCount === 0 || isBulkProcessing"
+              title="Rotate selected images 90° clockwise"
+            >
+              <span class="icon">↻</span>
+              <span class="tooltip">Rotate Selected</span>
+            </button>
+
+            <button 
               @click="handleDownloadSelected" 
               class="btn-icon btn-header"
               :disabled="selectedCount === 0"
@@ -163,6 +173,15 @@
       </div>
     </div>
 
+    <!-- Image Viewer Modal -->
+    <ImageViewer 
+      v-if="viewerImage"
+      :image="viewerImage"
+      :all-images="images"
+      @close="handleCloseViewer"
+      @navigate="handleNavigateViewer"
+    />
+
   </div>
 </template>
 
@@ -173,6 +192,7 @@ import { useImageStore } from './stores/imageStore';
 import { storeToRefs } from 'pinia';
 import UploadArea from './components/UploadArea.vue';
 import ImageCard from './components/ImageCard.vue';
+import ImageViewer from './components/ImageViewer.vue';
 
 const sessionStore = useSessionStore();
 const imageStore = useImageStore();
@@ -187,6 +207,7 @@ const bulkSelectedPreset = ref('');
 const isBulkProcessing = ref(false);
 const showClearAllConfirm = ref(false);
 const isClearingAll = ref(false);
+const viewerImage = ref(null);
 
 const initializeApp = async () => {
   isLoading.value = true;
@@ -217,7 +238,15 @@ const handleUploadComplete = ({ successCount, failCount }) => {
 
 const handleImageClick = (image) => {
   console.log('Image clicked:', image.id);
-  // Future: Open image viewer modal
+  viewerImage.value = image;
+};
+
+const handleCloseViewer = () => {
+  viewerImage.value = null;
+};
+
+const handleNavigateViewer = (image) => {
+  viewerImage.value = image;
 };
 
 // Toolbar actions
@@ -274,6 +303,23 @@ const handleDownloadSelected = () => {
   });
 };
 
+const handleBulkRotate = async () => {
+  if (selectedCount.value === 0) return;
+
+  isBulkProcessing.value = true;
+  try {
+    const rotatePromises = imageStore.selectedImages.map(imageId => 
+      imageStore.rotateImage(imageId, 90)
+    );
+    await Promise.all(rotatePromises);
+    console.log(`Rotated ${rotatePromises.length} images`);
+  } catch (error) {
+    console.error('Bulk rotation failed:', error);
+  } finally {
+    isBulkProcessing.value = false;
+  }
+};
+
 const handleClickOutside = () => {
   if (showBulkPresetMenu.value) {
     showBulkPresetMenu.value = false;
@@ -296,13 +342,46 @@ const confirmClearAll = async () => {
   }
 };
 
+const handleKeyboardShortcuts = (event) => {
+  // Don't trigger shortcuts if viewer is open or in an input field
+  if (viewerImage.value || event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+    return;
+  }
+
+  // Ctrl/Cmd + A: Select all images
+  if ((event.ctrlKey || event.metaKey) && event.key === 'a' && imageCount.value > 0) {
+    event.preventDefault();
+    selectAll();
+  }
+
+  // Escape: Clear selection
+  if (event.key === 'Escape' && selectedCount.value > 0) {
+    clearSelection();
+  }
+
+  // Delete: Delete selected images (with confirmation would be better, but for now just log)
+  if (event.key === 'Delete' && selectedCount.value > 0) {
+    event.preventDefault();
+    // For safety, we'll just clear selection instead of deleting
+    // To enable deletion, uncomment the lines below
+    // const confirmed = confirm(`Delete ${selectedCount.value} selected image(s)?`);
+    // if (confirmed) {
+    //   imageStore.selectedImages.forEach(id => imageStore.deleteImage(id));
+    // }
+    console.log('Delete key pressed. For safety, this only clears selection. Use remove buttons to delete.');
+    clearSelection();
+  }
+};
+
 onMounted(() => {
   initializeApp();
   document.addEventListener('click', handleClickOutside);
+  document.addEventListener('keydown', handleKeyboardShortcuts);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
+  document.removeEventListener('keydown', handleKeyboardShortcuts);
 });
 </script>
 
