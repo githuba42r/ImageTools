@@ -8,7 +8,10 @@
           <h2>🤖 AI Chat</h2>
         </div>
         <div class="header-right">
-          <p class="model-info">{{ modelDisplayName }}</p>
+          <div class="model-info-container">
+            <span class="model-label">Model:</span>
+            <span class="model-name">{{ modelDisplayName }}</span>
+          </div>
         </div>
       </div>
       
@@ -75,6 +78,64 @@
               </div>
               <div class="message-content">
                 <div class="message-text">{{ message.content }}</div>
+                
+                <!-- Retry Button for failed prompts after model switch -->
+                <div v-if="message.showRetryButton && message.retryPrompt" class="retry-prompt-container">
+                  <button @click="retryLastPrompt" class="btn-retry-prompt">
+                    🔄 Retry: "{{ message.retryPrompt.substring(0, 50) }}{{ message.retryPrompt.length > 50 ? '...' : '' }}"
+                  </button>
+                </div>
+                
+                <!-- Model Recommendations -->
+                <div v-if="message.model_recommendations && message.model_recommendations.length > 0" class="model-recommendations">
+                  <h4 class="recommendations-title">💡 Recommended Models:</h4>
+                  <div 
+                    v-for="(rec, idx) in message.model_recommendations" 
+                    :key="idx"
+                    class="model-rec-card"
+                  >
+                    <div class="model-rec-header">
+                      <div class="model-rec-main">
+                        <span class="model-rec-name">{{ rec.model_name }}</span>
+                        <span class="model-rec-reason">{{ rec.reason }}</span>
+                      </div>
+                      <span class="model-rec-cost">${{ rec.cost_prompt.toFixed(2) }}/${{ rec.cost_completion.toFixed(2) }}</span>
+                    </div>
+                    
+                    <!-- Collapsible capabilities -->
+                    <div v-if="expandedRecommendations.has(`${message.timestamp}-${idx}`)" class="model-rec-capabilities">
+                      <span 
+                        v-for="(cap, capIdx) in rec.capabilities" 
+                        :key="capIdx"
+                        class="capability-tag"
+                      >
+                        ✓ {{ cap }}
+                      </span>
+                    </div>
+                    
+                    <div class="model-rec-actions">
+                      <button 
+                        @click="switchToModel(rec.model_id)" 
+                        class="btn-switch-model"
+                      >
+                        Switch
+                      </button>
+                      <button 
+                        @click="toggleCapabilities(`${message.timestamp}-${idx}`)" 
+                        class="btn-toggle-caps"
+                      >
+                        {{ expandedRecommendations.has(`${message.timestamp}-${idx}`) ? 'Less' : 'More' }}
+                      </button>
+                      <button 
+                        @click="showModelDetails(rec.model_id)" 
+                        class="btn-model-details"
+                      >
+                        Details
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
                 <div v-if="message.operations && message.operations.length > 0" class="operations-info">
                   <span class="operations-label">Preview operations:</span>
                   <span 
@@ -159,7 +220,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['close', 'operationsApplied']);
+const emit = defineEmits(['close', 'operationsApplied', 'switchModel', 'showModelDetails']);
 
 // State
 const messages = ref([]);
@@ -173,6 +234,8 @@ const imageRefreshKey = ref(Date.now());
 const hasUnsavedChanges = ref(false);
 const isSaving = ref(false);
 const pendingOperations = ref([]);
+const expandedRecommendations = ref(new Set()); // Track which recommendations are expanded
+const lastFailedPrompt = ref(null); // Track the last prompt that couldn't be executed
 
 // Model display name
 const modelDisplayName = computed(() => {
@@ -229,6 +292,12 @@ const sendMessage = async () => {
   isLoading.value = true;
   
   try {
+    // Debug logging for model switching
+    console.log('🔍 ChatInterface.sendMessage() - Debug Info:');
+    console.log('  - props.selectedModel:', props.selectedModel);
+    console.log('  - conversationId:', conversationId.value);
+    console.log('  - userMessage:', userMessage.substring(0, 50));
+    
     // Send to API
     const response = await chatService.sendMessage({
       message: userMessage,
@@ -236,6 +305,8 @@ const sendMessage = async () => {
       conversationId: conversationId.value,
       model: props.selectedModel
     });
+    
+    console.log('  - Response received, conversation_id:', response.conversation_id);
     
     // Store conversation ID
     if (!conversationId.value) {
@@ -247,15 +318,29 @@ const sendMessage = async () => {
       role: 'assistant',
       content: response.response,
       operations: response.operations || [],
+      model_recommendations: response.model_recommendations || [],
       timestamp: new Date()
     });
     
-    // If there are operations, mark as having unsaved changes
-    if (response.operations && response.operations.length > 0) {
-      hasUnsavedChanges.value = true;
-      pendingOperations.value = response.operations;
-      // Refresh the image preview to show the modifications
+    // If there are model recommendations, save the failed prompt for retry
+    if (response.model_recommendations && response.model_recommendations.length > 0) {
+      lastFailedPrompt.value = userMessage;
+    }
+    
+    // Handle image updates
+    if (response.image_updated) {
+      // Refresh the image to show the updated version
       imageRefreshKey.value = Date.now();
+      
+      // If there are operations (JSON-based edits), mark as having unsaved changes
+      if (response.operations && response.operations.length > 0) {
+        hasUnsavedChanges.value = true;
+        pendingOperations.value = response.operations;
+      } else {
+        // Direct AI image generation/editing - already saved by backend
+        hasUnsavedChanges.value = false;
+        pendingOperations.value = [];
+      }
     }
     
     await scrollToBottom();
@@ -325,10 +410,67 @@ const handleCloseClick = () => {
   }
 };
 
+// Switch to recommended model
+const switchToModel = (modelId) => {
+  emit('switchModel', modelId);
+  // Don't add message here - the watch on selectedModel will handle it
+};
+
+// Retry the last failed prompt
+const retryLastPrompt = async () => {
+  if (!lastFailedPrompt.value) return;
+  
+  const promptToRetry = lastFailedPrompt.value;
+  lastFailedPrompt.value = null; // Clear it so we don't retry again
+  
+  // Set the input and send the message
+  inputMessage.value = promptToRetry;
+  await sendMessage();
+};
+
+// Show model details
+const showModelDetails = (modelId) => {
+  emit('showModelDetails', modelId);
+};
+
+// Toggle capabilities display
+const toggleCapabilities = (key) => {
+  if (expandedRecommendations.value.has(key)) {
+    expandedRecommendations.value.delete(key);
+  } else {
+    expandedRecommendations.value.add(key);
+  }
+};
+
 // Focus input on mount
 onMounted(() => {
   if (messageInput.value) {
     messageInput.value.focus();
+  }
+});
+
+// Watch for selectedModel changes
+watch(() => props.selectedModel, (newModel, oldModel) => {
+  if (oldModel && newModel && newModel !== oldModel) {
+    // Model changed - show notification in chat with retry option
+    const baseMessage = `🔄 Model switched to ${modelDisplayName.value}. You can now use features specific to this model!`;
+    
+    if (lastFailedPrompt.value) {
+      messages.value.push({
+        role: 'assistant',
+        content: baseMessage,
+        timestamp: new Date(),
+        showRetryButton: true,
+        retryPrompt: lastFailedPrompt.value
+      });
+    } else {
+      messages.value.push({
+        role: 'assistant',
+        content: baseMessage,
+        timestamp: new Date()
+      });
+    }
+    scrollToBottom();
   }
 });
 
@@ -385,6 +527,7 @@ watch(() => messages.value.length, () => {
   border-radius: 6px;
   transition: all 0.2s ease;
   z-index: 10;
+  margin-left: 3rem;
 }
 
 .modal-close-btn:hover {
@@ -393,7 +536,7 @@ watch(() => messages.value.length, () => {
 }
 
 .chat-header {
-  padding: 1rem 2rem;
+  padding: 0.65rem 1.5rem;
   border-bottom: 1px solid #e0e0e0;
   background-color: #fafafa;
   display: flex;
@@ -403,19 +546,46 @@ watch(() => messages.value.length, () => {
 
 .header-left h2 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   color: #333;
 }
 
 .header-right {
   display: flex;
   align-items: center;
+  padding-right: 3rem;
 }
 
+.model-info-container {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: #f3e5f5;
+  padding: 0.35rem 0.75rem;
+  border-radius: 16px;
+  border: 1.5px solid #e1bee7;
+}
+
+.model-label {
+  font-size: 0.65rem;
+  color: #7b1fa2;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.model-name {
+  color: #9C27B0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Legacy class for backwards compatibility */
 .model-info {
   margin: 0;
   color: #9C27B0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   background-color: #f3e5f5;
   padding: 0.5rem 1rem;
@@ -572,12 +742,12 @@ watch(() => messages.value.length, () => {
 .welcome-message h3 {
   margin: 0 0 0.5rem 0;
   color: #333;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
 }
 
 .welcome-message p {
   margin: 0 0 1rem 0;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .example-prompts {
@@ -592,9 +762,9 @@ watch(() => messages.value.length, () => {
 .prompt-chip {
   background-color: #f0f0f0;
   color: #555;
-  padding: 0.4rem 0.9rem;
+  padding: 0.35rem 0.8rem;
   border-radius: 16px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 500;
   border: 1px solid #e0e0e0;
 }
@@ -606,13 +776,13 @@ watch(() => messages.value.length, () => {
 }
 
 .message-icon {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   flex-shrink: 0;
 }
 
@@ -632,10 +802,10 @@ watch(() => messages.value.length, () => {
 }
 
 .message-text {
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  font-size: 0.95rem;
-  line-height: 1.5;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  line-height: 1.4;
   max-width: 85%;
 }
 
@@ -653,27 +823,207 @@ watch(() => messages.value.length, () => {
 .operations-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
   align-items: center;
-  font-size: 0.85rem;
+  font-size: 0.7rem;
 }
 
 .operations-label {
   color: #666;
   font-weight: 500;
+  font-size: 0.7rem;
 }
 
 .operation-tag {
   background-color: #9C27B0;
   color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
   font-weight: 600;
 }
 
-.message-time {
+/* Retry Prompt Styles */
+.retry-prompt-container {
+  margin-top: 0.5rem;
+}
+
+.btn-retry-prompt {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #4caf50 0%, #66bb6a 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(76, 175, 80, 0.2);
+}
+
+.btn-retry-prompt:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+  background: linear-gradient(135deg, #45a049 0%, #5cb85c 100%);
+}
+
+/* Model Recommendations Styles */
+.model-recommendations {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #7b1fa2;
+}
+
+.recommendations-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 0.6rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.model-rec-card {
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 0.65rem;
+  margin-bottom: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.model-rec-card:last-child {
+  margin-bottom: 0;
+}
+
+.model-rec-card:hover {
+  border-color: #7b1fa2;
+  box-shadow: 0 1px 4px rgba(123, 31, 162, 0.1);
+}
+
+.model-rec-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.4rem;
+  gap: 0.5rem;
+}
+
+.model-rec-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.model-rec-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #7b1fa2;
+  line-height: 1.2;
+}
+
+.model-rec-cost {
+  font-size: 0.65rem;
+  color: #666;
+  background-color: #f5f5f5;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-family: monospace;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.model-rec-reason {
+  font-size: 0.7rem;
+  color: #555;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.model-rec-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0 0.4rem 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f0f0f0;
+}
+
+.capability-tag {
+  font-size: 0.65rem;
+  color: #4caf50;
+  background-color: #e8f5e9;
+  padding: 0.2rem 0.45rem;
+  border-radius: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.model-rec-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.btn-switch-model {
+  flex: 1;
+  padding: 0.45rem 0.75rem;
+  background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%);
+  color: white;
+  border: none;
+  border-radius: 5px;
   font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-switch-model:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(123, 31, 162, 0.3);
+}
+
+.btn-toggle-caps {
+  padding: 0.45rem 0.65rem;
+  background-color: white;
+  color: #666;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 50px;
+}
+
+.btn-toggle-caps:hover {
+  background-color: #f5f5f5;
+  border-color: #ccc;
+}
+
+.btn-model-details {
+  padding: 0.45rem 0.65rem;
+  background-color: white;
+  color: #7b1fa2;
+  border: 1.5px solid #7b1fa2;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+}
+
+.btn-model-details:hover {
+  background-color: #f3e5f5;
+}
+
+.message-time {
+  font-size: 0.7rem;
   color: #999;
   margin-top: 0.25rem;
 }
@@ -717,10 +1067,10 @@ watch(() => messages.value.length, () => {
 .error-message {
   background-color: #ffebee;
   color: #c62828;
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 0.9rem;
   border-radius: 6px;
   margin-bottom: 1rem;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   border-left: 3px solid #f44336;
 }
 
@@ -731,10 +1081,10 @@ watch(() => messages.value.length, () => {
 
 .chat-input {
   flex: 1;
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 0.9rem;
   border: 2px solid #e0e0e0;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.9rem;
   transition: border-color 0.2s ease;
 }
 
@@ -749,12 +1099,12 @@ watch(() => messages.value.length, () => {
 }
 
 .send-button {
-  padding: 0.75rem 2rem;
+  padding: 0.65rem 1.75rem;
   background-color: #9C27B0;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -773,14 +1123,14 @@ watch(() => messages.value.length, () => {
 
 .connection-warning {
   margin-top: 1rem;
-  padding: 0.75rem 1rem;
+  padding: 0.65rem 0.9rem;
   background-color: #fff3e0;
   border-left: 3px solid #ff9800;
   border-radius: 6px;
   display: flex;
   gap: 0.5rem;
   align-items: center;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #e65100;
 }
 

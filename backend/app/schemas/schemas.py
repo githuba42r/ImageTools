@@ -194,11 +194,23 @@ class AIOperation(BaseModel):
     params: Dict[str, Any] = Field(..., description="Operation parameters")
 
 
+class ModelRecommendation(BaseModel):
+    """Recommended model for operations the current model cannot perform"""
+    model_id: str = Field(..., description="OpenRouter model ID")
+    model_name: str = Field(..., description="Display name of the model")
+    reason: str = Field(..., description="Why this model is recommended")
+    capabilities: List[str] = Field(..., description="What this model can do")
+    cost_prompt: float = Field(..., description="Cost per 1M prompt tokens in USD")
+    cost_completion: float = Field(..., description="Cost per 1M completion tokens in USD")
+    context_length: Optional[int] = Field(None, description="Context window size")
+
+
 class ChatResponse(BaseModel):
     conversation_id: str
     message_id: str
     response: str
     operations: List[AIOperation] = []
+    model_recommendations: List[ModelRecommendation] = []  # New field for model suggestions
     image_updated: bool = False
     new_image_url: Optional[str] = None
     tokens_used: Optional[int] = None

@@ -10,14 +10,27 @@ from app.schemas.schemas import ModelInfo
 
 
 # Recommended models for image manipulation tasks
+# Vision models (text+image->text) for viewing/analysis:
 RECOMMENDED_MODELS = [
-    "google/gemini-2.0-flash-exp:free",  # Free tier, good for testing
-    "google/gemini-3-flash-preview",     # Best balance of cost/performance
-    "anthropic/claude-3.5-sonnet",       # High quality, higher cost
+    "qwen/qwen3-vl-8b-instruct",                        # Best value - cheapest vision model ($0.08/$0.50 per 1M tokens)
+    "google/gemini-2.5-flash-lite-preview-09-2025",    # Google's low-cost option ($0.10/$0.40 per 1M tokens)
+    "qwen/qwen3-vl-30b-a3b-instruct",                  # Better quality, still affordable ($0.15/$0.60 per 1M tokens)
+    "allenai/molmo-2-8b",                              # Video support, low cost ($0.20/$0.20 per 1M tokens)
+    "google/gemini-3-flash-preview",                   # High quality Google option ($0.50/$3.00 per 1M tokens)
+    "anthropic/claude-3.5-sonnet",                     # Premium quality, higher cost
 ]
 
-# Default model
-DEFAULT_MODEL = "google/gemini-2.0-flash-exp:free"
+# Image editing models (text+image->text+image) for object removal, inpainting:
+IMAGE_EDITING_MODELS = [
+    "google/gemini-2.5-flash-image",                   # Low cost editing ($0.30/$2.50 per 1M tokens)
+    "openai/gpt-5-image-mini",                         # Mid-range editing ($2.50/$2.00 per 1M tokens)
+    "google/gemini-3-pro-image-preview",               # High quality editing ($2.00/$12.00 per 1M tokens)
+    "google/gemini-4-pro-image-preview",               # Latest Gemini 4 with image editing
+    "openai/gpt-5-image",                              # Premium editing ($10.00/$10.00 per 1M tokens)
+]
+
+# Default model - cheapest vision-capable model
+DEFAULT_MODEL = "qwen/qwen3-vl-8b-instruct"
 
 
 def parse_model_data(model_data: Dict[str, Any]) -> ModelInfo:
@@ -124,6 +137,40 @@ def get_recommended_models(all_models: List[ModelInfo]) -> List[ModelInfo]:
                 break
     
     return recommended
+
+
+def is_image_editing_model(model_id: str) -> bool:
+    """
+    Check if a model supports image editing/generation capabilities
+    
+    Args:
+        model_id: Model identifier (e.g., "google/gemini-4-pro-image-preview")
+        
+    Returns:
+        True if model can generate/edit images, False otherwise
+    """
+    # Check if explicitly listed in IMAGE_EDITING_MODELS
+    if model_id in IMAGE_EDITING_MODELS:
+        return True
+    
+    # Auto-detect based on model name patterns
+    model_lower = model_id.lower()
+    
+    # Image editing indicators in model names
+    image_indicators = [
+        "-image",           # e.g., "gemini-4-pro-image-preview"
+        "/image-",          # e.g., "provider/image-model"
+        "image-generation", # Explicit image generation models
+        "imagen",           # Google's Imagen models
+        "dall-e",          # OpenAI's DALL-E models (though these are usually separate)
+    ]
+    
+    # Check if model name contains image editing indicators
+    for indicator in image_indicators:
+        if indicator in model_lower:
+            return True
+    
+    return False
 
 
 def calculate_conversation_cost(

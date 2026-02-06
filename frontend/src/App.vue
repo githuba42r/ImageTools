@@ -165,6 +165,8 @@
                   :isOpenRouterConnected="openRouterConnected"
                   @image-click="handleImageClick"
                   @edit-click="handleEditClick"
+                  @switchModel="handleSwitchModel"
+                  @showModelDetails="handleShowModelDetails"
                 />
               </div>
             </div>
@@ -336,7 +338,11 @@
                   v-for="tag in getSelectedModelData()?.tags" 
                   :key="tag" 
                   class="model-tag"
-                  :class="{ 'tag-free': tag === 'Free', 'tag-recommended': tag === 'Recommended' }"
+                  :class="{ 
+                    'tag-free': tag === 'Free', 
+                    'tag-recommended': tag === 'Recommended',
+                    'tag-image-editing': tag === 'Image Editing'
+                  }"
                 >
                   {{ tag }}
                 </span>
@@ -505,6 +511,13 @@
                 <span class="toggle-label">Free only</span>
               </label>
             </div>
+            <div class="filter-toggle">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="showOnlyImageEditingModels" />
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Image editing only</span>
+              </label>
+            </div>
             <div class="filter-tags">
               <label class="filter-label">Tags:</label>
               <select v-model="selectedTagFilter" class="tag-filter-select">
@@ -567,7 +580,11 @@
                     v-for="tag in model.tags" 
                     :key="tag" 
                     class="model-tag"
-                    :class="{ 'tag-free': tag === 'Free', 'tag-recommended': tag === 'Recommended' }"
+                    :class="{ 
+                      'tag-free': tag === 'Free', 
+                      'tag-recommended': tag === 'Recommended',
+                      'tag-image-editing': tag === 'Image Editing'
+                    }"
                   >
                     {{ tag }}
                   </span>
@@ -640,7 +657,11 @@
                     v-for="tag in model.tags" 
                     :key="tag" 
                     class="model-tag"
-                    :class="{ 'tag-free': tag === 'Free', 'tag-recommended': tag === 'Recommended' }"
+                    :class="{ 
+                      'tag-free': tag === 'Free', 
+                      'tag-recommended': tag === 'Recommended',
+                      'tag-image-editing': tag === 'Image Editing'
+                    }"
                   >
                     {{ tag }}
                   </span>
@@ -740,6 +761,8 @@ const openRouterCredits = ref(null);
 const oauthNotification = ref(null); // { type: 'success' | 'error', message: string }
 const selectedModel = ref('');
 const showModelSelector = ref(false);
+const selectedModelForDetails = ref(null);
+const showModelDetailsModal = ref(false);
 
 // Model loading and filtering state
 const allModels = ref([]);
@@ -747,17 +770,25 @@ const isLoadingModels = ref(false);
 const modelsLoadError = ref(null);
 const modelSearchQuery = ref('');
 const showOnlyFreeModels = ref(false);
+const showOnlyImageEditingModels = ref(true); // Enabled by default
 const selectedTagFilter = ref('');
 const expandedDescriptions = ref(new Set()); // Track which model descriptions are expanded
 
 // Recommended model IDs (hardcoded list of preferred models)
 const recommendedModelIds = [
-  'google/gemini-2.0-flash-exp:free',
-  'anthropic/claude-3.5-sonnet',
-  'openai/gpt-4o',
-  'anthropic/claude-3-opus',
-  'google/gemini-flash-1.5-8b',
-  'meta-llama/llama-3.3-70b-instruct',
+  // Vision models (text+image->text) for viewing/analysis
+  'qwen/qwen3-vl-8b-instruct',                        // Best value - cheapest vision model
+  'google/gemini-2.5-flash-lite-preview-09-2025',    // Google's low-cost option
+  'qwen/qwen3-vl-30b-a3b-instruct',                  // Better quality, affordable
+  'allenai/molmo-2-8b',                              // Video support, low cost
+  'google/gemini-3-flash-preview',                   // High quality Google option
+  'anthropic/claude-3.5-sonnet',                     // Premium quality
+  
+  // Image editing models (text+image->text+image) for object removal, inpainting
+  'google/gemini-2.5-flash-image',                   // Low cost editing
+  'openai/gpt-5-image-mini',                         // Mid-range editing
+  'google/gemini-3-pro-image-preview',               // High quality editing
+  'google/gemini-4-pro-image-preview',               // Latest Gemini 4 with image editing
 ];
 
 // Provider icons and colors mapping
@@ -771,6 +802,7 @@ const providerInfo = {
   'qwen': { icon: '🔷', color: '#1890ff' },
   'nvidia': { icon: '💚', color: '#76b900' },
   'cohere': { icon: '🔮', color: '#39594d' },
+  'allenai': { icon: '🔬', color: '#00a4e4' },
   'default': { icon: '🤖', color: '#666' }
 };
 
@@ -808,6 +840,13 @@ const parseModelFromAPI = (apiModel) => {
   if (isFree) tags.push('Free');
   if (recommendedModelIds.includes(apiModel.id)) tags.push('Recommended');
   if (apiModel.architecture?.modality?.includes('image')) tags.push('Vision');
+  
+  // Check if model can output images (image editing capability)
+  if (apiModel.architecture?.modality?.includes('->text+image') || 
+      apiModel.architecture?.modality?.includes('->image')) {
+    tags.push('Image Editing');
+  }
+  
   if (apiModel.top_provider?.is_moderated) tags.push('Moderated');
   if (apiModel.context_length >= 100000) tags.push('Large Context');
   
@@ -868,11 +907,16 @@ const availableTags = computed(() => {
   return Array.from(tags).sort();
 });
 
-// Filter models based on search query, free toggle, and tag filter
+// Filter models based on search query, free toggle, image editing toggle, and tag filter
 const filterModels = (models) => {
   return models.filter(model => {
     // Free filter
     if (showOnlyFreeModels.value && !model.isFree) {
+      return false;
+    }
+    
+    // Image editing filter
+    if (showOnlyImageEditingModels.value && !model.tags.includes('Image Editing')) {
       return false;
     }
     
@@ -1025,6 +1069,26 @@ const handleNavigateViewer = (image) => {
 const handleEditClick = (image) => {
   console.log('Edit clicked for image:', image.id);
   editingImage.value = image;
+};
+
+// Handle switch model from chat recommendations
+const handleSwitchModel = async (modelId) => {
+  await selectModel(modelId);
+  // Close any open modals if needed
+};
+
+// Handle show model details from chat recommendations  
+const handleShowModelDetails = (modelId) => {
+  // Find the model in allModels
+  const model = allModels.value.find(m => m.id === modelId);
+  if (model) {
+    selectedModelForDetails.value = model;
+    showModelDetailsModal.value = true;
+  } else {
+    // If model not loaded yet, open model selector filtered to this model
+    modelSearchQuery.value = modelId;
+    showModelSelector.value = true;
+  }
 };
 
 const handleEditorSave = async (blob) => {
@@ -1494,7 +1558,7 @@ body {
 .app-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 1rem;
+  padding: 0.8rem;
   text-align: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   transition: padding 0.3s ease;
@@ -1503,7 +1567,7 @@ body {
 }
 
 .app-header.compact {
-  padding: 0.375rem 1rem;
+  padding: 0.3rem 0.8rem;
 }
 
 .header-content {
@@ -1529,8 +1593,8 @@ body {
 }
 
 .app-header h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
+  font-size: 2rem;
+  margin-bottom: 0.4rem;
   transition: font-size 0.3s ease, margin 0.3s ease;
   cursor: help;
   position: relative;
@@ -1538,7 +1602,7 @@ body {
 }
 
 .app-header.compact h1 {
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   margin-bottom: 0;
 }
 
@@ -1585,16 +1649,16 @@ body {
 }
 
 .subtitle {
-  font-size: 1.1rem;
+  font-size: 0.88rem;
   opacity: 0.9;
 }
 
 .image-stats {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.95rem;
-  margin-top: 0.5rem;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+  margin-top: 0.4rem;
 }
 
 .image-count {
@@ -1625,7 +1689,7 @@ body {
 
 .btn-icon {
   position: relative;
-  padding: 0.6rem;
+  padding: 0.48rem;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 4px;
   background-color: rgba(255, 255, 255, 0.15);
@@ -1653,16 +1717,16 @@ body {
 }
 
 .btn-icon .icon {
-  font-size: 1.25rem;
+  font-size: 1rem;
   display: block;
 }
 
 .btn-header {
-  padding: 0.5rem 0.7rem;
+  padding: 0.4rem 0.56rem;
 }
 
 .btn-header .icon {
-  font-size: 1.1rem;
+  font-size: 0.88rem;
 }
 
 .btn-compress-bulk {
@@ -1828,7 +1892,7 @@ body {
 
 .app-main {
   flex: 1;
-  padding: 2rem 1rem;
+  padding: 0.5rem 1rem;
   overflow: visible;
 }
 
@@ -1869,9 +1933,9 @@ body {
 
 .image-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1.5rem;
-  padding-top: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  padding-top: 0.5rem;
   overflow: visible;
 }
 
@@ -1953,13 +2017,13 @@ body {
 }
 
 .modal-header {
-  padding: 1.5rem;
+  padding: 1.2rem;
   border-bottom: 1px solid #e0e0e0;
 }
 
 .modal-header h2 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   color: #333;
 }
 
@@ -2176,8 +2240,8 @@ body {
 }
 
 .settings-section h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.25rem;
+  margin: 0 0 0.4rem 0;
+  font-size: 1rem;
   color: #333;
 }
 
@@ -2934,6 +2998,11 @@ body {
 .model-tag.tag-recommended {
   background-color: #fff3e0;
   color: #ef6c00;
+}
+
+.model-tag.tag-image-editing {
+  background-color: #f3e5f5;
+  color: #7b1fa2;
 }
 
 .model-specs {
