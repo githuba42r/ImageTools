@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     CORS_ENABLED: bool = True
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:8000"
     
+    # OpenRouter / AI Configuration
+    OPENROUTER_OAUTH_CALLBACK_URL: str = "http://localhost:5173/oauth/callback"
+    OPENROUTER_APP_NAME: str = "ImageTools"
+    OPENROUTER_APP_URL: str = "http://localhost:5173"
+    OPENROUTER_API_KEY: str = ""  # Optional fallback API key
+    
     @property
     def allowed_extensions_list(self) -> List[str]:
         return [ext.strip() for ext in self.ALLOWED_EXTENSIONS.split(",")]

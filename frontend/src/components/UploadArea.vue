@@ -3,8 +3,9 @@
     <div
       class="dropzone"
       :class="{ 'drag-over': isDragOver, 'uploading': isUploading, 'compact': compact, 'inline': inline }"
-      @dragover.prevent="isDragOver = true"
-      @dragleave.prevent="isDragOver = false"
+      @dragenter.prevent="handleDragEnter"
+      @dragover.prevent="handleDragOver"
+      @dragleave.prevent="handleDragLeave"
       @drop.prevent="handleDrop"
       @click="triggerFileInput"
     >
@@ -61,11 +62,31 @@ const fileInput = ref(null);
 const isDragOver = ref(false);
 const error = ref(null);
 const maxImages = 5;
+const dragCounter = ref(0);
 
 const emit = defineEmits(['upload-complete']);
 
 const triggerFileInput = () => {
   fileInput.value?.click();
+};
+
+const handleDragEnter = (event) => {
+  dragCounter.value++;
+  console.log('[UploadArea] Drag enter', { dragCounter: dragCounter.value, inline: props.inline });
+  isDragOver.value = true;
+};
+
+const handleDragOver = (event) => {
+  // Keep isDragOver true while dragging over
+  isDragOver.value = true;
+};
+
+const handleDragLeave = (event) => {
+  dragCounter.value--;
+  console.log('[UploadArea] Drag leave', { dragCounter: dragCounter.value, inline: props.inline });
+  if (dragCounter.value === 0) {
+    isDragOver.value = false;
+  }
 };
 
 const handleFileSelect = async (event) => {
@@ -75,23 +96,41 @@ const handleFileSelect = async (event) => {
 };
 
 const handleDrop = async (event) => {
+  console.log('[UploadArea] Drop event triggered', { 
+    filesCount: event.dataTransfer.files.length,
+    inline: props.inline,
+    compact: props.compact
+  });
+  
+  // Reset drag state
   isDragOver.value = false;
+  dragCounter.value = 0;
+  
   const files = Array.from(event.dataTransfer.files).filter(
     file => file.type.startsWith('image/')
   );
+  
+  console.log('[UploadArea] Filtered image files:', files.length);
+  
   await uploadFiles(files);
 };
 
 const uploadFiles = async (files) => {
+  console.log('[UploadArea] uploadFiles called with:', files.length, 'files');
+  
   if (files.length === 0) {
     error.value = 'No valid image files selected';
+    console.log('[UploadArea] No valid files');
     return;
   }
 
   error.value = null;
 
   try {
+    console.log('[UploadArea] Calling imageStore.uploadMultipleImages...');
     const results = await imageStore.uploadMultipleImages(files);
+    
+    console.log('[UploadArea] Upload results:', results);
     
     const successCount = results.filter(r => r.success).length;
     const failCount = results.filter(r => !r.success).length;
@@ -102,6 +141,7 @@ const uploadFiles = async (files) => {
 
     emit('upload-complete', { successCount, failCount });
   } catch (err) {
+    console.error('[UploadArea] Upload error:', err);
     error.value = err.message;
   }
 };

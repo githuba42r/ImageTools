@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, Float
+from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, Float, Boolean
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -63,7 +63,24 @@ class Message(Base):
     conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False, index=True)
     role = Column(String, nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
-    tokens_input = Column(Integer, nullable=True)
-    tokens_output = Column(Integer, nullable=True)
+    tokens_used = Column(Integer, nullable=True)
     cost = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class OpenRouterKey(Base):
+    """
+    Store OpenRouter API keys per session
+    Keys are encrypted at rest and associated with browser sessions
+    """
+    __tablename__ = "openrouter_keys"
+    
+    id = Column(String, primary_key=True, index=True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True, unique=True)
+    encrypted_api_key = Column(Text, nullable=False)  # Encrypted API key
+    key_label = Column(String, nullable=True)  # Optional label from OpenRouter
+    credits_remaining = Column(Float, nullable=True)  # Cache of remaining credits
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_used_at = Column(DateTime(timezone=True), nullable=True)

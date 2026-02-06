@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.v1.endpoints import sessions, images, compression, history, background
+from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth
 import logging
 
 # Configure logging
@@ -56,6 +56,8 @@ app.include_router(images.router, prefix=settings.API_PREFIX)
 app.include_router(compression.router, prefix=settings.API_PREFIX)
 app.include_router(history.router, prefix=settings.API_PREFIX)
 app.include_router(background.router, prefix=f"{settings.API_PREFIX}/background", tags=["background"])
+app.include_router(openrouter_oauth.router, prefix=f"{settings.API_PREFIX}/openrouter")
+app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["chat"])
 
 
 @app.get("/")

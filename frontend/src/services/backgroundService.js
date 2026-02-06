@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api/v1';
+import { api } from './api';
 
 /**
  * Background removal service
@@ -26,8 +24,8 @@ export const backgroundService = {
     } = options;
 
     try {
-      const response = await axios.post(
-        `${API_URL}/background/${imageId}/remove-background`,
+      const response = await api.post(
+        `/background/${imageId}/remove-background`,
         {
           alpha_matting: alphaMatting,
           alpha_matting_foreground_threshold: alphaMattingForegroundThreshold,
@@ -49,7 +47,7 @@ export const backgroundService = {
    */
   async getAvailableModels() {
     try {
-      const response = await axios.get(`${API_URL}/background/models`);
+      const response = await api.get('/background/models');
       return response.data;
     } catch (error) {
       console.error('Failed to get available models:', error);
