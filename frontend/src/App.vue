@@ -290,31 +290,74 @@
           <div class="settings-section">
             <h3>🧠 AI Model Selection</h3>
             <p class="section-description">
-              Choose which AI model to use for image manipulation.
+              Choose which AI model to use for image manipulation. Click the card to change models.
             </p>
             
-            <div class="model-selector">
-              <div class="current-model-display">
-                <label>Current Model:</label>
-                <div v-if="selectedModel" class="selected-model-info">
-                  <span class="model-icon">{{ getSelectedModelData()?.icon }}</span>
-                  <div class="model-text">
-                    <span class="model-name">{{ getSelectedModelData()?.name }}</span>
-                    <span class="model-cost">{{ getSelectedModelData()?.cost }}</span>
-                  </div>
+            <!-- Model Card Display (Clickable) -->
+            <div 
+              v-if="selectedModel && getSelectedModelData()"
+              class="selected-model-card clickable"
+              :class="{ 'disabled': !openRouterConnected }"
+              @click="openRouterConnected && openModelSelector()"
+            >
+              <div class="model-card-header">
+                <span class="model-icon-large" :style="{ color: getSelectedModelData()?.color }">
+                  {{ getSelectedModelData()?.icon }}
+                </span>
+                <div class="model-header-text">
+                  <h3 class="model-card-name">{{ getSelectedModelData()?.name }}</h3>
+                  <p class="model-provider">{{ getSelectedModelData()?.provider }}</p>
                 </div>
-                <div v-else class="no-model-selected">
-                  <span class="placeholder-text">No model selected</span>
+                <span class="click-hint">✏️</span>
+              </div>
+              
+              <p class="model-description">{{ getSelectedModelData()?.description }}</p>
+              
+              <div class="model-tags">
+                <span 
+                  v-for="tag in getSelectedModelData()?.tags" 
+                  :key="tag" 
+                  class="model-tag"
+                  :class="{ 'tag-free': tag === 'Free', 'tag-recommended': tag === 'Recommended' }"
+                >
+                  {{ tag }}
+                </span>
+              </div>
+              
+              <div class="model-specs">
+                <div class="spec-item" v-if="getSelectedModelData()?.contextWindow">
+                  <span class="spec-label">Context:</span>
+                  <span class="spec-value">{{ formatContextWindow(getSelectedModelData()?.contextWindow) }}</span>
+                </div>
+                <div class="spec-item" v-if="getSelectedModelData()?.maxTokens">
+                  <span class="spec-label">Max Output:</span>
+                  <span class="spec-value">{{ formatTokens(getSelectedModelData()?.maxTokens) }}</span>
                 </div>
               </div>
               
-              <button 
-                class="btn-select-model"
-                :disabled="!openRouterConnected"
-                @click="openModelSelector"
-              >
-                {{ openRouterConnected ? 'Choose Model' : 'Connect to Choose' }}
-              </button>
+              <div class="model-footer">
+                <div class="model-pricing">
+                  <span class="pricing-label">Cost:</span>
+                  <span class="pricing-value">{{ getSelectedModelData()?.cost }}</span>
+                </div>
+                <div class="model-id">{{ getSelectedModelData()?.id }}</div>
+              </div>
+            </div>
+            
+            <!-- No Model Selected Placeholder -->
+            <div 
+              v-else
+              class="selected-model-card clickable placeholder"
+              :class="{ 'disabled': !openRouterConnected }"
+              @click="openRouterConnected && openModelSelector()"
+            >
+              <div class="placeholder-content">
+                <span class="placeholder-icon">🤖</span>
+                <h3 class="placeholder-title">No Model Selected</h3>
+                <p class="placeholder-text">
+                  {{ openRouterConnected ? 'Click here to choose an AI model' : 'Connect to OpenRouter to choose a model' }}
+                </p>
+              </div>
             </div>
             
             <div class="info-box">
@@ -2354,94 +2397,86 @@ body {
   text-decoration: underline;
 }
 
-.model-selector {
+/* Selected Model Card in AI Settings (Clickable) */
+.selected-model-card {
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  background-color: white;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  position: relative;
   margin-top: 1rem;
-}
-
-.current-model-display {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.current-model-display label {
-  font-weight: 600;
-  color: #333;
-  font-size: 0.9rem;
-}
-
-.selected-model-info {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-}
-
-.model-icon {
-  font-size: 2rem;
-  flex-shrink: 0;
-}
-
-.model-text {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.model-name {
-  font-weight: 600;
-  color: #333;
-  font-size: 1rem;
-}
-
-.model-cost {
-  font-size: 0.85rem;
-  color: #666;
-}
-
-.no-model-selected {
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border: 2px dashed #ddd;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.placeholder-text {
-  color: #999;
-  font-style: italic;
-}
-
-.btn-select-model {
-  padding: 0.75rem 1.5rem;
-  background-color: #2196F3;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.btn-select-model:hover:not(:disabled) {
-  background-color: #1976D2;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+.selected-model-card.clickable {
+  cursor: pointer;
 }
 
-.btn-select-model:disabled {
-  background-color: #e0e0e0;
-  color: #999;
+.selected-model-card.clickable:hover:not(.disabled) {
+  border-color: #2196F3;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+  transform: translateY(-2px);
+}
+
+.selected-model-card.clickable:hover:not(.disabled) .click-hint {
+  opacity: 1;
+}
+
+.selected-model-card.disabled {
+  opacity: 0.6;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
+  background-color: #f5f5f5;
+}
+
+.selected-model-card .click-hint {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  font-size: 1.5rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Placeholder State */
+.selected-model-card.placeholder {
+  border: 2px dashed #ddd;
+  background-color: #f8f9fa;
+}
+
+.selected-model-card.placeholder:hover:not(.disabled) {
+  border-color: #2196F3;
+  background-color: #f0f7ff;
+}
+
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.placeholder-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.placeholder-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #666;
+}
+
+.placeholder-content .placeholder-text {
+  margin: 0;
+  color: #999;
+  font-size: 0.95rem;
 }
 
 /* Model Selector Modal */
