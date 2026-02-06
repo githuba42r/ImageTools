@@ -478,25 +478,23 @@
               <input 
                 v-model="modelSearchQuery"
                 type="text"
-                placeholder="🔍 Search models by name, provider, or capability..."
+                placeholder="🔍 Search models..."
                 class="search-input"
               />
             </div>
-            <div class="filter-row">
-              <div class="filter-toggle">
-                <label class="toggle-switch">
-                  <input type="checkbox" v-model="showOnlyFreeModels" />
-                  <span class="toggle-slider"></span>
-                  <span class="toggle-label">Free only</span>
-                </label>
-              </div>
-              <div class="filter-tags">
-                <label class="filter-label">Filter by tags:</label>
-                <select v-model="selectedTagFilter" class="tag-filter-select">
-                  <option value="">All Tags</option>
-                  <option v-for="tag in availableTags" :key="tag" :value="tag">{{ tag }}</option>
-                </select>
-              </div>
+            <div class="filter-toggle">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="showOnlyFreeModels" />
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Free only</span>
+              </label>
+            </div>
+            <div class="filter-tags">
+              <label class="filter-label">Tags:</label>
+              <select v-model="selectedTagFilter" class="tag-filter-select">
+                <option value="">All Tags</option>
+                <option v-for="tag in availableTags" :key="tag" :value="tag">{{ tag }}</option>
+              </select>
             </div>
           </div>
 
@@ -2507,23 +2505,28 @@ body {
 
 /* Model Filters */
 .model-filters {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   margin-bottom: 1.5rem;
   padding: 1rem;
   background-color: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #e0e0e0;
+  flex-wrap: wrap;
 }
 
 .filter-search {
-  margin-bottom: 1rem;
+  flex: 0 1 300px;
+  min-width: 200px;
 }
 
 .search-input {
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.875rem;
   border: 1px solid #ddd;
   border-radius: 6px;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -2533,16 +2536,10 @@ body {
   box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
 }
 
-.filter-row {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-}
-
 .filter-toggle {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .toggle-switch {
@@ -2592,6 +2589,7 @@ body {
   font-size: 0.9rem;
   color: #333;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .filter-tags {
@@ -2599,6 +2597,7 @@ body {
   align-items: center;
   gap: 0.75rem;
   flex: 1;
+  min-width: 200px;
 }
 
 .filter-label {
@@ -2610,9 +2609,9 @@ body {
 
 .tag-filter-select {
   flex: 1;
-  min-width: 200px;
-  max-width: 300px;
-  padding: 0.5rem 0.75rem;
+  min-width: 150px;
+  max-width: 250px;
+  padding: 0.6rem 0.75rem;
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 0.9rem;
@@ -3005,6 +3004,32 @@ body {
 
   .model-card {
     padding: 1rem;
+  }
+
+  /* Model filters - stack on mobile */
+  .model-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .filter-search {
+    flex: 1;
+    min-width: 100%;
+  }
+
+  .filter-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filter-tags {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .tag-filter-select {
+    max-width: 100%;
   }
 
   /* Buttons and text sizing */
