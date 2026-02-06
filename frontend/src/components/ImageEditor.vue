@@ -116,25 +116,28 @@ const initializeEditor = () => {
 };
 
 const handleSave = async () => {
-  if (!editorInstance) return;
+  if (!editorInstance) {
+    console.error('Editor instance not available');
+    return;
+  }
 
   try {
     console.log('Getting edited image from editor...');
     
-    // Get the edited image as a data URL with proper format
-    // Try to preserve the original format or default to PNG
-    const imageFormat = props.image.format?.toLowerCase() || 'png';
-    const mimeType = `image/${imageFormat === 'jpg' ? 'jpeg' : imageFormat}`;
+    // Get the edited image as a data URL
+    // Toast UI Image Editor uses toDataURL() without parameters by default
+    let dataURL;
+    try {
+      dataURL = editorInstance.toDataURL();
+      console.log('Data URL obtained, length:', dataURL ? dataURL.length : 0);
+    } catch (err) {
+      console.error('Failed to get data URL:', err);
+      throw new Error('Failed to export edited image');
+    }
     
-    console.log('Image format:', imageFormat, 'MIME type:', mimeType);
-    
-    // Get data URL with quality settings
-    const dataURL = editorInstance.toDataURL({
-      format: imageFormat,
-      quality: 0.95
-    });
-    
-    console.log('Data URL length:', dataURL.length);
+    if (!dataURL || dataURL.length === 0) {
+      throw new Error('Empty data URL returned from editor');
+    }
     
     // Convert data URL to blob
     const response = await fetch(dataURL);
@@ -145,16 +148,12 @@ const handleSave = async () => {
       type: blob.type
     });
     
-    // Create a proper blob with correct MIME type if needed
-    const properBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
-    
-    console.log('Emitting save event with blob:', {
-      size: properBlob.size,
-      type: properBlob.type
-    });
+    if (blob.size === 0) {
+      throw new Error('Empty blob created from data URL');
+    }
     
     // Emit save event with blob
-    emit('save', properBlob);
+    emit('save', blob);
   } catch (error) {
     console.error('Error saving image:', error);
     console.error('Error details:', {
