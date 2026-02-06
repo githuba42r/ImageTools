@@ -260,12 +260,21 @@ const handleEditorSave = async (blob) => {
   if (!editingImage.value) return;
 
   try {
+    console.log('Saving edited image...', {
+      imageId: editingImage.value.id,
+      filename: editingImage.value.original_filename,
+      blobSize: blob.size,
+      blobType: blob.type
+    });
+
     // Create FormData with the edited image blob
     const formData = new FormData();
     formData.append('file', blob, editingImage.value.original_filename);
 
     // Call backend API to save edited image
     const response = await imageService.saveEditedImage(editingImage.value.id, formData);
+    
+    console.log('API response:', response);
     
     // Refresh the image in the store
     await imageStore.loadSessionImages();
@@ -276,6 +285,11 @@ const handleEditorSave = async (blob) => {
     console.log('Image edited successfully:', response);
   } catch (error) {
     console.error('Failed to save edited image:', error);
+    console.error('Error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
     alert('Failed to save edited image. Please try again.');
   }
 };

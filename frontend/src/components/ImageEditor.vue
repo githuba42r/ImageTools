@@ -119,17 +119,48 @@ const handleSave = async () => {
   if (!editorInstance) return;
 
   try {
-    // Get the edited image as a data URL
-    const dataURL = editorInstance.toDataURL();
+    console.log('Getting edited image from editor...');
+    
+    // Get the edited image as a data URL with proper format
+    // Try to preserve the original format or default to PNG
+    const imageFormat = props.image.format?.toLowerCase() || 'png';
+    const mimeType = `image/${imageFormat === 'jpg' ? 'jpeg' : imageFormat}`;
+    
+    console.log('Image format:', imageFormat, 'MIME type:', mimeType);
+    
+    // Get data URL with quality settings
+    const dataURL = editorInstance.toDataURL({
+      format: imageFormat,
+      quality: 0.95
+    });
+    
+    console.log('Data URL length:', dataURL.length);
     
     // Convert data URL to blob
     const response = await fetch(dataURL);
     const blob = await response.blob();
     
+    console.log('Blob created:', {
+      size: blob.size,
+      type: blob.type
+    });
+    
+    // Create a proper blob with correct MIME type if needed
+    const properBlob = blob.type ? blob : new Blob([blob], { type: mimeType });
+    
+    console.log('Emitting save event with blob:', {
+      size: properBlob.size,
+      type: properBlob.type
+    });
+    
     // Emit save event with blob
-    emit('save', blob);
+    emit('save', properBlob);
   } catch (error) {
     console.error('Error saving image:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack
+    });
     alert('Failed to save image. Please try again.');
   }
 };

@@ -230,17 +230,27 @@ async def save_edited_image(
     db: AsyncSession = Depends(get_db)
 ):
     """Save edited image from editor."""
+    print(f"[EDIT] Received edit request for image: {image_id}")
+    print(f"[EDIT] File info: filename={file.filename}, content_type={file.content_type}")
+    
     # Verify image exists
     image = await ImageService.get_image(db, image_id)
     if not image:
+        print(f"[EDIT] Image not found: {image_id}")
         raise HTTPException(status_code=404, detail="Image not found")
+    
+    print(f"[EDIT] Image found: {image.original_filename}")
     
     # Save edited image
     try:
         output_path, new_size, width, height = await ImageService.save_edited_image(
             db, image_id, file.file
         )
+        print(f"[EDIT] Image saved successfully: path={output_path}, size={new_size}, dims={width}x{height}")
     except Exception as e:
+        print(f"[EDIT] Error saving image: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to save edited image: {str(e)}")
     
     return ImageResponse(
