@@ -87,6 +87,16 @@
         </button>
 
         <button 
+          @click="handleEdit" 
+          class="btn-icon btn-edit"
+          :disabled="isProcessing"
+          :title="'Open advanced editor'"
+        >
+          <span class="icon">✏️</span>
+          <span class="tooltip">Edit</span>
+        </button>
+
+        <button 
           @click="handleUndo" 
           class="btn-icon"
           :disabled="!canUndo || isProcessing"
@@ -157,7 +167,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['image-click']);
+const emit = defineEmits(['image-click', 'edit-click']);
 
 const imageStore = useImageStore();
 const selectedPreset = ref('');
@@ -293,6 +303,10 @@ const handleUndo = async () => {
 
 const handleDownload = () => {
   window.open(props.image.image_url, '_blank');
+};
+
+const handleEdit = () => {
+  emit('edit-click', props.image);
 };
 
 const confirmDelete = async () => {
@@ -531,6 +545,21 @@ onBeforeUnmount(() => {
 }
 
 .btn-preset .icon {
+  color: white;
+}
+
+.btn-edit {
+  background-color: #2196F3;
+  color: white;
+  border-color: #2196F3;
+}
+
+.btn-edit:hover:not(:disabled) {
+  background-color: #1976D2;
+  border-color: #1976D2;
+}
+
+.btn-edit .icon {
   color: white;
 }
 

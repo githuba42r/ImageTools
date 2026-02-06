@@ -223,6 +223,42 @@ async def flip_image(
     )
 
 
+@router.post("/{image_id}/edit", response_model=ImageResponse)
+async def save_edited_image(
+    image_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """Save edited image from editor."""
+    # Verify image exists
+    image = await ImageService.get_image(db, image_id)
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Save edited image
+    try:
+        output_path, new_size, width, height = await ImageService.save_edited_image(
+            db, image_id, file.file
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save edited image: {str(e)}")
+    
+    return ImageResponse(
+        id=image.id,
+        session_id=image.session_id,
+        original_filename=image.original_filename,
+        original_size=image.original_size,
+        current_size=new_size,
+        width=width,
+        height=height,
+        format=image.format,
+        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
+        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
+        created_at=image.created_at,
+        updated_at=image.updated_at
+    )
+
+
 @router.get("/{image_id}/exif")
 async def get_image_exif(
     image_id: str,

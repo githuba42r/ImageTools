@@ -122,6 +122,7 @@
                   :image="image"
                   :presets="presets"
                   @image-click="handleImageClick"
+                  @edit-click="handleEditClick"
                 />
               </div>
             </div>
@@ -172,6 +173,14 @@
       @navigate="handleNavigateViewer"
     />
 
+    <!-- Image Editor Modal -->
+    <ImageEditor
+      v-if="editingImage"
+      :image="editingImage"
+      @save="handleEditorSave"
+      @close="handleEditorClose"
+    />
+
   </div>
 </template>
 
@@ -184,6 +193,7 @@ import { imageService } from './services/api';
 import UploadArea from './components/UploadArea.vue';
 import ImageCard from './components/ImageCard.vue';
 import ImageViewer from './components/ImageViewer.vue';
+import ImageEditor from './components/ImageEditor.vue';
 
 const sessionStore = useSessionStore();
 const imageStore = useImageStore();
@@ -199,6 +209,7 @@ const isBulkProcessing = ref(false);
 const showClearAllConfirm = ref(false);
 const isClearingAll = ref(false);
 const viewerImage = ref(null);
+const editingImage = ref(null);
 
 const initializeApp = async () => {
   isLoading.value = true;
@@ -238,6 +249,39 @@ const handleCloseViewer = () => {
 
 const handleNavigateViewer = (image) => {
   viewerImage.value = image;
+};
+
+const handleEditClick = (image) => {
+  console.log('Edit clicked for image:', image.id);
+  editingImage.value = image;
+};
+
+const handleEditorSave = async (blob) => {
+  if (!editingImage.value) return;
+
+  try {
+    // Create FormData with the edited image blob
+    const formData = new FormData();
+    formData.append('file', blob, editingImage.value.original_filename);
+
+    // Call backend API to save edited image
+    const response = await imageService.saveEditedImage(editingImage.value.id, formData);
+    
+    // Refresh the image in the store
+    await imageStore.loadSessionImages();
+    
+    // Close the editor
+    editingImage.value = null;
+    
+    console.log('Image edited successfully:', response);
+  } catch (error) {
+    console.error('Failed to save edited image:', error);
+    alert('Failed to save edited image. Please try again.');
+  }
+};
+
+const handleEditorClose = () => {
+  editingImage.value = null;
 };
 
 // Toolbar actions

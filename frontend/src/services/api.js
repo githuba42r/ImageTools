@@ -87,6 +87,15 @@ export const imageService = {
     );
     return response.data;
   },
+
+  async saveEditedImage(imageId, formData) {
+    const response = await api.post(`/images/${imageId}/edit`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 };
 
 // Compression API

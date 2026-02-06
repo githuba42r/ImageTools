@@ -9,9 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.4.21",
+    "axios": "^1.6.7",
     "pinia": "^2.1.7",
-    "axios": "^1.6.7"
+    "tui-image-editor": "^3.15.3",
+    "vue": "^3.4.21"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",

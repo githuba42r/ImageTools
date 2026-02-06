@@ -328,6 +328,99 @@ class ImageService:
         return output_path, new_size, new_width, new_height
     
     @staticmethod
+    async def save_edited_image(
+        db: AsyncSession,
+        image_id: str,
+        file: BinaryIO
+    ) -> tuple[str, int, int, int]:
+        """
+        Save an edited image from the editor.
+        
+        Args:
+            db: Database session
+            image_id: Image ID
+            file: File object with edited image data
+            
+        Returns:
+            Tuple of (output_path, new_size, width, height)
+        """
+        image = await ImageService.get_image(db, image_id)
+        if not image:
+            raise ValueError("Image not found")
+        
+        ImageService._ensure_storage_dirs()
+        
+        # Generate output path
+        ext = Path(image.current_path).suffix
+        output_path = os.path.join(
+            settings.STORAGE_PATH,
+            f"{image_id}_edited_{uuid.uuid4()}{ext}"
+        )
+        
+        # Save edited image to temporary file first
+        temp_path = os.path.join(settings.TEMP_STORAGE_PATH, f"temp_{uuid.uuid4()}{ext}")
+        with open(temp_path, "wb") as f:
+            shutil.copyfileobj(file, f)
+        
+        # Open and process the edited image
+        with PILImage.open(temp_path) as img:
+            # Apply EXIF orientation if present
+            try:
+                img = ImageOps.exif_transpose(img)
+            except (AttributeError, KeyError, ZeroDivisionError, ValueError):
+                pass
+            
+            # Save with quality settings
+            save_kwargs = {"quality": 95, "optimize": True}
+            if img.format == "PNG":
+                save_kwargs = {"optimize": True}
+            elif img.format == "WEBP":
+                save_kwargs = {"quality": 95}
+                
+            img.save(output_path, **save_kwargs)
+            
+            new_width, new_height = img.size
+        
+        # Remove temporary file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        
+        # Get file size
+        new_size = os.path.getsize(output_path)
+        
+        # Create history entry
+        history_entry = History(
+            id=str(uuid.uuid4()),
+            image_id=image_id,
+            operation_type="edit",
+            operation_params=json.dumps({"source": "advanced_editor"}),
+            input_path=image.current_path,
+            output_path=output_path,
+            file_size=new_size,
+            sequence=await ImageService._get_next_sequence(db, image_id)
+        )
+        db.add(history_entry)
+        
+        # Update image record
+        image.current_path = output_path
+        image.current_size = new_size
+        image.width = new_width
+        image.height = new_height
+        
+        await db.commit()
+        await db.refresh(image)
+        
+        # Recreate thumbnail
+        if image.thumbnail_path and os.path.exists(image.thumbnail_path):
+            os.remove(image.thumbnail_path)
+        thumbnail_path = os.path.join(settings.STORAGE_PATH, f"{image_id}_thumb{ext}")
+        ImageService._create_thumbnail(output_path, thumbnail_path)
+        image.thumbnail_path = thumbnail_path
+        await db.commit()
+        
+        return output_path, new_size, new_width, new_height
+    
+    @staticmethod
     async def _get_next_sequence(db: AsyncSession, image_id: str) -> int:
         """Get next sequence number for history."""
         result = await db.execute(
