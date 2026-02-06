@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 
 class SessionCreate(BaseModel):
@@ -101,3 +101,90 @@ class FlipResponse(BaseModel):
     width: int
     height: int
     image_url: str
+
+
+# AI Chat Schemas
+
+class MessageCreate(BaseModel):
+    content: str = Field(..., min_length=1, max_length=10000, description="Message content")
+
+
+class MessageResponse(BaseModel):
+    id: str
+    conversation_id: str
+    role: str  # "user" or "assistant"
+    content: str
+    tokens_used: Optional[int] = None
+    cost: Optional[float] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class ConversationCreate(BaseModel):
+    image_id: str = Field(..., description="ID of the image to chat about")
+    model: str = Field(default="google/gemini-2.0-flash-exp:free", description="OpenRouter model ID")
+
+
+class ConversationResponse(BaseModel):
+    id: str
+    session_id: str
+    image_id: str
+    model: str
+    created_at: datetime
+    updated_at: datetime
+    total_cost: float
+    messages: List[MessageResponse] = []
+    
+    class Config:
+        from_attributes = True
+
+
+class ChatRequest(BaseModel):
+    conversation_id: Optional[str] = Field(None, description="Existing conversation ID, or None for new conversation")
+    image_id: str = Field(..., description="ID of the image to manipulate")
+    message: str = Field(..., min_length=1, max_length=10000, description="User message")
+    model: str = Field(default="google/gemini-2.0-flash-exp:free", description="OpenRouter model ID")
+    api_key: Optional[str] = Field(None, description="OpenRouter API key (if not in env)")
+
+
+class AIOperation(BaseModel):
+    type: str = Field(..., description="Operation type: brightness, contrast, saturation, rotate, crop, resize, blur, sharpen, sepia, grayscale")
+    params: Dict[str, Any] = Field(..., description="Operation parameters")
+
+
+class ChatResponse(BaseModel):
+    conversation_id: str
+    message_id: str
+    response: str
+    operations: List[AIOperation] = []
+    image_updated: bool = False
+    new_image_url: Optional[str] = None
+    tokens_used: Optional[int] = None
+    cost: Optional[float] = None
+    total_conversation_cost: float
+
+
+class ModelInfo(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    context_length: Optional[int] = None
+    pricing: Optional[Dict[str, float]] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class ModelSearchResponse(BaseModel):
+    models: List[ModelInfo]
+    total: int
+
+
+class CostSummary(BaseModel):
+    conversation_cost: float
+    monthly_cost: float
+    monthly_limit: Optional[float] = None
+    remaining_budget: Optional[float] = None
+
