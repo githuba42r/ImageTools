@@ -19,14 +19,43 @@
         </div>
         
         <!-- Settings button - always visible -->
-        <button 
-          @click="showSettingsModal = true" 
-          class="btn-icon btn-header btn-settings"
-          title="Settings"
-        >
-          <span class="icon">⚙️</span>
-          <span class="tooltip">Settings</span>
-        </button>
+        <div class="settings-menu-container">
+          <button 
+            @click="showSettingsMenu = !showSettingsMenu" 
+            class="btn-icon btn-header btn-settings"
+            title="Settings"
+          >
+            <span class="icon">⚙️</span>
+            <span class="tooltip">Settings</span>
+          </button>
+          
+          <!-- Settings Dropdown Menu -->
+          <div v-if="showSettingsMenu" class="settings-dropdown" @click.stop>
+            <button class="settings-menu-item" @click="openAISettings">
+              <span class="menu-icon">🤖</span>
+              <div class="menu-text">
+                <span class="menu-title">AI Settings</span>
+                <span class="menu-desc">Configure OpenRouter & models</span>
+              </div>
+            </button>
+            
+            <button class="settings-menu-item" @click="openPresetSettings">
+              <span class="menu-icon">⚙️</span>
+              <div class="menu-text">
+                <span class="menu-title">Preset Settings</span>
+                <span class="menu-desc">Manage compression presets</span>
+              </div>
+            </button>
+            
+            <button class="settings-menu-item" @click="openAbout">
+              <span class="menu-icon">ℹ️</span>
+              <div class="menu-text">
+                <span class="menu-title">About</span>
+                <span class="menu-desc">App info & session details</span>
+              </div>
+            </button>
+          </div>
+        </div>
         
         <div v-if="imageCount > 0" class="header-right">
           <!-- Toolbar actions -->
@@ -192,12 +221,12 @@
       @close="handleEditorClose"
     />
 
-    <!-- Settings Modal -->
-    <div v-if="showSettingsModal" class="modal-overlay" @click="showSettingsModal = false">
+    <!-- AI Settings Modal -->
+    <div v-if="showAISettingsModal" class="modal-overlay" @click="showAISettingsModal = false">
       <div class="settings-modal" @click.stop>
         <div class="modal-header">
-          <h2>⚙️ Settings</h2>
-          <button class="close-btn" @click="showSettingsModal = false">✕</button>
+          <h2>🤖 AI Settings</h2>
+          <button class="close-btn" @click="showAISettingsModal = false">✕</button>
         </div>
         
         <!-- OAuth Notification Banner -->
@@ -208,6 +237,15 @@
         </div>
         
         <div class="settings-content">
+          <!-- What is OpenRouter Info Box (only when not connected) -->
+          <div v-if="!openRouterConnected" class="info-box openrouter-intro">
+            <p><strong>What is OpenRouter?</strong></p>
+            <p>OpenRouter provides access to multiple AI models including GPT-4, Claude, and more. You'll need an OpenRouter account with credits to use AI features.</p>
+            <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer">
+              Create an account at openrouter.ai →
+            </a>
+          </div>
+          
           <!-- OpenRouter AI Connection Section -->
           <div class="settings-section">
             <h3>🤖 AI Features (OpenRouter)</h3>
@@ -246,14 +284,6 @@
                 <strong>Credits Remaining:</strong> ${{ openRouterCredits.toFixed(4) }}
               </p>
             </div>
-            
-            <div class="info-box">
-              <p><strong>What is OpenRouter?</strong></p>
-              <p>OpenRouter provides access to multiple AI models including GPT-4, Claude, and more. You'll need an OpenRouter account with credits to use AI features.</p>
-              <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer">
-                Create an account at openrouter.ai →
-              </a>
-            </div>
           </div>
 
           <!-- LLM Model Selection Section -->
@@ -264,48 +294,192 @@
             </p>
             
             <div class="model-selector">
-              <label for="model-select">Model:</label>
-              <select 
-                id="model-select" 
-                class="model-dropdown" 
+              <div class="current-model-display">
+                <label>Current Model:</label>
+                <div v-if="selectedModel" class="selected-model-info">
+                  <span class="model-icon">{{ getSelectedModelData()?.icon }}</span>
+                  <div class="model-text">
+                    <span class="model-name">{{ getSelectedModelData()?.name }}</span>
+                    <span class="model-cost">{{ getSelectedModelData()?.cost }}</span>
+                  </div>
+                </div>
+                <div v-else class="no-model-selected">
+                  <span class="placeholder-text">No model selected</span>
+                </div>
+              </div>
+              
+              <button 
+                class="btn-select-model"
                 :disabled="!openRouterConnected"
-                v-model="selectedModel"
+                @click="showModelSelector = true"
               >
-                <option value="" disabled>
-                  {{ openRouterConnected ? 'Select a model' : 'Connect OpenRouter to select a model' }}
-                </option>
-                <option value="google/gemini-2.0-flash-exp:free">gemini-2.0-flash-exp:free (Free)</option>
-                <option value="openai/gpt-4-turbo">gpt-4-turbo</option>
-                <option value="anthropic/claude-3.5-sonnet">claude-3.5-sonnet</option>
-                <option value="anthropic/claude-3-opus">claude-3-opus</option>
-                <option value="meta-llama/llama-3.1-70b-instruct">llama-3.1-70b-instruct</option>
-              </select>
+                {{ openRouterConnected ? 'Choose Model' : 'Connect to Choose' }}
+              </button>
             </div>
             
             <div class="info-box">
-              <p><strong>Recommended Models:</strong></p>
-              <ul>
-                <li><strong>gemini-2.0-flash-exp:free</strong> - Free, fast, good for most tasks</li>
-                <li><strong>gpt-4.1-turbo</strong> - High quality, vision-capable</li>
-                <li><strong>claude-4.7-sonnet</strong> - Excellent reasoning and vision</li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- App Information Section -->
-          <div class="settings-section">
-            <h3>ℹ️ About</h3>
-            <div class="app-info">
-              <p><strong>Image Tools</strong> v1.2</p>
-              <p>Session ID: {{ sessionId ? sessionId.substring(0, 16) + '...' : 'None' }}</p>
-              <p>Stage 4: AI Features (OpenRouter OAuth2)</p>
+              <p><strong>About AI Models:</strong></p>
+              <p>Different models have varying capabilities, speeds, and costs. Free models are great for testing, while premium models offer better quality and advanced features.</p>
             </div>
           </div>
         </div>
         
         <div class="modal-footer">
-          <button class="btn-modal btn-primary" @click="showSettingsModal = false">
+          <button class="btn-modal btn-primary" @click="showAISettingsModal = false">
             Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preset Settings Modal -->
+    <div v-if="showPresetSettingsModal" class="modal-overlay" @click="showPresetSettingsModal = false">
+      <div class="settings-modal" @click.stop>
+        <div class="modal-header">
+          <h2>⚙️ Preset Settings</h2>
+          <button class="close-btn" @click="showPresetSettingsModal = false">✕</button>
+        </div>
+        
+        <div class="settings-content">
+          <div class="settings-section">
+            <h3>📦 Compression Presets</h3>
+            <p class="section-description">
+              Manage your compression presets and their settings.
+            </p>
+            
+            <div class="info-box">
+              <p><strong>Coming Soon:</strong></p>
+              <p>Preset management features will allow you to create, edit, and delete custom compression presets.</p>
+            </div>
+            
+            <div class="presets-list">
+              <div v-for="preset in presets" :key="preset.name" class="preset-item">
+                <span class="preset-icon">{{ getPresetIcon(preset.name) }}</span>
+                <div class="preset-info">
+                  <span class="preset-name">{{ preset.display_name }}</span>
+                  <span class="preset-desc">Quality: {{ preset.quality }}%, Max: {{ preset.max_width }}x{{ preset.max_height }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-modal btn-primary" @click="showPresetSettingsModal = false">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- About Modal -->
+    <div v-if="showAboutModal" class="modal-overlay" @click="showAboutModal = false">
+      <div class="settings-modal about-modal" @click.stop>
+        <div class="modal-header">
+          <h2>ℹ️ About Image Tools</h2>
+          <button class="close-btn" @click="showAboutModal = false">✕</button>
+        </div>
+        
+        <div class="settings-content">
+          <div class="settings-section">
+            <div class="app-info-large">
+              <div class="app-logo">🖼️</div>
+              <h3>Image Tools</h3>
+              <p class="version">Version 1.2.0</p>
+              <p class="stage">Stage 4: AI Features</p>
+            </div>
+            
+            <div class="info-box">
+              <p><strong>Features:</strong></p>
+              <ul>
+                <li>Image compression with smart presets</li>
+                <li>Background removal</li>
+                <li>Format conversion</li>
+                <li>Batch processing</li>
+                <li>AI-powered image manipulation (OpenRouter)</li>
+              </ul>
+            </div>
+            
+            <div class="info-box">
+              <p><strong>Session Information:</strong></p>
+              <p><strong>Session ID:</strong> <code>{{ sessionId ? sessionId.substring(0, 16) + '...' : 'None' }}</code></p>
+              <p><strong>Images in Session:</strong> {{ imageCount }}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-modal btn-primary" @click="showAboutModal = false">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Selection Modal -->
+    <div v-if="showModelSelector" class="modal-overlay" @click="showModelSelector = false">
+      <div class="model-selector-modal" @click.stop>
+        <div class="modal-header">
+          <h2>🧠 Choose AI Model</h2>
+          <button class="close-btn" @click="showModelSelector = false">✕</button>
+        </div>
+        
+        <div class="model-selector-content">
+          <p class="selector-description">
+            Select the AI model you want to use for image manipulation. Each model has different capabilities, speeds, and costs.
+          </p>
+          
+          <div class="model-grid">
+            <div 
+              v-for="model in availableModels" 
+              :key="model.id"
+              class="model-card"
+              :class="{ 'selected': selectedModel === model.id }"
+              @click="selectModel(model.id)"
+            >
+              <div class="model-card-header">
+                <span class="model-icon-large" :style="{ color: model.color }">{{ model.icon }}</span>
+                <div class="model-header-text">
+                  <h3 class="model-card-name">{{ model.name }}</h3>
+                  <p class="model-provider">{{ model.provider }}</p>
+                </div>
+                <div v-if="selectedModel === model.id" class="selected-checkmark">✓</div>
+              </div>
+              
+              <p class="model-description">{{ model.description }}</p>
+              
+              <div class="model-tags">
+                <span 
+                  v-for="tag in model.tags" 
+                  :key="tag" 
+                  class="model-tag"
+                  :class="{ 'tag-free': tag === 'Free', 'tag-recommended': tag === 'Recommended' }"
+                >
+                  {{ tag }}
+                </span>
+              </div>
+              
+              <div class="model-footer">
+                <div class="model-pricing">
+                  <span class="pricing-label">Cost:</span>
+                  <span class="pricing-value">{{ model.cost }}</span>
+                </div>
+                <div class="model-id">{{ model.id }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-modal btn-secondary" @click="showModelSelector = false">
+            Cancel
+          </button>
+          <button 
+            class="btn-modal btn-primary" 
+            @click="showModelSelector = false"
+            :disabled="!selectedModel"
+          >
+            Confirm Selection
           </button>
         </div>
       </div>
@@ -342,13 +516,115 @@ const isClearingAll = ref(false);
 const viewerImage = ref(null);
 const editingImage = ref(null);
 const isSavingEdit = ref(false);
-const showSettingsModal = ref(false);
+
+// Settings menu state
+const showSettingsMenu = ref(false);
+const showAISettingsModal = ref(false);
+const showPresetSettingsModal = ref(false);
+const showAboutModal = ref(false);
 
 // OpenRouter OAuth state
 const openRouterConnected = ref(false);
 const openRouterCredits = ref(null);
 const oauthNotification = ref(null); // { type: 'success' | 'error', message: string }
 const selectedModel = ref('');
+const showModelSelector = ref(false);
+
+// AI Model data with details, pricing, and capabilities
+const availableModels = [
+  {
+    id: 'google/gemini-2.0-flash-exp:free',
+    name: 'Gemini 2.0 Flash',
+    provider: 'Google',
+    description: 'Fast, efficient model with vision capabilities. Perfect for most image tasks.',
+    cost: 'Free',
+    costPerMillion: '$0.00',
+    tags: ['Free', 'Fast', 'Vision', 'Recommended'],
+    icon: '⚡',
+    color: '#4285f4'
+  },
+  {
+    id: 'openai/gpt-4-turbo',
+    name: 'GPT-4 Turbo',
+    provider: 'OpenAI',
+    description: 'High-quality multimodal model with excellent vision understanding and reasoning.',
+    cost: '$10 / 1M tokens',
+    costPerMillion: '$10.00',
+    tags: ['Vision', 'High Quality', 'Popular'],
+    icon: '🤖',
+    color: '#10a37f'
+  },
+  {
+    id: 'anthropic/claude-3.5-sonnet',
+    name: 'Claude 3.5 Sonnet',
+    provider: 'Anthropic',
+    description: 'Excellent reasoning and vision capabilities with nuanced understanding.',
+    cost: '$3 / 1M tokens',
+    costPerMillion: '$3.00',
+    tags: ['Vision', 'Reasoning', 'Recommended'],
+    icon: '🧠',
+    color: '#cc785c'
+  },
+  {
+    id: 'anthropic/claude-3-opus',
+    name: 'Claude 3 Opus',
+    provider: 'Anthropic',
+    description: 'Top-tier model with exceptional vision analysis and creative capabilities.',
+    cost: '$15 / 1M tokens',
+    costPerMillion: '$15.00',
+    tags: ['Vision', 'Premium', 'Creative'],
+    icon: '💎',
+    color: '#cc785c'
+  },
+  {
+    id: 'meta-llama/llama-3.1-70b-instruct',
+    name: 'Llama 3.1 70B',
+    provider: 'Meta',
+    description: 'Open-source model with strong general capabilities and efficiency.',
+    cost: '$0.50 / 1M tokens',
+    costPerMillion: '$0.50',
+    tags: ['Open Source', 'Efficient', 'Cost-effective'],
+    icon: '🦙',
+    color: '#0668e1'
+  },
+  {
+    id: 'openai/gpt-4o',
+    name: 'GPT-4o',
+    provider: 'OpenAI',
+    description: 'Latest OpenAI model optimized for speed and multimodal tasks.',
+    cost: '$5 / 1M tokens',
+    costPerMillion: '$5.00',
+    tags: ['Vision', 'Fast', 'Latest'],
+    icon: '🚀',
+    color: '#10a37f'
+  },
+  {
+    id: 'anthropic/claude-3-haiku',
+    name: 'Claude 3 Haiku',
+    provider: 'Anthropic',
+    description: 'Fast and cost-effective model for simpler vision and text tasks.',
+    cost: '$0.25 / 1M tokens',
+    costPerMillion: '$0.25',
+    tags: ['Fast', 'Budget', 'Vision'],
+    icon: '⚡',
+    color: '#cc785c'
+  },
+  {
+    id: 'google/gemini-pro-vision',
+    name: 'Gemini Pro Vision',
+    provider: 'Google',
+    description: 'Powerful vision model with multimodal understanding capabilities.',
+    cost: '$0.125 / 1M tokens',
+    costPerMillion: '$0.125',
+    tags: ['Vision', 'Affordable', 'Google'],
+    icon: '👁️',
+    color: '#4285f4'
+  }
+];
+
+const getSelectedModelData = () => {
+  return availableModels.find(m => m.id === selectedModel.value);
+};
 
 const initializeApp = async () => {
   isLoading.value = true;
@@ -488,6 +764,22 @@ const handleEditorClose = () => {
   editingImage.value = null;
 };
 
+// Settings menu handlers
+const openAISettings = () => {
+  showSettingsMenu.value = false;
+  showAISettingsModal.value = true;
+};
+
+const openPresetSettings = () => {
+  showSettingsMenu.value = false;
+  showPresetSettingsModal.value = true;
+};
+
+const openAbout = () => {
+  showSettingsMenu.value = false;
+  showAboutModal.value = true;
+};
+
 // OpenRouter OAuth handlers
 const loadOpenRouterStatus = async () => {
   try {
@@ -557,8 +849,8 @@ const handleOAuthCallback = async () => {
         message: `Successfully connected to OpenRouter! Credits: ${creditsText}`
       };
       
-      // Open settings modal to show connection
-      showSettingsModal.value = true;
+      // Open AI settings modal to show connection
+      showAISettingsModal.value = true;
       
       // Auto-dismiss notification after 5 seconds
       setTimeout(() => {
@@ -577,8 +869,8 @@ const handleOAuthCallback = async () => {
       message: `Failed to connect: ${error.message}`
     };
     
-    // Open settings modal to show error
-    showSettingsModal.value = true;
+    // Open AI settings modal to show error
+    showAISettingsModal.value = true;
     
     // Clean up
     sessionStorage.removeItem('pkce_code_verifier');
@@ -636,6 +928,12 @@ const selectAll = () => {
 
 const clearSelection = () => {
   imageStore.clearSelection();
+};
+
+// Model selection handler
+const selectModel = (modelId) => {
+  selectedModel.value = modelId;
+  console.log('Model selected:', modelId);
 };
 
 const getPresetIcon = (presetName) => {
@@ -714,6 +1012,9 @@ const handleDownloadZip = async () => {
 const handleClickOutside = () => {
   if (showBulkPresetMenu.value) {
     showBulkPresetMenu.value = false;
+  }
+  if (showSettingsMenu.value) {
+    showSettingsMenu.value = false;
   }
 };
 
@@ -1359,6 +1660,75 @@ body {
   margin-left: auto;
 }
 
+/* Settings Menu Dropdown */
+.settings-menu-container {
+  position: relative;
+  margin-left: auto;
+}
+
+.settings-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 280px;
+  z-index: 1000;
+  animation: slideDown 0.2s ease-out;
+}
+
+.settings-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  text-align: left;
+}
+
+.settings-menu-item:first-child {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.settings-menu-item:last-child {
+  border-bottom: none;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.settings-menu-item:hover {
+  background-color: #f8f9fa;
+}
+
+.menu-icon {
+  font-size: 1.75rem;
+  flex-shrink: 0;
+}
+
+.menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.menu-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.menu-desc {
+  font-size: 0.8rem;
+  color: #666;
+}
+
 .settings-modal {
   background: white;
   border-radius: 12px;
@@ -1396,74 +1766,6 @@ body {
 .settings-modal .close-btn:hover {
   background-color: #f5f5f5;
   color: #333;
-}
-
-.oauth-notification {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  margin: 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.notification-success {
-  background-color: #e8f5e9;
-  color: #2e7d32;
-  border-left: 4px solid #4CAF50;
-}
-
-.notification-error {
-  background-color: #ffebee;
-  color: #c62828;
-  border-left: 4px solid #f44336;
-}
-
-.notification-icon {
-  font-size: 1.2rem;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-.notification-message {
-  flex: 1;
-  font-weight: 500;
-  font-size: 0.95rem;
-}
-
-.notification-close {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  color: inherit;
-  opacity: 0.7;
-  cursor: pointer;
-  padding: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-
-.notification-close:hover {
-  opacity: 1;
-  background-color: rgba(0, 0, 0, 0.1);
 }
 
 .settings-content {
@@ -1615,6 +1917,156 @@ body {
   margin-top: 1rem;
 }
 
+.openrouter-intro {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  background-color: #e3f2fd;
+  border-left: 4px solid #2196F3;
+  padding: 1.25rem;
+}
+
+/* OAuth Notification Banner */
+.oauth-notification {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  margin: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  animation: slideDown 0.3s ease-out;
+}
+
+.notification-success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border-left: 4px solid #4CAF50;
+}
+
+.notification-error {
+  background-color: #ffebee;
+  color: #c62828;
+  border-left: 4px solid #f44336;
+}
+
+.notification-icon {
+  font-size: 1.2rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.notification-message {
+  flex: 1;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.notification-close:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Presets List */
+.presets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.preset-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.preset-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.preset-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.preset-desc {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+/* About Modal Styles */
+.about-modal {
+  max-width: 600px;
+}
+
+.app-info-large {
+  text-align: center;
+  padding: 2rem 1rem 1rem 1rem;
+}
+
+.app-logo {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.app-info-large h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.75rem;
+  color: #333;
+}
+
+.app-info-large .version {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.app-info-large .stage {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #999;
+}
+
+.about-modal code {
+  background-color: #f5f5f5;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  color: #333;
+}
+
 .info-box p {
   margin: 0 0 0.5rem 0;
   font-size: 0.9rem;
@@ -1654,9 +2106,307 @@ body {
 
 .model-selector {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-top: 1rem;
+}
+
+.current-model-display {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.current-model-display label {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.selected-model-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.model-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.model-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.model-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+.model-cost {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.no-model-selected {
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border: 2px dashed #ddd;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.placeholder-text {
+  color: #999;
+  font-style: italic;
+}
+
+.btn-select-model {
+  padding: 0.75rem 1.5rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-select-model:hover:not(:disabled) {
+  background-color: #1976D2;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+}
+
+.btn-select-model:disabled {
+  background-color: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Model Selector Modal */
+.model-selector-modal {
+  background-color: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 1200px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+.model-selector-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.selector-description {
+  margin: 0 0 1.5rem 0;
+  color: #666;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.25rem;
+}
+
+.model-card {
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: white;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: relative;
+}
+
+.model-card:hover {
+  border-color: #2196F3;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+  transform: translateY(-2px);
+}
+
+.model-card.selected {
+  border-color: #4CAF50;
+  background-color: #f1f8f4;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+}
+
+.model-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  position: relative;
+}
+
+.model-icon-large {
+  font-size: 2.5rem;
+  flex-shrink: 0;
+}
+
+.model-header-text {
+  flex: 1;
+}
+
+.model-card-name {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.model-provider {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.selected-checkmark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 28px;
+  height: 28px;
+  background-color: #4CAF50;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+.model-description {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #555;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.model-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.model-tag {
+  padding: 0.35rem 0.75rem;
+  background-color: #e3f2fd;
+  color: #1976D2;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.model-tag.tag-free {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.model-tag.tag-recommended {
+  background-color: #fff3e0;
+  color: #ef6c00;
+}
+
+.model-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.model-pricing {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pricing-label {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.pricing-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.model-id {
+  font-size: 0.75rem;
+  color: #999;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+
+/* Modal footer buttons */
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.btn-modal {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+}
+
+.btn-modal.btn-primary {
+  background-color: #2196F3;
+  color: white;
+}
+
+.btn-modal.btn-primary:hover:not(:disabled) {
+  background-color: #1976D2;
+  box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+}
+
+.btn-modal.btn-primary:disabled {
+  background-color: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.btn-modal.btn-secondary {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.btn-modal.btn-secondary:hover {
+  background-color: #e0e0e0;
 }
 
 .model-selector label {
