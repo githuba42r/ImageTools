@@ -370,14 +370,21 @@ class ImageService:
             except (AttributeError, KeyError, ZeroDivisionError, ValueError):
                 pass
             
-            # Save with quality settings
-            save_kwargs = {"quality": 95, "optimize": True}
-            if img.format == "PNG":
+            # Determine format for saving
+            img_format = img.format or 'PNG'  # Default to PNG if format not detected
+            
+            # Save with quality settings based on format
+            save_kwargs = {}
+            if img_format in ['JPEG', 'JPG']:
+                save_kwargs = {"quality": 95, "optimize": True}
+            elif img_format == "PNG":
                 save_kwargs = {"optimize": True}
-            elif img.format == "WEBP":
+            elif img_format == "WEBP":
+                save_kwargs = {"quality": 95}
+            else:
                 save_kwargs = {"quality": 95}
                 
-            img.save(output_path, **save_kwargs)
+            img.save(output_path, format=img_format, **save_kwargs)
             
             new_width, new_height = img.size
         
