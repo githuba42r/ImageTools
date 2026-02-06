@@ -209,14 +209,38 @@
             </p>
             
             <div class="openrouter-status">
-              <div class="status-indicator" :class="{ 'connected': false }">
+              <div class="status-indicator" :class="{ 'connected': openRouterConnected }">
                 <span class="status-dot"></span>
-                <span class="status-text">Not Connected</span>
+                <span class="status-text">
+                  {{ openRouterConnected ? 'Connected' : 'Not Connected' }}
+                </span>
               </div>
               
-              <button class="btn-connect" @click="handleConnectOpenRouter">
+              <button 
+                v-if="!openRouterConnected"
+                class="btn-connect" 
+                @click="handleConnectOpenRouter"
+              >
                 Connect OpenRouter Account
               </button>
+              
+              <button 
+                v-else
+                class="btn-disconnect" 
+                @click="handleDisconnectOpenRouter"
+              >
+                Disconnect
+              </button>
+            </div>
+            
+            <!-- Show credits info when connected -->
+            <div v-if="openRouterConnected" class="credits-info">
+              <p v-if="openRouterCredits !== null">
+                <strong>Credits Remaining:</strong> ${{ openRouterCredits.toFixed(4) }}
+              </p>
+              <p v-if="openRouterKeyLabel">
+                <strong>Key Label:</strong> {{ openRouterKeyLabel }}
+              </p>
             </div>
             
             <div class="info-box">
@@ -280,6 +304,7 @@ import { useSessionStore } from './stores/sessionStore';
 import { useImageStore } from './stores/imageStore';
 import { storeToRefs } from 'pinia';
 import { imageService } from './services/api';
+import { openRouterService, generateCodeVerifier, generateCodeChallenge } from './services/openRouterService';
 import UploadArea from './components/UploadArea.vue';
 import ImageCard from './components/ImageCard.vue';
 import ImageViewer from './components/ImageViewer.vue';
@@ -303,6 +328,11 @@ const editingImage = ref(null);
 const isSavingEdit = ref(false);
 const showSettingsModal = ref(false);
 
+// OpenRouter OAuth state
+const openRouterConnected = ref(false);
+const openRouterCredits = ref(null);
+const openRouterKeyLabel = ref(null);
+
 const initializeApp = async () => {
   isLoading.value = true;
   error.value = null;
@@ -313,6 +343,17 @@ const initializeApp = async () => {
       imageStore.loadSessionImages(),
       imageStore.loadPresets()
     ]);
+    
+    // Set session ID in OpenRouter service
+    if (sessionId.value) {
+      openRouterService.setSessionId(sessionId.value);
+    }
+    
+    // Check if we're returning from OAuth callback
+    handleOAuthCallback();
+    
+    // Load OpenRouter connection status
+    await loadOpenRouterStatus();
   } catch (err) {
     error.value = 'Failed to initialize application: ' + err.message;
     console.error('Initialization error:', err);
@@ -425,10 +466,103 @@ const handleEditorClose = () => {
 };
 
 // OpenRouter OAuth handlers
-const handleConnectOpenRouter = () => {
-  console.log('Connect OpenRouter clicked');
-  // TODO: Implement OAuth flow
-  alert('OpenRouter OAuth connection coming soon!\n\nThis will:\n1. Generate PKCE code challenge\n2. Redirect to OpenRouter for authorization\n3. Handle callback and store API key securely');
+const loadOpenRouterStatus = async () => {
+  try {
+    const status = await openRouterService.getStatus();
+    openRouterConnected.value = status.connected;
+    openRouterCredits.value = status.credits_remaining;
+    openRouterKeyLabel.value = status.key_label;
+  } catch (error) {
+    console.error('Failed to load OpenRouter status:', error);
+  }
+};
+
+const handleConnectOpenRouter = async () => {
+  try {
+    // 1. Generate PKCE code_verifier and code_challenge
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    
+    // 2. Store code_verifier in sessionStorage for callback
+    sessionStorage.setItem('pkce_code_verifier', codeVerifier);
+    
+    // 3. Get authorization URL from backend
+    const { auth_url } = await openRouterService.getAuthorizationUrl(codeChallenge);
+    
+    // 4. Redirect to OpenRouter
+    window.location.href = auth_url;
+    
+  } catch (error) {
+    console.error('Failed to start OAuth flow:', error);
+    alert('Failed to connect to OpenRouter: ' + error.message);
+  }
+};
+
+const handleOAuthCallback = async () => {
+  // Check if we have a 'code' parameter in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  
+  if (!code) return; // Not a callback
+  
+  try {
+    // Retrieve stored code_verifier
+    const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
+    if (!codeVerifier) {
+      throw new Error('Code verifier not found');
+    }
+    
+    // Exchange code for API key (proxied through backend)
+    const result = await openRouterService.exchangeCode(code, codeVerifier);
+    
+    if (result.success) {
+      // Update connection status
+      openRouterConnected.value = true;
+      openRouterCredits.value = result.credits_remaining;
+      openRouterKeyLabel.value = result.key_label;
+      
+      // Clean up
+      sessionStorage.removeItem('pkce_code_verifier');
+      
+      // Remove code from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Show success message
+      alert(`Successfully connected to OpenRouter!\n\nCredits: ${result.credits_remaining || 'N/A'}`);
+      
+      // Open settings modal to show connection
+      showSettingsModal.value = true;
+    } else {
+      throw new Error('OAuth exchange failed');
+    }
+    
+  } catch (error) {
+    console.error('OAuth callback error:', error);
+    alert('Failed to complete OpenRouter connection: ' + error.message);
+    
+    // Clean up
+    sessionStorage.removeItem('pkce_code_verifier');
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+};
+
+const handleDisconnectOpenRouter = async () => {
+  if (!confirm('Disconnect from OpenRouter? You will need to reconnect to use AI features.')) {
+    return;
+  }
+  
+  try {
+    const result = await openRouterService.revoke();
+    if (result.success) {
+      openRouterConnected.value = false;
+      openRouterCredits.value = null;
+      openRouterKeyLabel.value = null;
+      alert('Disconnected from OpenRouter');
+    }
+  } catch (error) {
+    console.error('Failed to disconnect:', error);
+    alert('Failed to disconnect: ' + error.message);
+  }
 };
 
 // Toolbar actions
@@ -1290,6 +1424,47 @@ body {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.btn-disconnect {
+  padding: 0.75rem 1.5rem;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-disconnect:hover {
+  background-color: #d32f2f;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(244, 67, 54, 0.3);
+}
+
+.credits-info {
+  background-color: #e8f5e9;
+  border-left: 3px solid #4CAF50;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+}
+
+.credits-info p {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  color: #2e7d32;
+  line-height: 1.5;
+}
+
+.credits-info p:last-child {
+  margin-bottom: 0;
+}
+
+.credits-info strong {
+  color: #1b5e20;
 }
 
 .info-box {
