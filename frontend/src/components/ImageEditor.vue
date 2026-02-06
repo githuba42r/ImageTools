@@ -31,44 +31,60 @@ const editorContainer = ref(null);
 let editorInstance = null;
 
 const initializeEditor = () => {
-  if (!editorContainer.value || !props.image) return;
+  console.log('[Editor] Initializing editor...');
+  console.log('[Editor] Container:', editorContainer.value);
+  console.log('[Editor] Image:', props.image);
+  
+  if (!editorContainer.value || !props.image) {
+    console.error('[Editor] Missing container or image');
+    return;
+  }
 
   // Clean up existing instance
   if (editorInstance) {
+    console.log('[Editor] Destroying existing instance');
     editorInstance.destroy();
   }
 
+  console.log('[Editor] Creating new editor instance with image:', props.image.image_url);
+
   // Initialize Toast UI Image Editor
-  editorInstance = new ImageEditor(editorContainer.value, {
-    includeUI: {
-      loadImage: {
-        path: props.image.image_url,
-        name: props.image.original_filename
+  try {
+    editorInstance = new ImageEditor(editorContainer.value, {
+      includeUI: {
+        loadImage: {
+          path: props.image.image_url,
+          name: props.image.original_filename
+        },
+        theme: {
+          'common.bi.image': '',
+          'common.bisize.width': '0px',
+          'common.bisize.height': '0px',
+          'common.backgroundImage': 'none',
+          'common.backgroundColor': '#1e1e1e',
+          'common.border': '0px'
+        },
+        menu: ['crop', 'flip', 'rotate', 'draw', 'shape', 'icon', 'text', 'mask', 'filter'],
+        initMenu: '',
+        uiSize: {
+          width: '100%',
+          height: '100%'
+        },
+        menuBarPosition: 'bottom',
+        usageStatistics: false
       },
-      theme: {
-        'common.bi.image': '',
-        'common.bisize.width': '0px',
-        'common.bisize.height': '0px',
-        'common.backgroundImage': 'none',
-        'common.backgroundColor': '#1e1e1e',
-        'common.border': '0px'
-      },
-      menu: ['crop', 'flip', 'rotate', 'draw', 'shape', 'icon', 'text', 'mask', 'filter'],
-      initMenu: '',
-      uiSize: {
-        width: '100%',
-        height: '100%'
-      },
-      menuBarPosition: 'bottom',
-      usageStatistics: false
-    },
-    cssMaxWidth: 1200,
-    cssMaxHeight: 800,
-    selectionStyle: {
-      cornerSize: 20,
-      rotatingPointOffset: 70
-    }
-  });
+      cssMaxWidth: 1200,
+      cssMaxHeight: 800,
+      selectionStyle: {
+        cornerSize: 20,
+        rotatingPointOffset: 70
+      }
+    });
+    
+    console.log('[Editor] Editor instance created successfully');
+  } catch (error) {
+    console.error('[Editor] Failed to create editor instance:', error);
+  }
 
   // Hide the load and download buttons with a slight delay to ensure DOM is ready
   setTimeout(() => {

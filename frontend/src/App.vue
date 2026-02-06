@@ -257,7 +257,24 @@ const handleEditClick = (image) => {
 };
 
 const handleEditorSave = async (blob) => {
-  if (!editingImage.value) return;
+  if (!editingImage.value) {
+    console.error('No editing image found');
+    return;
+  }
+
+  console.log('Starting save process...');
+  console.log('Editing image:', editingImage.value);
+  console.log('Blob received:', blob);
+
+  if (!blob) {
+    alert('No image data received from editor. Please try editing the image first.');
+    return;
+  }
+
+  if (blob.size === 0) {
+    alert('Empty image data received. Please try again.');
+    return;
+  }
 
   try {
     console.log('Saving edited image...', {
@@ -271,26 +288,41 @@ const handleEditorSave = async (blob) => {
     const formData = new FormData();
     formData.append('file', blob, editingImage.value.original_filename);
 
+    console.log('FormData created, calling API...');
+
     // Call backend API to save edited image
     const response = await imageService.saveEditedImage(editingImage.value.id, formData);
     
-    console.log('API response:', response);
+    console.log('API response received:', response);
     
     // Refresh the image in the store
+    console.log('Refreshing image list...');
     await imageStore.loadSessionImages();
     
     // Close the editor
     editingImage.value = null;
     
     console.log('Image edited successfully:', response);
+    alert('Image saved successfully!');
   } catch (error) {
     console.error('Failed to save edited image:', error);
     console.error('Error details:', {
       message: error.message,
       response: error.response?.data,
-      status: error.response?.status
+      status: error.response?.status,
+      statusText: error.response?.statusText
     });
-    alert('Failed to save edited image. Please try again.');
+    
+    let errorMessage = 'Failed to save edited image. ';
+    if (error.response?.data?.detail) {
+      errorMessage += error.response.data.detail;
+    } else if (error.message) {
+      errorMessage += error.message;
+    } else {
+      errorMessage += 'Please check console for details.';
+    }
+    
+    alert(errorMessage);
   }
 };
 
