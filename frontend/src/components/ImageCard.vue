@@ -490,14 +490,14 @@ onBeforeUnmount(() => {
 
 .icon-buttons {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
   justify-content: space-between;
 }
 
 .btn-icon {
   flex: 1;
   position: relative;
-  padding: 0.6rem;
+  padding: 0.4rem 0.25rem;
   border: 1px solid #ddd;
   border-radius: 4px;
   background-color: white;
@@ -506,6 +506,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
 }
 
 .btn-icon:hover:not(:disabled) {
@@ -524,7 +525,7 @@ onBeforeUnmount(() => {
 }
 
 .btn-icon .icon {
-  font-size: 1.25rem;
+  font-size: 1rem;
   display: block;
   color: #333;
 }
@@ -545,9 +546,9 @@ onBeforeUnmount(() => {
   transform: translateX(-50%) translateY(-8px);
   background-color: #333;
   color: white;
-  padding: 0.4rem 0.6rem;
+  padding: 0.3rem 0.5rem;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
