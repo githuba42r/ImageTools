@@ -373,6 +373,17 @@ class ImageService:
             # Determine format for saving
             img_format = img.format or 'PNG'  # Default to PNG if format not detected
             
+            # Convert RGBA to RGB if saving as JPEG (JPEG doesn't support transparency)
+            if img.mode == 'RGBA' and img_format in ['JPEG', 'JPG']:
+                # Create a white background
+                rgb_img = PILImage.new('RGB', img.size, (255, 255, 255))
+                # Paste the RGBA image on the white background
+                rgb_img.paste(img, mask=img.split()[3])  # Use alpha channel as mask
+                img = rgb_img
+            elif img.mode not in ('RGB', 'L') and img_format in ['JPEG', 'JPG']:
+                # Convert any other non-RGB mode to RGB for JPEG
+                img = img.convert('RGB')
+            
             # Save with quality settings based on format
             save_kwargs = {}
             if img_format in ['JPEG', 'JPG']:
