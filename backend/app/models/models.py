@@ -84,3 +84,17 @@ class OpenRouterKey(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class UserSettings(Base):
+    """
+    Store user settings per session
+    Includes selected AI model and other preferences
+    """
+    __tablename__ = "user_settings"
+    
+    id = Column(String, primary_key=True, index=True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True, unique=True)
+    selected_model_id = Column(String, nullable=True)  # OpenRouter model ID (e.g., "google/gemini-2.0-flash-exp:free")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

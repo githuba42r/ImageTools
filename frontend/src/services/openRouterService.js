@@ -181,6 +181,44 @@ class OpenRouterService {
     const result = await response.json();
     return result.data || [];
   }
+
+  /**
+   * Get user settings (selected model, etc.)
+   * @returns {Promise<Object>} { selected_model_id: string|null }
+   */
+  async getSettings() {
+    const response = await fetch('http://localhost:8081/api/v1/settings', {
+      method: 'GET',
+      headers: this._getHeaders()
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to get settings');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Update selected AI model
+   * @param {string} modelId - OpenRouter model ID (e.g., "google/gemini-2.0-flash-exp:free")
+   * @returns {Promise<Object>} { selected_model_id: string }
+   */
+  async updateModel(modelId) {
+    const response = await fetch('http://localhost:8081/api/v1/settings/model', {
+      method: 'PUT',
+      headers: this._getHeaders(),
+      body: JSON.stringify({ model_id: modelId })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update model');
+    }
+
+    return response.json();
+  }
 }
 
 // ============================================================================

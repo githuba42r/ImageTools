@@ -224,9 +224,10 @@
     <!-- AI Settings Modal -->
     <div v-if="showAISettingsModal" class="modal-overlay" @click="showAISettingsModal = false">
       <div class="settings-modal" @click.stop>
+        <button class="modal-close-btn" @click="showAISettingsModal = false">✕</button>
+        
         <div class="modal-header">
           <h2>🤖 AI Settings</h2>
-          <button class="close-btn" @click="showAISettingsModal = false">✕</button>
         </div>
         
         <!-- OAuth Notification Banner -->
@@ -311,7 +312,21 @@
                 <span class="click-hint">✏️</span>
               </div>
               
-              <p class="model-description">{{ getSelectedModelData()?.description }}</p>
+              <div class="model-description-container">
+                <p 
+                  class="model-description" 
+                  :class="{ 'expanded': expandedDescriptions.has('ai-settings-selected') }"
+                >
+                  {{ expandedDescriptions.has('ai-settings-selected') ? getSelectedModelData()?.description : getSelectedModelData()?.descriptionShort }}
+                </p>
+                <button 
+                  v-if="getSelectedModelData()?.description?.length > 200"
+                  @click.stop="toggleDescription('ai-settings-selected')"
+                  class="btn-toggle-description"
+                >
+                  {{ expandedDescriptions.has('ai-settings-selected') ? 'Show less' : 'Show more' }}
+                </button>
+              </div>
               
               <div class="model-tags">
                 <span 
@@ -359,11 +374,6 @@
                 </p>
               </div>
             </div>
-            
-            <div class="info-box">
-              <p><strong>About AI Models:</strong></p>
-              <p>Different models have varying capabilities, speeds, and costs. Free models are great for testing, while premium models offer better quality and advanced features.</p>
-            </div>
           </div>
         </div>
         
@@ -378,9 +388,10 @@
     <!-- Preset Settings Modal -->
     <div v-if="showPresetSettingsModal" class="modal-overlay" @click="showPresetSettingsModal = false">
       <div class="settings-modal" @click.stop>
+        <button class="modal-close-btn" @click="showPresetSettingsModal = false">✕</button>
+        
         <div class="modal-header">
           <h2>⚙️ Preset Settings</h2>
-          <button class="close-btn" @click="showPresetSettingsModal = false">✕</button>
         </div>
         
         <div class="settings-content">
@@ -418,9 +429,10 @@
     <!-- About Modal -->
     <div v-if="showAboutModal" class="modal-overlay" @click="showAboutModal = false">
       <div class="settings-modal about-modal" @click.stop>
+        <button class="modal-close-btn" @click="showAboutModal = false">✕</button>
+        
         <div class="modal-header">
           <h2>ℹ️ About Image Tools</h2>
-          <button class="close-btn" @click="showAboutModal = false">✕</button>
         </div>
         
         <div class="settings-content">
@@ -462,9 +474,10 @@
     <!-- Model Selection Modal -->
     <div v-if="showModelSelector" class="modal-overlay" @click="showModelSelector = false">
       <div class="model-selector-modal" @click.stop>
+        <button class="modal-close-btn" @click="showModelSelector = false">✕</button>
+        
         <div class="modal-header">
           <h2>🧠 Choose AI Model</h2>
-          <button class="close-btn" @click="showModelSelector = false">✕</button>
         </div>
         
         <div class="model-selector-content">
@@ -530,7 +543,21 @@
                   <div v-if="selectedModel === model.id" class="selected-checkmark">✓</div>
                 </div>
                 
-                <p class="model-description">{{ model.description }}</p>
+                <div class="model-description-container">
+                  <p 
+                    class="model-description" 
+                    :class="{ 'expanded': expandedDescriptions.has(model.id) }"
+                  >
+                    {{ expandedDescriptions.has(model.id) ? model.description : model.descriptionShort }}
+                  </p>
+                  <button 
+                    v-if="model.description.length > 200"
+                    @click.stop="toggleDescription(model.id)"
+                    class="btn-toggle-description"
+                  >
+                    {{ expandedDescriptions.has(model.id) ? 'Show less' : 'Show more' }}
+                  </button>
+                </div>
                 
                 <div class="model-tags">
                   <span 
@@ -589,7 +616,21 @@
                   <div v-if="selectedModel === model.id" class="selected-checkmark">✓</div>
                 </div>
                 
-                <p class="model-description">{{ model.description }}</p>
+                <div class="model-description-container">
+                  <p 
+                    class="model-description" 
+                    :class="{ 'expanded': expandedDescriptions.has(model.id) }"
+                  >
+                    {{ expandedDescriptions.has(model.id) ? model.description : model.descriptionShort }}
+                  </p>
+                  <button 
+                    v-if="model.description.length > 200"
+                    @click.stop="toggleDescription(model.id)"
+                    class="btn-toggle-description"
+                  >
+                    {{ expandedDescriptions.has(model.id) ? 'Show less' : 'Show more' }}
+                  </button>
+                </div>
                 
                 <div class="model-tags">
                   <span 
@@ -627,6 +668,12 @@
           <!-- No results -->
           <div v-if="!isLoadingModels && !modelsLoadError && filteredRecommendedModels.length === 0 && filteredOtherModels.length === 0" class="no-results">
             <p>No models found matching your search.</p>
+          </div>
+          
+          <!-- About AI Models Info -->
+          <div v-if="!isLoadingModels && !modelsLoadError" class="info-box model-info">
+            <p><strong>About AI Models:</strong></p>
+            <p>Different models have varying capabilities, speeds, and costs. Free models are great for testing, while premium models offer better quality and advanced features.</p>
           </div>
         </div>
         
@@ -697,6 +744,7 @@ const modelsLoadError = ref(null);
 const modelSearchQuery = ref('');
 const showOnlyFreeModels = ref(false);
 const selectedTagFilter = ref('');
+const expandedDescriptions = ref(new Set()); // Track which model descriptions are expanded
 
 // Recommended model IDs (hardcoded list of preferred models)
 const recommendedModelIds = [
@@ -768,7 +816,8 @@ const parseModelFromAPI = (apiModel) => {
     id: apiModel.id,
     name: apiModel.name,
     provider: provider.charAt(0).toUpperCase() + provider.slice(1).replace('-', ' '),
-    description: apiModel.description?.split('\n')[0]?.substring(0, 200) || 'No description available',
+    description: apiModel.description?.split('\n')[0] || 'No description available',
+    descriptionShort: apiModel.description?.split('\n')[0]?.substring(0, 200) || 'No description available',
     cost: costDisplay,
     isFree: isFree,
     tags: tags,
@@ -851,13 +900,35 @@ const filterModels = (models) => {
 // Filtered recommended models
 const filteredRecommendedModels = computed(() => {
   const recommended = allModels.value.filter(m => m.isRecommended);
-  return filterModels(recommended);
+  const filtered = filterModels(recommended);
+  
+  // Promote selected model to the top
+  if (selectedModel.value) {
+    const selectedIndex = filtered.findIndex(m => m.id === selectedModel.value);
+    if (selectedIndex > 0) {
+      const selectedModelData = filtered.splice(selectedIndex, 1)[0];
+      filtered.unshift(selectedModelData);
+    }
+  }
+  
+  return filtered;
 });
 
 // Filtered other models
 const filteredOtherModels = computed(() => {
   const others = allModels.value.filter(m => !m.isRecommended);
-  return filterModels(others);
+  const filtered = filterModels(others);
+  
+  // Promote selected model to the top
+  if (selectedModel.value) {
+    const selectedIndex = filtered.findIndex(m => m.id === selectedModel.value);
+    if (selectedIndex > 0) {
+      const selectedModelData = filtered.splice(selectedIndex, 1)[0];
+      filtered.unshift(selectedModelData);
+    }
+  }
+  
+  return filtered;
 });
 
 // Format context window for display
@@ -901,10 +972,20 @@ const initializeApp = async () => {
     // Load OpenRouter connection status
     await loadOpenRouterStatus();
     
-    // Load saved model selection from localStorage
-    const savedModel = localStorage.getItem('openrouter_selected_model');
-    if (savedModel) {
-      selectedModel.value = savedModel;
+    // Load saved model selection from backend
+    try {
+      const settings = await openRouterService.getSettings();
+      if (settings.selected_model_id) {
+        selectedModel.value = settings.selected_model_id;
+        console.log('Loaded selected model from backend:', settings.selected_model_id);
+        
+        // Load all models so we can display the selected model's details
+        if (allModels.value.length === 0) {
+          await loadAllModels();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
     }
   } catch (err) {
     error.value = 'Failed to initialize application: ' + err.message;
@@ -1193,9 +1274,26 @@ const openModelSelector = async () => {
   }
 };
 
-const selectModel = (modelId) => {
+const selectModel = async (modelId) => {
   selectedModel.value = modelId;
   console.log('Model selected:', modelId);
+  
+  // Save to backend
+  try {
+    await openRouterService.updateModel(modelId);
+    console.log('Model saved to backend:', modelId);
+  } catch (error) {
+    console.error('Failed to save model to backend:', error);
+    // Still update the UI even if backend save fails
+  }
+};
+
+const toggleDescription = (modelId) => {
+  if (expandedDescriptions.value.has(modelId)) {
+    expandedDescriptions.value.delete(modelId);
+  } else {
+    expandedDescriptions.value.add(modelId);
+  }
 };
 
 const getPresetIcon = (presetName) => {
@@ -1365,14 +1463,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
   document.removeEventListener('keydown', handleKeyboardShortcuts);
-});
-
-// Watch for model selection changes and persist to localStorage
-watch(selectedModel, (newModel) => {
-  if (newModel) {
-    localStorage.setItem('openrouter_selected_model', newModel);
-    console.log('Selected model saved:', newModel);
-  }
 });
 </script>
 
@@ -2038,24 +2128,27 @@ body {
   align-items: center;
 }
 
-.settings-modal .close-btn {
+.modal-close-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
   background: none;
   border: none;
-  font-size: 1.5rem;
-  color: #666;
+  font-size: 2rem;
+  color: #999;
   cursor: pointer;
   padding: 0;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease;
+  z-index: 10;
+  line-height: 1;
 }
 
-.settings-modal .close-btn:hover {
-  background-color: #f5f5f5;
+.modal-close-btn:hover {
   color: #333;
 }
 
@@ -2513,12 +2606,13 @@ body {
   background-color: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #e0e0e0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .filter-search {
-  flex: 0 1 300px;
+  flex: 1 1 auto;
   min-width: 200px;
+  max-width: 400px;
 }
 
 .search-input {
@@ -2775,6 +2869,39 @@ body {
   color: #555;
   line-height: 1.5;
   flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.model-description.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+.model-description-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.btn-toggle-description {
+  background: none;
+  border: none;
+  color: #2196F3;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem 0;
+  text-align: left;
+  align-self: flex-start;
+  transition: color 0.2s ease;
+}
+
+.btn-toggle-description:hover {
+  color: #1976D2;
+  text-decoration: underline;
 }
 
 .model-tags {
@@ -2836,6 +2963,7 @@ body {
   gap: 0.5rem;
   padding-top: 0.75rem;
   border-top: 1px solid #e0e0e0;
+  margin-top: auto;
 }
 
 .model-pricing {
@@ -3016,6 +3144,7 @@ body {
   .filter-search {
     flex: 1;
     min-width: 100%;
+    max-width: 100%;
   }
 
   .filter-toggle {
