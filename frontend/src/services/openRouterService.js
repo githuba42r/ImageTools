@@ -161,6 +161,26 @@ class OpenRouterService {
 
     return response.json();
   }
+
+  /**
+   * Get all available models from OpenRouter
+   * @returns {Promise<Array>} Array of model objects with id, name, pricing, context_length, etc.
+   */
+  async getModels() {
+    const response = await fetch('https://openrouter.ai/api/v1/models', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch models from OpenRouter');
+    }
+
+    const result = await response.json();
+    return result.data || [];
+  }
 }
 
 // ============================================================================

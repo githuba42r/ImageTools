@@ -311,7 +311,7 @@
               <button 
                 class="btn-select-model"
                 :disabled="!openRouterConnected"
-                @click="showModelSelector = true"
+                @click="openModelSelector"
               >
                 {{ openRouterConnected ? 'Choose Model' : 'Connect to Choose' }}
               </button>
@@ -429,44 +429,163 @@
             Select the AI model you want to use for image manipulation. Each model has different capabilities, speeds, and costs.
           </p>
           
-          <div class="model-grid">
-            <div 
-              v-for="model in availableModels" 
-              :key="model.id"
-              class="model-card"
-              :class="{ 'selected': selectedModel === model.id }"
-              @click="selectModel(model.id)"
-            >
-              <div class="model-card-header">
-                <span class="model-icon-large" :style="{ color: model.color }">{{ model.icon }}</span>
-                <div class="model-header-text">
-                  <h3 class="model-card-name">{{ model.name }}</h3>
-                  <p class="model-provider">{{ model.provider }}</p>
-                </div>
-                <div v-if="selectedModel === model.id" class="selected-checkmark">✓</div>
+          <!-- Filter Controls -->
+          <div class="model-filters">
+            <div class="filter-search">
+              <input 
+                v-model="modelSearchQuery"
+                type="text"
+                placeholder="🔍 Search models by name, provider, or capability..."
+                class="search-input"
+              />
+            </div>
+            <div class="filter-row">
+              <div class="filter-toggle">
+                <label class="toggle-switch">
+                  <input type="checkbox" v-model="showOnlyFreeModels" />
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-label">Free only</span>
+                </label>
               </div>
-              
-              <p class="model-description">{{ model.description }}</p>
-              
-              <div class="model-tags">
-                <span 
-                  v-for="tag in model.tags" 
-                  :key="tag" 
-                  class="model-tag"
-                  :class="{ 'tag-free': tag === 'Free', 'tag-recommended': tag === 'Recommended' }"
-                >
-                  {{ tag }}
-                </span>
-              </div>
-              
-              <div class="model-footer">
-                <div class="model-pricing">
-                  <span class="pricing-label">Cost:</span>
-                  <span class="pricing-value">{{ model.cost }}</span>
-                </div>
-                <div class="model-id">{{ model.id }}</div>
+              <div class="filter-tags">
+                <label class="filter-label">Filter by tags:</label>
+                <select v-model="selectedTagFilter" class="tag-filter-select">
+                  <option value="">All Tags</option>
+                  <option v-for="tag in availableTags" :key="tag" :value="tag">{{ tag }}</option>
+                </select>
               </div>
             </div>
+          </div>
+
+          <!-- Loading state -->
+          <div v-if="isLoadingModels" class="models-loading">
+            <span class="loading-spinner">⏳</span>
+            <p>Loading models from OpenRouter...</p>
+          </div>
+
+          <!-- Error state -->
+          <div v-if="modelsLoadError" class="models-error">
+            <p>❌ {{ modelsLoadError }}</p>
+            <button class="btn-retry" @click="loadAllModels">Retry</button>
+          </div>
+
+          <!-- Recommended Models Section -->
+          <div v-if="!isLoadingModels && !modelsLoadError && filteredRecommendedModels.length > 0" class="models-section">
+            <h3 class="section-header">⭐ Recommended Models</h3>
+            <div class="model-grid">
+              <div 
+                v-for="model in filteredRecommendedModels" 
+                :key="model.id"
+                class="model-card"
+                :class="{ 'selected': selectedModel === model.id }"
+                @click="selectModel(model.id)"
+              >
+                <div class="model-card-header">
+                  <span class="model-icon-large" :style="{ color: model.color }">{{ model.icon }}</span>
+                  <div class="model-header-text">
+                    <h3 class="model-card-name">{{ model.name }}</h3>
+                    <p class="model-provider">{{ model.provider }}</p>
+                  </div>
+                  <div v-if="selectedModel === model.id" class="selected-checkmark">✓</div>
+                </div>
+                
+                <p class="model-description">{{ model.description }}</p>
+                
+                <div class="model-tags">
+                  <span 
+                    v-for="tag in model.tags" 
+                    :key="tag" 
+                    class="model-tag"
+                    :class="{ 'tag-free': tag === 'Free', 'tag-recommended': tag === 'Recommended' }"
+                  >
+                    {{ tag }}
+                  </span>
+                </div>
+                
+                <div class="model-specs">
+                  <div class="spec-item" v-if="model.contextWindow">
+                    <span class="spec-label">Context:</span>
+                    <span class="spec-value">{{ formatContextWindow(model.contextWindow) }}</span>
+                  </div>
+                  <div class="spec-item" v-if="model.maxTokens">
+                    <span class="spec-label">Max Output:</span>
+                    <span class="spec-value">{{ formatTokens(model.maxTokens) }}</span>
+                  </div>
+                </div>
+                
+                <div class="model-footer">
+                  <div class="model-pricing">
+                    <span class="pricing-label">Cost:</span>
+                    <span class="pricing-value">{{ model.cost }}</span>
+                  </div>
+                  <div class="model-id">{{ model.id }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Divider between recommended and all models -->
+          <div v-if="!isLoadingModels && !modelsLoadError && filteredRecommendedModels.length > 0 && filteredOtherModels.length > 0" class="section-divider">
+            <span>All Models ({{ filteredOtherModels.length }})</span>
+          </div>
+
+          <!-- All Other Models Section -->
+          <div v-if="!isLoadingModels && !modelsLoadError && filteredOtherModels.length > 0" class="models-section">
+            <div class="model-grid">
+              <div 
+                v-for="model in filteredOtherModels" 
+                :key="model.id"
+                class="model-card"
+                :class="{ 'selected': selectedModel === model.id }"
+                @click="selectModel(model.id)"
+              >
+                <div class="model-card-header">
+                  <span class="model-icon-large" :style="{ color: model.color }">{{ model.icon }}</span>
+                  <div class="model-header-text">
+                    <h3 class="model-card-name">{{ model.name }}</h3>
+                    <p class="model-provider">{{ model.provider }}</p>
+                  </div>
+                  <div v-if="selectedModel === model.id" class="selected-checkmark">✓</div>
+                </div>
+                
+                <p class="model-description">{{ model.description }}</p>
+                
+                <div class="model-tags">
+                  <span 
+                    v-for="tag in model.tags" 
+                    :key="tag" 
+                    class="model-tag"
+                    :class="{ 'tag-free': tag === 'Free', 'tag-recommended': tag === 'Recommended' }"
+                  >
+                    {{ tag }}
+                  </span>
+                </div>
+                
+                <div class="model-specs">
+                  <div class="spec-item" v-if="model.contextWindow">
+                    <span class="spec-label">Context:</span>
+                    <span class="spec-value">{{ formatContextWindow(model.contextWindow) }}</span>
+                  </div>
+                  <div class="spec-item" v-if="model.maxTokens">
+                    <span class="spec-label">Max Output:</span>
+                    <span class="spec-value">{{ formatTokens(model.maxTokens) }}</span>
+                  </div>
+                </div>
+                
+                <div class="model-footer">
+                  <div class="model-pricing">
+                    <span class="pricing-label">Cost:</span>
+                    <span class="pricing-value">{{ model.cost }}</span>
+                  </div>
+                  <div class="model-id">{{ model.id }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- No results -->
+          <div v-if="!isLoadingModels && !modelsLoadError && filteredRecommendedModels.length === 0 && filteredOtherModels.length === 0" class="no-results">
+            <p>No models found matching your search.</p>
           </div>
         </div>
         
@@ -530,100 +649,193 @@ const oauthNotification = ref(null); // { type: 'success' | 'error', message: st
 const selectedModel = ref('');
 const showModelSelector = ref(false);
 
-// AI Model data with details, pricing, and capabilities
-const availableModels = [
-  {
-    id: 'google/gemini-2.0-flash-exp:free',
-    name: 'Gemini 2.0 Flash',
-    provider: 'Google',
-    description: 'Fast, efficient model with vision capabilities. Perfect for most image tasks.',
-    cost: 'Free',
-    costPerMillion: '$0.00',
-    tags: ['Free', 'Fast', 'Vision', 'Recommended'],
-    icon: '⚡',
-    color: '#4285f4'
-  },
-  {
-    id: 'openai/gpt-4-turbo',
-    name: 'GPT-4 Turbo',
-    provider: 'OpenAI',
-    description: 'High-quality multimodal model with excellent vision understanding and reasoning.',
-    cost: '$10 / 1M tokens',
-    costPerMillion: '$10.00',
-    tags: ['Vision', 'High Quality', 'Popular'],
-    icon: '🤖',
-    color: '#10a37f'
-  },
-  {
-    id: 'anthropic/claude-3.5-sonnet',
-    name: 'Claude 3.5 Sonnet',
-    provider: 'Anthropic',
-    description: 'Excellent reasoning and vision capabilities with nuanced understanding.',
-    cost: '$3 / 1M tokens',
-    costPerMillion: '$3.00',
-    tags: ['Vision', 'Reasoning', 'Recommended'],
-    icon: '🧠',
-    color: '#cc785c'
-  },
-  {
-    id: 'anthropic/claude-3-opus',
-    name: 'Claude 3 Opus',
-    provider: 'Anthropic',
-    description: 'Top-tier model with exceptional vision analysis and creative capabilities.',
-    cost: '$15 / 1M tokens',
-    costPerMillion: '$15.00',
-    tags: ['Vision', 'Premium', 'Creative'],
-    icon: '💎',
-    color: '#cc785c'
-  },
-  {
-    id: 'meta-llama/llama-3.1-70b-instruct',
-    name: 'Llama 3.1 70B',
-    provider: 'Meta',
-    description: 'Open-source model with strong general capabilities and efficiency.',
-    cost: '$0.50 / 1M tokens',
-    costPerMillion: '$0.50',
-    tags: ['Open Source', 'Efficient', 'Cost-effective'],
-    icon: '🦙',
-    color: '#0668e1'
-  },
-  {
-    id: 'openai/gpt-4o',
-    name: 'GPT-4o',
-    provider: 'OpenAI',
-    description: 'Latest OpenAI model optimized for speed and multimodal tasks.',
-    cost: '$5 / 1M tokens',
-    costPerMillion: '$5.00',
-    tags: ['Vision', 'Fast', 'Latest'],
-    icon: '🚀',
-    color: '#10a37f'
-  },
-  {
-    id: 'anthropic/claude-3-haiku',
-    name: 'Claude 3 Haiku',
-    provider: 'Anthropic',
-    description: 'Fast and cost-effective model for simpler vision and text tasks.',
-    cost: '$0.25 / 1M tokens',
-    costPerMillion: '$0.25',
-    tags: ['Fast', 'Budget', 'Vision'],
-    icon: '⚡',
-    color: '#cc785c'
-  },
-  {
-    id: 'google/gemini-pro-vision',
-    name: 'Gemini Pro Vision',
-    provider: 'Google',
-    description: 'Powerful vision model with multimodal understanding capabilities.',
-    cost: '$0.125 / 1M tokens',
-    costPerMillion: '$0.125',
-    tags: ['Vision', 'Affordable', 'Google'],
-    icon: '👁️',
-    color: '#4285f4'
-  }
+// Model loading and filtering state
+const allModels = ref([]);
+const isLoadingModels = ref(false);
+const modelsLoadError = ref(null);
+const modelSearchQuery = ref('');
+const showOnlyFreeModels = ref(false);
+const selectedTagFilter = ref('');
+
+// Recommended model IDs (hardcoded list of preferred models)
+const recommendedModelIds = [
+  'google/gemini-2.0-flash-exp:free',
+  'anthropic/claude-3.5-sonnet',
+  'openai/gpt-4o',
+  'anthropic/claude-3-opus',
+  'google/gemini-flash-1.5-8b',
+  'meta-llama/llama-3.3-70b-instruct',
 ];
 
+// Provider icons and colors mapping
+const providerInfo = {
+  'google': { icon: '⚡', color: '#4285f4' },
+  'anthropic': { icon: '🧠', color: '#cc785c' },
+  'openai': { icon: '🤖', color: '#10a37f' },
+  'meta': { icon: '🦙', color: '#0668e1' },
+  'meta-llama': { icon: '🦙', color: '#0668e1' },
+  'mistralai': { icon: '🌪️', color: '#ff7f00' },
+  'qwen': { icon: '🔷', color: '#1890ff' },
+  'nvidia': { icon: '💚', color: '#76b900' },
+  'cohere': { icon: '🔮', color: '#39594d' },
+  'default': { icon: '🤖', color: '#666' }
+};
+
+// Get provider info from model ID
+const getProviderInfo = (modelId) => {
+  const provider = modelId.split('/')[0].toLowerCase();
+  return providerInfo[provider] || providerInfo.default;
+};
+
+// Parse model data from OpenRouter API
+const parseModelFromAPI = (apiModel) => {
+  const provider = apiModel.id.split('/')[0];
+  const providerDetails = getProviderInfo(apiModel.id);
+  
+  // Calculate cost display
+  let costDisplay = 'Free';
+  let isFree = false;
+  
+  if (apiModel.pricing) {
+    const promptCost = parseFloat(apiModel.pricing.prompt || 0);
+    const completionCost = parseFloat(apiModel.pricing.completion || 0);
+    
+    if (promptCost === 0 && completionCost === 0) {
+      costDisplay = 'Free';
+      isFree = true;
+    } else {
+      // Average of prompt and completion cost per 1M tokens
+      const avgCost = ((promptCost + completionCost) / 2) * 1000000;
+      costDisplay = `$${avgCost.toFixed(2)} / 1M`;
+    }
+  }
+  
+  // Generate tags
+  const tags = [];
+  if (isFree) tags.push('Free');
+  if (recommendedModelIds.includes(apiModel.id)) tags.push('Recommended');
+  if (apiModel.architecture?.modality?.includes('image')) tags.push('Vision');
+  if (apiModel.top_provider?.is_moderated) tags.push('Moderated');
+  if (apiModel.context_length >= 100000) tags.push('Large Context');
+  
+  // Extract capabilities from description or supported parameters
+  if (apiModel.description?.toLowerCase().includes('reasoning')) tags.push('Reasoning');
+  if (apiModel.description?.toLowerCase().includes('code') || apiModel.description?.toLowerCase().includes('coding')) tags.push('Coding');
+  if (apiModel.description?.toLowerCase().includes('fast') || apiModel.name?.toLowerCase().includes('turbo')) tags.push('Fast');
+  
+  return {
+    id: apiModel.id,
+    name: apiModel.name,
+    provider: provider.charAt(0).toUpperCase() + provider.slice(1).replace('-', ' '),
+    description: apiModel.description?.split('\n')[0]?.substring(0, 200) || 'No description available',
+    cost: costDisplay,
+    isFree: isFree,
+    tags: tags,
+    icon: providerDetails.icon,
+    color: providerDetails.color,
+    contextWindow: apiModel.context_length || null,
+    maxTokens: apiModel.top_provider?.max_completion_tokens || null,
+    isRecommended: recommendedModelIds.includes(apiModel.id)
+  };
+};
+
+// Load all models from OpenRouter API
+const loadAllModels = async () => {
+  isLoadingModels.value = true;
+  modelsLoadError.value = null;
+  
+  try {
+    const apiModels = await openRouterService.getModels();
+    allModels.value = apiModels
+      .filter(m => m.id && m.name) // Filter out invalid models
+      .map(parseModelFromAPI)
+      .sort((a, b) => {
+        // Sort: Recommended first, then by name
+        if (a.isRecommended && !b.isRecommended) return -1;
+        if (!a.isRecommended && b.isRecommended) return 1;
+        return a.name.localeCompare(b.name);
+      });
+    
+    console.log(`Loaded ${allModels.value.length} models from OpenRouter`);
+  } catch (error) {
+    console.error('Failed to load models:', error);
+    modelsLoadError.value = error.message || 'Failed to load models from OpenRouter';
+  } finally {
+    isLoadingModels.value = false;
+  }
+};
+
+// Get all unique tags from models
+const availableTags = computed(() => {
+  const tags = new Set();
+  allModels.value.forEach(model => {
+    model.tags.forEach(tag => tags.add(tag));
+  });
+  return Array.from(tags).sort();
+});
+
+// Filter models based on search query, free toggle, and tag filter
+const filterModels = (models) => {
+  return models.filter(model => {
+    // Free filter
+    if (showOnlyFreeModels.value && !model.isFree) {
+      return false;
+    }
+    
+    // Tag filter
+    if (selectedTagFilter.value && !model.tags.includes(selectedTagFilter.value)) {
+      return false;
+    }
+    
+    // Search filter
+    if (modelSearchQuery.value) {
+      const query = modelSearchQuery.value.toLowerCase();
+      const searchableText = [
+        model.name,
+        model.provider,
+        model.description,
+        model.id,
+        ...model.tags
+      ].join(' ').toLowerCase();
+      
+      if (!searchableText.includes(query)) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+};
+
+// Filtered recommended models
+const filteredRecommendedModels = computed(() => {
+  const recommended = allModels.value.filter(m => m.isRecommended);
+  return filterModels(recommended);
+});
+
+// Filtered other models
+const filteredOtherModels = computed(() => {
+  const others = allModels.value.filter(m => !m.isRecommended);
+  return filterModels(others);
+});
+
+// Format context window for display
+const formatContextWindow = (tokens) => {
+  if (!tokens) return 'Unknown';
+  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
+  return tokens.toString();
+};
+
+// Format max tokens for display
+const formatTokens = (tokens) => {
+  if (!tokens) return 'Unknown';
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
+  return tokens.toString();
+};
+
 const getSelectedModelData = () => {
-  return availableModels.find(m => m.id === selectedModel.value);
+  return allModels.value.find(m => m.id === selectedModel.value);
 };
 
 const initializeApp = async () => {
@@ -930,7 +1142,16 @@ const clearSelection = () => {
   imageStore.clearSelection();
 };
 
-// Model selection handler
+// Model selection handlers
+const openModelSelector = async () => {
+  showModelSelector.value = true;
+  
+  // Load models if not already loaded
+  if (allModels.value.length === 0 && !isLoadingModels.value) {
+    await loadAllModels();
+  }
+};
+
 const selectModel = (modelId) => {
   selectedModel.value = modelId;
   console.log('Model selected:', modelId);
@@ -2249,6 +2470,194 @@ body {
   line-height: 1.5;
 }
 
+/* Model Filters */
+.model-filters {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.filter-search {
+  margin-bottom: 1rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #2196F3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-switch input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+}
+
+.toggle-slider {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  background-color: #ccc;
+  border-radius: 24px;
+  transition: background-color 0.3s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-slider {
+  background-color: #4CAF50;
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.toggle-label {
+  font-size: 0.9rem;
+  color: #333;
+  font-weight: 500;
+}
+
+.filter-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.filter-label {
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tag-filter-select {
+  flex: 1;
+  min-width: 200px;
+  max-width: 300px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.tag-filter-select:focus {
+  outline: none;
+  border-color: #2196F3;
+}
+
+/* Loading and Error States */
+.models-loading,
+.models-error,
+.no-results {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #666;
+}
+
+.loading-spinner {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 1rem;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.models-error {
+  color: #d32f2f;
+}
+
+.btn-retry {
+  margin-top: 1rem;
+  padding: 0.5rem 1.5rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s ease;
+}
+
+.btn-retry:hover {
+  background-color: #1976D2;
+}
+
+/* Models Section */
+.models-section {
+  margin-bottom: 2rem;
+}
+
+.section-header {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-divider {
+  margin: 2rem 0;
+  padding: 0.75rem 0;
+  border-top: 2px solid #e0e0e0;
+  border-bottom: 2px solid #e0e0e0;
+  text-align: center;
+  font-weight: 600;
+  color: #666;
+  font-size: 0.95rem;
+}
+
 .model-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -2359,6 +2768,32 @@ body {
 .model-tag.tag-recommended {
   background-color: #fff3e0;
   color: #ef6c00;
+}
+
+.model-specs {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.spec-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background-color: #f0f0f0;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.spec-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.spec-value {
+  color: #333;
+  font-weight: 700;
 }
 
 .model-footer {
