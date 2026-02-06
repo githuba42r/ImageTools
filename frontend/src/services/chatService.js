@@ -44,10 +44,15 @@ class ChatService {
    * @returns {Promise<Object>} Chat response with AI reply and operations
    */
   async sendMessage({ message, imageId, conversationId, model }) {
+    if (!this.sessionId) {
+      throw new Error('Session ID not set. Please initialize chat service first.');
+    }
+    
     const response = await fetch(`${this.baseURL}/send`, {
       method: 'POST',
       headers: this._getHeaders(),
       body: JSON.stringify({
+        session_id: this.sessionId,
         message,
         image_id: imageId,
         conversation_id: conversationId,

@@ -181,6 +181,7 @@ class ConversationResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    session_id: str = Field(..., description="User session ID for API key retrieval")
     conversation_id: Optional[str] = Field(None, description="Existing conversation ID, or None for new conversation")
     image_id: str = Field(..., description="ID of the image to manipulate")
     message: str = Field(..., min_length=1, max_length=10000, description="User message")

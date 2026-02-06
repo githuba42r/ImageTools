@@ -5,11 +5,12 @@ This module provides REST API endpoints for AI-powered image manipulation chat.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from app.core.database import get_db
 from app.services.ai_chat_service import AIChatService
+from app.services.openrouter_oauth_service import OpenRouterOAuthService
 from app.schemas.schemas import (
     ChatRequest,
     ChatResponse,
@@ -22,7 +23,7 @@ router = APIRouter(tags=["AI Chat"])
 @router.post("/send", response_model=ChatResponse)
 async def send_message(
     request: ChatRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Send a message in an AI chat conversation
@@ -31,13 +32,21 @@ async def send_message(
     - **image_id**: ID of the image to manipulate
     - **conversation_id**: Optional - continue existing conversation
     - **model**: Optional - AI model to use (defaults to gemini-2.0-flash-exp:free)
-    - **api_key**: Optional - OpenRouter API key (can also use OPENROUTER_API_KEY env var)
+    - **session_id**: Required - User session ID (used to fetch encrypted API key)
     
     Returns AI response with any image operations to apply
     """
     try:
+        # Retrieve API key from encrypted storage
+        oauth_service = OpenRouterOAuthService(db)
+        api_key = await oauth_service.get_api_key(request.session_id)
+        
+        if not api_key:
+            raise ValueError("OpenRouter API key not found. Please connect your OpenRouter account first.")
+        
+        # Send message with retrieved API key
         service = AIChatService(db)
-        response = await service.send_message(request)
+        response = await service.send_message(request, api_key=api_key)
         return response
     except ValueError as e:
         raise HTTPException(
@@ -52,9 +61,9 @@ async def send_message(
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
-def get_conversation(
+async def get_conversation(
     conversation_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get a conversation with all messages
@@ -76,9 +85,9 @@ def get_conversation(
 
 
 @router.delete("/conversations/{conversation_id}")
-def delete_conversation(
+async def delete_conversation(
     conversation_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Delete a conversation and all its messages
@@ -100,9 +109,9 @@ def delete_conversation(
 
 
 @router.get("/sessions/{session_id}/conversations", response_model=List[ConversationResponse])
-def get_session_conversations(
+async def get_session_conversations(
     session_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get all conversations for a session

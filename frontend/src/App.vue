@@ -156,10 +156,13 @@
             <div class="main-content">
               <div class="image-gallery">
                 <ImageCard
-                  v-for="image in images"
+                  v-for="image in imageStore.images"
                   :key="image.id"
                   :image="image"
                   :presets="presets"
+                  :sessionId="sessionId"
+                  :selectedModel="selectedModel"
+                  :isOpenRouterConnected="openRouterConnected"
                   @image-click="handleImageClick"
                   @edit-click="handleEditClick"
                 />
@@ -702,6 +705,7 @@ import { useImageStore } from './stores/imageStore';
 import { storeToRefs } from 'pinia';
 import { imageService } from './services/api';
 import { openRouterService, generateCodeVerifier, generateCodeChallenge } from './services/openRouterService';
+import { chatService } from './services/chatService';
 import UploadArea from './components/UploadArea.vue';
 import ImageCard from './components/ImageCard.vue';
 import ImageViewer from './components/ImageViewer.vue';
@@ -964,6 +968,7 @@ const initializeApp = async () => {
     // Set session ID in OpenRouter service
     if (sessionId.value) {
       openRouterService.setSessionId(sessionId.value);
+      chatService.setSessionId(sessionId.value);
     }
     
     // Check if we're returning from OAuth callback

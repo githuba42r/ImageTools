@@ -126,6 +126,16 @@
           </button>
 
           <button 
+            @click="openChatInterface" 
+            class="btn-icon btn-ai"
+            :disabled="isProcessing"
+            :title="'AI Chat - Ask AI to modify image'"
+          >
+            <span class="icon">💬</span>
+            <span class="tooltip">AI Chat</span>
+          </button>
+
+          <button 
             @click="handleUndo" 
             class="btn-icon"
             :disabled="!canUndo || isProcessing"
@@ -177,6 +187,17 @@
           </div>
         </div>
       </div>
+
+    <!-- Chat Interface Modal -->
+    <ChatInterface
+      v-if="showChatInterface"
+      :image="image"
+      :sessionId="sessionId"
+      :selectedModel="selectedModel"
+      :isConnected="isOpenRouterConnected"
+      @close="closeChatInterface"
+      @operationsApplied="handleOperationsApplied"
+    />
 
     <!-- Resize Modal -->
     <div v-if="showResizeModal" class="modal-backdrop" @click="closeResizeModal">
@@ -280,6 +301,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useImageStore } from '../stores/imageStore';
 import { historyService } from '../services/api';
+import ChatInterface from './ChatInterface.vue';
 
 const props = defineProps({
   image: {
@@ -289,6 +311,18 @@ const props = defineProps({
   presets: {
     type: Array,
     default: () => []
+  },
+  sessionId: {
+    type: String,
+    required: true
+  },
+  selectedModel: {
+    type: String,
+    default: null
+  },
+  isOpenRouterConnected: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -302,6 +336,7 @@ const canUndo = ref(false);
 const showPresetMenu = ref(false);
 const imageRefreshKey = ref(Date.now());
 const showDeleteConfirm = ref(false);
+const showChatInterface = ref(false);
 
 // Resize modal state
 const showResizeModal = ref(false);
@@ -502,6 +537,19 @@ const handleRemoveBackground = async () => {
     isProcessing.value = false;
     processingMessage.value = '';
   }
+};
+
+const openChatInterface = () => {
+  showChatInterface.value = true;
+};
+
+const closeChatInterface = () => {
+  showChatInterface.value = false;
+};
+
+const handleOperationsApplied = (operations) => {
+  console.log('Operations applied:', operations);
+  imageRefreshKey.value = Date.now(); // Force reload
 };
 
 const confirmDelete = async () => {
