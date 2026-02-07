@@ -76,6 +76,15 @@ export function connectWebSocket() {
     return;
   }
   
+  // Check if we've exceeded max attempts BEFORE trying to connect
+  if (reconnectAttempts >= maxReconnectAttempts) {
+    console.error('[WebSocket] Max reconnection attempts reached, backend appears to be offline');
+    if (onOfflineCallback) {
+      onOfflineCallback();
+    }
+    return;
+  }
+  
   const url = getWebSocketUrl();
   console.log(`[WebSocket] Connecting to ${url}... (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
   
@@ -83,7 +92,7 @@ export function connectWebSocket() {
     ws = new WebSocket(url);
     
     ws.onopen = () => {
-      console.log('[WebSocket] Connected');
+      console.log('[WebSocket] Connected successfully');
       isConnected = true;
       reconnectAttempts = 0; // Reset on successful connection
       
@@ -113,11 +122,11 @@ export function connectWebSocket() {
     };
     
     ws.onerror = (error) => {
-      console.error('[WebSocket] Error:', error);
+      console.error('[WebSocket] Connection error:', error);
     };
     
     ws.onclose = (event) => {
-      console.log('[WebSocket] Disconnected', event.code, event.reason);
+      console.log(`[WebSocket] Disconnected (code: ${event.code}, reason: ${event.reason || 'none'})`);
       isConnected = false;
       
       // Clear ping timeout
@@ -132,40 +141,48 @@ export function connectWebSocket() {
         return;
       }
       
-      // Attempt to reconnect
-      if (reconnectAttempts < maxReconnectAttempts) {
-        reconnectAttempts++;
-        const delay = getReconnectDelay();
-        console.log(`[WebSocket] Reconnecting in ${delay}ms... (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
-        
-        reconnectTimeout = setTimeout(() => {
-          connectWebSocket();
-        }, delay);
-      } else {
-        // Max reconnect attempts reached - trigger offline modal
-        console.error('[WebSocket] Max reconnection attempts reached, backend appears to be offline');
-        
+      // Increment attempt counter
+      reconnectAttempts++;
+      console.log(`[WebSocket] Reconnection attempt ${reconnectAttempts}/${maxReconnectAttempts} failed`);
+      
+      // Check if we've exceeded max attempts
+      if (reconnectAttempts >= maxReconnectAttempts) {
+        console.error('[WebSocket] Max reconnection attempts reached, triggering offline modal');
         if (onOfflineCallback) {
           onOfflineCallback();
         }
+        return;
       }
+      
+      // Schedule reconnection with exponential backoff
+      const delay = getReconnectDelay();
+      console.log(`[WebSocket] Scheduling reconnection in ${delay}ms...`);
+      
+      reconnectTimeout = setTimeout(() => {
+        connectWebSocket();
+      }, delay);
     };
     
   } catch (error) {
     console.error('[WebSocket] Failed to create WebSocket:', error);
     
-    // Retry if under max attempts
-    if (reconnectAttempts < maxReconnectAttempts) {
-      reconnectAttempts++;
-      const delay = getReconnectDelay();
-      reconnectTimeout = setTimeout(() => {
-        connectWebSocket();
-      }, delay);
-    } else {
+    // Increment attempt counter
+    reconnectAttempts++;
+    
+    // Check if we've exceeded max attempts
+    if (reconnectAttempts >= maxReconnectAttempts) {
+      console.error('[WebSocket] Max reconnection attempts reached (creation error)');
       if (onOfflineCallback) {
         onOfflineCallback();
       }
+      return;
     }
+    
+    // Schedule reconnection
+    const delay = getReconnectDelay();
+    reconnectTimeout = setTimeout(() => {
+      connectWebSocket();
+    }, delay);
   }
 }
 
