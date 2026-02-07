@@ -703,11 +703,24 @@
             <!-- Connection Instructions (after string is generated and copied) -->
             <div v-if="addonRegistrationUrl" class="info-box info-box-success" style="margin-top: 20px;">
               <p style="margin-bottom: 15px;">
-                <strong>✓ Connection string copied to clipboard!</strong>
+                <strong v-if="addonUrlCopied">✓ Connection string copied to clipboard!</strong>
+                <strong v-else style="color: #f59e0b;">⚠️ Connection string generated</strong>
               </p>
               
-              <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #a5d6a7;">
-                <code style="word-break: break-all; font-size: 11px; color: #2e7d32;">{{ addonRegistrationUrl }}</code>
+              <div v-if="!addonUrlCopied" style="margin-bottom: 15px;">
+                <button 
+                  class="btn-modal btn-primary" 
+                  @click="copyAddonUrl"
+                  style="width: 100%;"
+                >
+                  📋 Copy Connection String to Clipboard
+                </button>
+              </div>
+              
+              <div style="background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 15px; border: 2px solid #ffc107; text-align: center;">
+                <p style="margin: 0; font-size: 1.2em; font-weight: bold; color: #856404;">
+                  ⏱️ Expires in: {{ Math.floor(addonCountdownSeconds / 60) }}:{{ String(addonCountdownSeconds % 60).padStart(2, '0') }}
+                </p>
               </div>
               
               <p style="margin-bottom: 10px;"><strong>How to connect:</strong></p>
@@ -718,8 +731,8 @@
                 <li>Click "Connect" to complete the setup</li>
               </ol>
               <p style="margin-top: 15px; font-size: 0.85em; color: #666;">
-                💡 Connection string expires in 5 minutes. 
-                <a href="#" @click.prevent="addonRegistrationUrl = null" style="color: #6366f1; text-decoration: underline;">
+                💡 Connection string expires in 2 minutes. 
+                <a href="#" @click.prevent="addonRegistrationUrl = null; addonCountdownSeconds = 0; addonUrlCopied = false; if (addonCountdownInterval) clearInterval(addonCountdownInterval);" style="color: #6366f1; text-decoration: underline;">
                   Generate new string
                 </a>
               </p>
@@ -732,17 +745,35 @@
                 <div class="device-info">
                   <span class="device-icon">🧩</span>
                   <div class="device-details">
-                    <strong>{{ addon.browser_name || 'Browser' }}</strong>
+                    <strong>{{ addon.browser_name || 'Browser' }} {{ addon.browser_version ? `v${addon.browser_version}` : '' }}</strong>
                     <p style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                      <span v-if="addon.os_name">{{ addon.os_name }} • </span>
                       Connected: {{ formatDate(addon.created_at) }}
                       <span v-if="addon.last_used_at"> • Last used: {{ formatDate(addon.last_used_at) }}</span>
                     </p>
                   </div>
                 </div>
+                <div v-if="addonPendingRevoke === addon.id" style="display: flex; gap: 8px;">
+                  <button 
+                    class="btn-revoke-confirm" 
+                    @click="revokeAddonAuthorization(addon.id)"
+                    title="Confirm disconnect"
+                  >
+                    ✓ Confirm
+                  </button>
+                  <button 
+                    class="btn-revoke-cancel" 
+                    @click="cancelRevokeAddon"
+                    title="Cancel"
+                  >
+                    ✕
+                  </button>
+                </div>
                 <button 
+                  v-else
                   class="btn-revoke" 
                   @click="revokeAddonAuthorization(addon.id)"
-                  title="Revoke this connection"
+                  title="Disconnect this browser"
                 >
                   ✕
                 </button>
@@ -1169,6 +1200,9 @@ const addonRegistrationUrl = ref(null);
 const isGeneratingAddonUrl = ref(false);
 const addonUrlCopied = ref(false);
 const connectedAddons = ref([]);
+const addonCountdownSeconds = ref(0);
+const addonPendingRevoke = ref(null); // Track which addon is pending revoke confirmation
+let addonCountdownInterval = null;
 
 // Image card settings
 const imageCardSize = ref(localStorage.getItem('imageCardSize') || 'small');
@@ -1929,13 +1963,49 @@ const generateAddonRegistrationUrl = async () => {
     
     addonRegistrationUrl.value = base64String;
     
-    console.log('[Addon] Generated connection string:', base64String);
+    console.log('[Addon] Generated connection string (not displayed for security)');
+    console.log('[Addon] Connection string length:', base64String.length);
+    console.log('[Addon] First 20 chars:', base64String.substring(0, 20) + '...');
     
     // Automatically copy to clipboard
     try {
-      await navigator.clipboard.writeText(base64String);
-      addonUrlCopied.value = true;
-      console.log('[Addon] Connection string automatically copied to clipboard');
+      // Try modern clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(base64String);
+        addonUrlCopied.value = true;
+        console.log('[Addon] Connection string automatically copied to clipboard (modern API)');
+        console.log('[Addon] Verifying copy...');
+        
+        // Verify the copy worked
+        try {
+          const clipboardText = await navigator.clipboard.readText();
+          if (clipboardText === base64String) {
+            console.log('[Addon] ✓ Clipboard verification successful');
+          } else {
+            console.warn('[Addon] ⚠️ Clipboard content does not match expected string');
+            console.log('[Addon] Expected length:', base64String.length, 'Got:', clipboardText.length);
+          }
+        } catch (readError) {
+          console.warn('[Addon] Cannot verify clipboard (permission denied):', readError.message);
+        }
+      } else {
+        // Fallback to older method
+        const textarea = document.createElement('textarea');
+        textarea.value = base64String;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const success = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        
+        if (success) {
+          addonUrlCopied.value = true;
+          console.log('[Addon] Connection string automatically copied to clipboard (fallback)');
+        } else {
+          throw new Error('execCommand copy failed');
+        }
+      }
       
       // Show temporary success message
       setTimeout(() => {
@@ -1944,15 +2014,43 @@ const generateAddonRegistrationUrl = async () => {
     } catch (clipboardError) {
       console.error('[Addon] Failed to auto-copy to clipboard:', clipboardError);
       addonUrlCopied.value = false;
+      // Show error message to user
+      alert('Failed to copy connection string to clipboard. Please try again or copy manually.');
     }
     
-    // Auto-expire after 5 minutes
-    setTimeout(() => {
-      if (addonRegistrationUrl.value === base64String) {
+    // Start countdown timer (2 minutes = 120 seconds)
+    addonCountdownSeconds.value = 120;
+    
+    // Clear any existing interval
+    if (addonCountdownInterval) {
+      clearInterval(addonCountdownInterval);
+    }
+    
+    // Start countdown interval
+    addonCountdownInterval = setInterval(() => {
+      if (addonCountdownSeconds.value > 0) {
+        addonCountdownSeconds.value--;
+      } else {
+        // Expired
+        clearInterval(addonCountdownInterval);
+        addonCountdownInterval = null;
         addonRegistrationUrl.value = null;
         console.log('[Addon] Connection string expired');
       }
-    }, 5 * 60 * 1000);
+    }, 1000);
+    
+    // Auto-expire after 2 minutes (120 seconds)
+    setTimeout(() => {
+      if (addonRegistrationUrl.value === base64String) {
+        addonRegistrationUrl.value = null;
+        addonCountdownSeconds.value = 0;
+        if (addonCountdownInterval) {
+          clearInterval(addonCountdownInterval);
+          addonCountdownInterval = null;
+        }
+        console.log('[Addon] Connection string expired');
+      }
+    }, 2 * 60 * 1000);
     
   } catch (error) {
     console.error('[Addon] Failed to generate connection string:', error);
@@ -1966,13 +2064,51 @@ const copyAddonUrl = async () => {
   if (!addonRegistrationUrl.value) return;
   
   try {
-    await navigator.clipboard.writeText(addonRegistrationUrl.value);
-    addonUrlCopied.value = true;
+    console.log('[Addon] Manual copy requested');
+    console.log('[Addon] String length:', addonRegistrationUrl.value.length);
+    
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(addonRegistrationUrl.value);
+      addonUrlCopied.value = true;
+      console.log('[Addon] Manual copy successful (modern API)');
+      
+      // Verify
+      try {
+        const clipboardText = await navigator.clipboard.readText();
+        if (clipboardText === addonRegistrationUrl.value) {
+          console.log('[Addon] ✓ Manual copy verification successful');
+        } else {
+          console.warn('[Addon] ⚠️ Manual copy verification failed');
+        }
+      } catch (readError) {
+        console.warn('[Addon] Cannot verify clipboard:', readError.message);
+      }
+    } else {
+      // Fallback to older method
+      const textarea = document.createElement('textarea');
+      textarea.value = addonRegistrationUrl.value;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const success = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      
+      if (success) {
+        addonUrlCopied.value = true;
+        console.log('[Addon] Manual copy successful (fallback)');
+      } else {
+        throw new Error('execCommand copy failed');
+      }
+    }
+    
     setTimeout(() => {
       addonUrlCopied.value = false;
     }, 3000);
   } catch (err) {
     console.error('[Addon] Failed to copy URL:', err);
+    alert('Failed to copy to clipboard. Please try copying manually.');
   }
 };
 
@@ -1987,17 +2123,24 @@ const loadConnectedAddons = async () => {
 };
 
 const revokeAddonAuthorization = async (authId) => {
-  if (!confirm('Are you sure you want to disconnect this addon?')) {
-    return;
+  // If already pending, this is the confirm action
+  if (addonPendingRevoke.value === authId) {
+    try {
+      await addonService.revokeAuthorization(authId);
+      await loadConnectedAddons();
+      addonPendingRevoke.value = null;
+    } catch (error) {
+      console.error('[Addon] Failed to revoke authorization:', error);
+      alert('Failed to disconnect addon. Please try again.');
+    }
+  } else {
+    // Set as pending
+    addonPendingRevoke.value = authId;
   }
-  
-  try {
-    await addonService.revokeAuthorization(authId);
-    await loadConnectedAddons();
-  } catch (error) {
-    console.error('[Addon] Failed to revoke authorization:', error);
-    alert('Failed to disconnect addon. Please try again.');
-  }
+};
+
+const cancelRevokeAddon = () => {
+  addonPendingRevoke.value = null;
 };
 
 const formatDate = (dateString) => {
@@ -2011,6 +2154,14 @@ watch(showAddonModal, (isOpen) => {
     // Reset state when modal is closed
     addonRegistrationUrl.value = null;
     addonUrlCopied.value = false;
+    addonCountdownSeconds.value = 0;
+    addonPendingRevoke.value = null;
+    
+    // Clear countdown interval
+    if (addonCountdownInterval) {
+      clearInterval(addonCountdownInterval);
+      addonCountdownInterval = null;
+    }
   }
 });
 
@@ -4636,5 +4787,36 @@ body {
 
 .btn-revoke:hover {
   background: #dc2626;
+}
+
+.btn-revoke-confirm {
+  padding: 6px 12px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.btn-revoke-confirm:hover {
+  background: #059669;
+}
+
+.btn-revoke-cancel {
+  padding: 6px 12px;
+  background: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background 0.2s;
+}
+
+.btn-revoke-cancel:hover {
+  background: #4b5563;
 }
 </style>

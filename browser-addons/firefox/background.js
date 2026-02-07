@@ -27,6 +27,20 @@ browser.runtime.onInstalled.addListener(async () => {
   createContextMenus();
 });
 
+// Load auth state on browser startup
+browser.runtime.onStartup.addListener(async () => {
+  console.log('[ImageTools] Browser started, loading auth state');
+  await loadAuthState();
+  createContextMenus();
+});
+
+// Load auth state immediately when background script loads
+(async () => {
+  console.log('[ImageTools] Background script loaded');
+  await loadAuthState();
+  createContextMenus();
+})();
+
 // Load auth state from storage
 async function loadAuthState() {
   try {
@@ -113,16 +127,62 @@ function isAuthenticated() {
   return true;
 }
 
+// Get browser information
+function getBrowserInfo() {
+  const userAgent = navigator.userAgent;
+  let browserName = 'Firefox';
+  let browserVersion = '';
+  let osName = '';
+  
+  // Detect browser
+  if (userAgent.indexOf('Edg/') > -1) {
+    browserName = 'Edge';
+    browserVersion = userAgent.match(/Edg\/([\d.]+)/)?.[1] || '';
+  } else if (userAgent.indexOf('Chrome/') > -1) {
+    browserName = 'Chrome';
+    browserVersion = userAgent.match(/Chrome\/([\d.]+)/)?.[1] || '';
+  } else if (userAgent.indexOf('Firefox/') > -1) {
+    browserName = 'Firefox';
+    browserVersion = userAgent.match(/Firefox\/([\d.]+)/)?.[1] || '';
+  }
+  
+  // Detect OS
+  if (userAgent.indexOf('Win') > -1) {
+    osName = 'Windows';
+  } else if (userAgent.indexOf('Mac') > -1) {
+    osName = 'macOS';
+  } else if (userAgent.indexOf('Linux') > -1) {
+    osName = 'Linux';
+  } else if (userAgent.indexOf('Android') > -1) {
+    osName = 'Android';
+  } else if (userAgent.indexOf('iOS') > -1 || userAgent.indexOf('iPhone') > -1 || userAgent.indexOf('iPad') > -1) {
+    osName = 'iOS';
+  }
+  
+  return {
+    browserName,
+    browserVersion,
+    osName,
+    userAgent
+  };
+}
+
 // Exchange authorization code for tokens
 async function exchangeAuthCode(authorizationCode, instanceUrl) {
   try {
+    const browserInfo = getBrowserInfo();
+    
     const response = await fetch(`${instanceUrl}${API_ENDPOINTS.token}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        authorization_code: authorizationCode
+        authorization_code: authorizationCode,
+        browser_name: browserInfo.browserName,
+        browser_version: browserInfo.browserVersion,
+        os_name: browserInfo.osName,
+        user_agent: browserInfo.userAgent
       })
     });
     
@@ -132,7 +192,7 @@ async function exchangeAuthCode(authorizationCode, instanceUrl) {
     
     const data = await response.json();
     
-    // Save auth state
+    // Update global auth state
     authState = {
       instanceUrl: data.instance_url,
       accessToken: data.access_token,

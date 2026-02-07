@@ -370,6 +370,10 @@ class AddonAuthorizationResponse(BaseModel):
 class AddonTokenExchangeRequest(BaseModel):
     """Request to exchange authorization code for tokens"""
     authorization_code: str = Field(..., description="Authorization code from registration URL")
+    browser_name: Optional[str] = Field(None, description="Browser name (Chrome, Firefox, etc.)")
+    browser_version: Optional[str] = Field(None, description="Browser version")
+    os_name: Optional[str] = Field(None, description="Operating system")
+    user_agent: Optional[str] = Field(None, description="Full user agent string")
 
 
 class AddonTokenExchangeResponse(BaseModel):
@@ -423,6 +427,8 @@ class ConnectedAddonInfo(BaseModel):
     """Information about a connected addon"""
     id: str
     browser_name: Optional[str]
+    browser_version: Optional[str]
+    os_name: Optional[str]
     created_at: datetime
     last_used_at: Optional[datetime]
     access_expires_at: Optional[datetime]

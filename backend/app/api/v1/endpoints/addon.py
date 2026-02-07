@@ -78,7 +78,14 @@ async def exchange_token(
     Called when addon first connects with the registration URL.
     Returns long-term tokens for ongoing authentication.
     """
-    authorization = await AddonService.exchange_code_for_tokens(db, request.authorization_code)
+    authorization = await AddonService.exchange_code_for_tokens(
+        db=db,
+        authorization_code=request.authorization_code,
+        browser_name=request.browser_name,
+        browser_version=request.browser_version,
+        os_name=request.os_name,
+        user_agent=request.user_agent
+    )
     if not authorization:
         raise HTTPException(status_code=401, detail="Invalid or expired authorization code")
     
@@ -272,6 +279,8 @@ async def list_connected_addons(
         ConnectedAddonInfo(
             id=a.id,
             browser_name=a.browser_name,
+            browser_version=a.browser_version,
+            os_name=a.os_name,
             created_at=a.created_at,
             last_used_at=a.last_used_at,
             access_expires_at=a.access_expires_at,

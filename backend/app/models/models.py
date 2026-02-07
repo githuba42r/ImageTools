@@ -149,7 +149,10 @@ class BrowserAddonAuthorization(Base):
     id = Column(String, primary_key=True, index=True)  # UUID
     session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
     browser_name = Column(String, nullable=True)  # "firefox" or "chrome"
+    browser_version = Column(String, nullable=True)  # Browser version
+    os_name = Column(String, nullable=True)  # Operating system
     addon_identifier = Column(String, nullable=True)  # Optional addon ID
+    user_agent = Column(String, nullable=True)  # Full user agent string
     
     # Authorization code (short-lived, single-use, 5 minutes)
     authorization_code = Column(String, nullable=False, unique=True, index=True)

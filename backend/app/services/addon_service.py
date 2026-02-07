@@ -72,7 +72,11 @@ class AddonService:
     @staticmethod
     async def exchange_code_for_tokens(
         db: AsyncSession,
-        authorization_code: str
+        authorization_code: str,
+        browser_name: Optional[str] = None,
+        browser_version: Optional[str] = None,
+        os_name: Optional[str] = None,
+        user_agent: Optional[str] = None
     ) -> Optional[BrowserAddonAuthorization]:
         """
         Exchange authorization code for access and refresh tokens
@@ -85,6 +89,10 @@ class AddonService:
         Args:
             db: Database session
             authorization_code: Authorization code from registration URL
+            browser_name: Browser name (Chrome, Firefox, etc.)
+            browser_version: Browser version
+            os_name: Operating system name
+            user_agent: Full user agent string
         
         Returns:
             BrowserAddonAuthorization with tokens, or None if invalid
@@ -112,6 +120,16 @@ class AddonService:
             authorization.is_active = False
             await db.commit()
             return None
+        
+        # Update browser information if provided
+        if browser_name:
+            authorization.browser_name = browser_name
+        if browser_version:
+            authorization.browser_version = browser_version
+        if os_name:
+            authorization.os_name = os_name
+        if user_agent:
+            authorization.user_agent = user_agent
         
         # Generate access and refresh tokens
         authorization.access_token = AddonService.generate_secure_token(32)
