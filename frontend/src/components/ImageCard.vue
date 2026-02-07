@@ -1,7 +1,10 @@
 <template>
   <div 
     class="image-card" 
-    :class="{ 'selected': isSelected }"
+    :class="[
+      { 'selected': isSelected },
+      `card-size-${cardSize}`
+    ]"
     @click="handleCardClick"
   >
     <div class="image-preview" @click.stop="handleImageClick">
@@ -339,6 +342,11 @@ const props = defineProps({
   expiryDays: {
     type: Number,
     default: 7
+  },
+  cardSize: {
+    type: String,
+    default: 'small',
+    validator: (value) => ['small', 'medium', 'large'].includes(value)
   }
 });
 
@@ -380,7 +388,15 @@ const compressionRatio = computed(() => {
 
 // Expiration date calculations
 const expirationDate = computed(() => {
-  const created = new Date(props.image.created_at);
+  // Parse the created_at date string, treating it as UTC
+  let createdDateStr = props.image.created_at;
+  
+  // If the date string doesn't end with 'Z', add it to indicate UTC
+  if (!createdDateStr.endsWith('Z') && !createdDateStr.includes('+')) {
+    createdDateStr += 'Z';
+  }
+  
+  const created = new Date(createdDateStr);
   const expiry = new Date(created);
   expiry.setDate(created.getDate() + props.expiryDays);
   return expiry;
@@ -815,6 +831,150 @@ onBeforeUnmount(() => {
   background-color: #f1f8f4;
   box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.3);
 }
+
+/* Card size variations */
+.image-card.card-size-small {
+  /* Default size - no changes needed */
+}
+
+/* MEDIUM SIZE - 50% larger overall */
+.image-card.card-size-medium {
+  padding: 1.125rem;
+  min-width: 280px;
+}
+
+.image-card.card-size-medium .image-preview {
+  height: 300px;
+  margin-bottom: 0.75rem;
+  border-radius: 6px;
+}
+
+.image-card.card-size-medium .image-preview img {
+  min-width: 90%;
+  min-height: 90%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.image-card.card-size-medium .image-info {
+  font-size: 0.7rem;
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
+}
+
+.image-card.card-size-medium .info-item {
+  gap: 0.3rem;
+}
+
+.image-card.card-size-medium .card-actions {
+  gap: 0.75rem;
+}
+
+.image-card.card-size-medium .icon-buttons {
+  gap: 0.75rem;
+}
+
+.image-card.card-size-medium .btn-icon {
+  width: 52px;
+  height: 52px;
+}
+
+.image-card.card-size-medium .btn-icon .icon {
+  font-size: 1.35rem;
+}
+
+.image-card.card-size-medium .more-actions-menu {
+  min-width: 180px;
+  margin-bottom: 0.375rem;
+}
+
+.image-card.card-size-medium .menu-action {
+  padding: 0.6rem 0.9rem;
+  gap: 0.75rem;
+}
+
+.image-card.card-size-medium .menu-icon {
+  font-size: 1.2rem;
+  width: 24px;
+}
+
+.image-card.card-size-medium .menu-label {
+  font-size: 0.95rem;
+}
+
+/* LARGE SIZE - 100% larger overall */
+.image-card.card-size-large {
+  padding: 1.5rem;
+  min-width: 360px;
+}
+
+.image-card.card-size-large .image-preview {
+  height: 400px;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+}
+
+.image-card.card-size-large .image-preview img {
+  min-width: 95%;
+  min-height: 95%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.image-card.card-size-large .image-info {
+  font-size: 0.85rem;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.image-card.card-size-large .info-item {
+  gap: 0.4rem;
+}
+
+.image-card.card-size-large .card-actions {
+  gap: 1rem;
+}
+
+.image-card.card-size-large .icon-buttons {
+  gap: 1rem;
+}
+
+.image-card.card-size-large .btn-icon {
+  width: 70px;
+  height: 70px;
+}
+
+.image-card.card-size-large .btn-icon .icon {
+  font-size: 1.8rem;
+}
+
+.image-card.card-size-large .info-item .label,
+.image-card.card-size-large .info-item .value {
+  font-size: 0.85rem;
+}
+
+.image-card.card-size-large .more-actions-menu {
+  min-width: 220px;
+  margin-bottom: 0.5rem;
+}
+
+.image-card.card-size-large .menu-action {
+  padding: 0.8rem 1.2rem;
+  gap: 1rem;
+}
+
+.image-card.card-size-large .menu-icon {
+  font-size: 1.4rem;
+  width: 28px;
+}
+
+.image-card.card-size-large .menu-label {
+  font-size: 1.1rem;
+}
+
+
 
 .image-preview {
   width: 100%;

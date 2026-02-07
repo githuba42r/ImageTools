@@ -61,6 +61,14 @@
               </div>
             </button>
             
+            <button class="settings-menu-item" @click="openImageCardSettings">
+              <span class="menu-icon">🖼️</span>
+              <div class="menu-text">
+                <span class="menu-title">Image Card Settings</span>
+                <span class="menu-desc">Customize card size & layout</span>
+              </div>
+            </button>
+            
             <button class="settings-menu-item" @click="openAbout">
               <span class="menu-icon">ℹ️</span>
               <div class="menu-text">
@@ -178,6 +186,7 @@
                   :selectedModel="selectedModel"
                   :isOpenRouterConnected="openRouterConnected"
                   :expiryDays="appConfig.session_expiry_days"
+                  :cardSize="imageCardSize"
                   @image-click="handleImageClick"
                   @edit-click="handleEditClick"
                   @switchModel="handleSwitchModel"
@@ -504,6 +513,89 @@
       </div>
     </div>
 
+    <!-- Image Card Settings Modal -->
+    <div v-if="showImageCardSettingsModal" class="modal-overlay" @click="showImageCardSettingsModal = false">
+      <div class="settings-modal" @click.stop>
+        <button class="modal-close-btn" @click="showImageCardSettingsModal = false">✕</button>
+        
+        <div class="modal-header">
+          <h2>🖼️ Image Card Settings</h2>
+        </div>
+        
+        <div class="settings-content">
+          <div class="settings-section">
+            <h3>Card Size</h3>
+            <p class="setting-description">Adjust the size of image cards in the gallery</p>
+            
+            <div class="size-options">
+              <label 
+                class="size-option"
+                :class="{ active: imageCardSize === 'small' }"
+              >
+                <input 
+                  type="radio" 
+                  name="cardSize" 
+                  value="small" 
+                  v-model="imageCardSize"
+                />
+                <div class="option-content">
+                  <span class="option-icon">📱</span>
+                  <div class="option-text">
+                    <span class="option-title">Small</span>
+                    <span class="option-desc">200px preview height</span>
+                  </div>
+                </div>
+              </label>
+              
+              <label 
+                class="size-option"
+                :class="{ active: imageCardSize === 'medium' }"
+              >
+                <input 
+                  type="radio" 
+                  name="cardSize" 
+                  value="medium" 
+                  v-model="imageCardSize"
+                />
+                <div class="option-content">
+                  <span class="option-icon">💻</span>
+                  <div class="option-text">
+                    <span class="option-title">Medium</span>
+                    <span class="option-desc">300px preview height</span>
+                  </div>
+                </div>
+              </label>
+              
+              <label 
+                class="size-option"
+                :class="{ active: imageCardSize === 'large' }"
+              >
+                <input 
+                  type="radio" 
+                  name="cardSize" 
+                  value="large" 
+                  v-model="imageCardSize"
+                />
+                <div class="option-content">
+                  <span class="option-icon">🖥️</span>
+                  <div class="option-text">
+                    <span class="option-title">Large</span>
+                    <span class="option-desc">400px preview height</span>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-modal btn-primary" @click="showImageCardSettingsModal = false">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Model Selection Modal -->
     <div v-if="showModelSelector" class="modal-overlay" @click="showModelSelector = false">
       <div class="model-selector-modal" @click.stop>
@@ -778,6 +870,10 @@ const showSettingsMenu = ref(false);
 const showAISettingsModal = ref(false);
 const showPresetSettingsModal = ref(false);
 const showAboutModal = ref(false);
+const showImageCardSettingsModal = ref(false);
+
+// Image card settings
+const imageCardSize = ref(localStorage.getItem('imageCardSize') || 'small');
 
 // App configuration state
 const appConfig = ref({
@@ -1228,6 +1324,17 @@ const openAbout = () => {
   showSettingsMenu.value = false;
   showAboutModal.value = true;
 };
+
+const openImageCardSettings = () => {
+  showSettingsMenu.value = false;
+  showImageCardSettingsModal.value = true;
+};
+
+// Watch for imageCardSize changes and save to localStorage
+watch(imageCardSize, (newSize) => {
+  localStorage.setItem('imageCardSize', newSize);
+  console.log('Image card size changed to:', newSize);
+});
 
 // OpenRouter OAuth handlers
 const loadOpenRouterStatus = async () => {
@@ -2016,6 +2123,17 @@ body {
   overflow: visible;
 }
 
+/* Adjust grid columns based on card size */
+.image-gallery:has(.card-size-medium) {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.image-gallery:has(.card-size-large) {
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1.5rem;
+}
+
 .content-with-images {
   display: flex;
   gap: 1.5rem;
@@ -2327,6 +2445,76 @@ body {
   color: #666;
   font-size: 0.95rem;
   line-height: 1.5;
+}
+
+.setting-description {
+  margin: 0 0 1.5rem 0;
+  color: #666;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.size-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.size-option {
+  position: relative;
+  display: block;
+  padding: 1.25rem;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.size-option:hover {
+  border-color: #bdbdbd;
+  background: #fafafa;
+}
+
+.size-option.active {
+  border-color: #4CAF50;
+  background: #f1f8f4;
+}
+
+.size-option input[type="radio"] {
+  display: none;
+}
+
+.option-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.option-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.option-title {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #333;
+}
+
+.option-desc {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.size-option.active .option-title {
+  color: #2e7d32;
 }
 
 .openrouter-status {
