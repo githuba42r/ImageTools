@@ -562,7 +562,10 @@ const handleRemoveBackground = async () => {
 };
 
 const openChatInterface = () => {
+  console.log('openChatInterface called');
+  console.log('showChatInterface before:', showChatInterface.value);
   showChatInterface.value = true;
+  console.log('showChatInterface after:', showChatInterface.value);
 };
 
 const closeChatInterface = () => {
@@ -585,9 +588,12 @@ const handleShowModelDetails = (modelId) => {
 };
 
 const confirmDelete = async () => {
+  console.log('confirmDelete called for image:', props.image.id);
   isProcessing.value = true;
   try {
     await imageStore.deleteImage(props.image.id);
+    console.log('Image deleted successfully');
+    showDeleteConfirm.value = false; // Reset the confirmation state
   } catch (error) {
     console.error('Delete failed:', error);
     showDeleteConfirm.value = false;
@@ -1144,19 +1150,20 @@ onBeforeUnmount(() => {
 .delete-confirm {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.5rem;
+  gap: 0.5rem;
+  padding: 0.4rem;
   background-color: #fff3e0;
   border: 1px solid #ff9800;
   border-radius: 4px;
 }
 
 .delete-message {
-  font-size: 0.9rem;
+  font-size: 0.7rem;
   font-weight: 500;
   color: #e65100;
   text-align: center;
   word-break: break-word;
+  line-height: 1.3;
 }
 
 .delete-actions {
@@ -1167,17 +1174,17 @@ onBeforeUnmount(() => {
 
 .btn-confirm {
   flex: 1;
-  padding: 0.6rem;
+  padding: 0.4rem 0.5rem;
   border: none;
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.7rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .btn-confirm:disabled {
