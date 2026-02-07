@@ -17,17 +17,17 @@
     </div>
 
     <div class="image-info">
-      <span class="info-item">
+      <span class="info-item has-tooltip-card" :title="expirationTooltip">
         <span class="label">Size:</span>
         <span class="value">{{ formatSize(image.current_size) }} / {{ formatSize(image.original_size) }}</span>
       </span>
       <span class="info-separator">•</span>
-      <span class="info-item">
+      <span class="info-item has-tooltip-card" :title="expirationTooltip">
         <span class="label">Dim:</span>
         <span class="value">{{ image.width }} × {{ image.height }}</span>
       </span>
       <span v-if="compressionRatio" class="info-separator">•</span>
-      <span v-if="compressionRatio" class="info-item compression-ratio">
+      <span v-if="compressionRatio" class="info-item compression-ratio has-tooltip-card" :title="expirationTooltip">
         <span class="label">Saved:</span>
         <span class="value">{{ compressionRatio }}%</span>
       </span>
@@ -335,6 +335,10 @@ const props = defineProps({
   isOpenRouterConnected: {
     type: Boolean,
     default: false
+  },
+  expiryDays: {
+    type: Number,
+    default: 7
   }
 });
 
@@ -372,6 +376,37 @@ const compressionRatio = computed(() => {
   if (props.image.current_size >= props.image.original_size) return null;
   const ratio = ((props.image.original_size - props.image.current_size) / props.image.original_size) * 100;
   return Math.round(ratio);
+});
+
+// Expiration date calculations
+const expirationDate = computed(() => {
+  const created = new Date(props.image.created_at);
+  const expiry = new Date(created);
+  expiry.setDate(created.getDate() + props.expiryDays);
+  return expiry;
+});
+
+const expirationDateFormatted = computed(() => {
+  return expirationDate.value.toLocaleString();
+});
+
+const timeRemainingText = computed(() => {
+  const now = new Date();
+  const diff = expirationDate.value - now;
+  
+  if (diff <= 0) return 'Expired';
+  
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  
+  if (days > 0) return `${days} day${days !== 1 ? 's' : ''} ${hours}h remaining`;
+  if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''} ${minutes}m remaining`;
+  return `${minutes} minute${minutes !== 1 ? 's' : ''} remaining`;
+});
+
+const expirationTooltip = computed(() => {
+  return `Expires: ${expirationDateFormatted.value}\n${timeRemainingText.value}`;
 });
 
 // Resize computed properties
@@ -866,6 +901,15 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.2rem;
   white-space: nowrap;
+}
+
+.has-tooltip-card {
+  cursor: help;
+  position: relative;
+}
+
+.has-tooltip-card:hover {
+  opacity: 0.8;
 }
 
 .info-separator {

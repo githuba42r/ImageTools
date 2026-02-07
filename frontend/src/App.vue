@@ -3,15 +3,29 @@
     <header class="app-header" :class="{ 'compact': imageCount > 0 }">
       <div class="header-content">
         <div class="header-left">
-          <h1 class="has-tooltip">
-            🖼️ Image Tools
-            <span class="tooltip-text">Image Tools v1.0 | Session: {{ sessionId ? sessionId.substring(0, 8) + '...' : 'None' }}</span>
-          </h1>
+          <div class="title-container">
+            <h1 class="has-tooltip">
+              🖼️ Image Tools
+              <span class="tooltip-text">Image Tools v1.0 | Session: {{ sessionId ? sessionId.substring(0, 8) + '...' : 'None' }}</span>
+            </h1>
+            <button 
+              @click="openAbout" 
+              class="btn-info-icon"
+              title="About & Session Info"
+            >
+              ℹ️
+            </button>
+          </div>
           <p v-if="imageCount === 0" class="subtitle">Compress and manage your images</p>
           
           <!-- Image count and selection info -->
           <div v-if="imageCount > 0" class="image-stats">
-            <span class="image-count">{{ imageCount }} image{{ imageCount !== 1 ? 's' : '' }}</span>
+            <span class="image-count">
+              {{ imageCount }} / {{ appConfig.max_images_per_session }} image{{ imageCount !== 1 ? 's' : '' }}
+              <span class="expiry-info" :title="`Images expire after ${appConfig.session_expiry_days} days`">
+                (expires in {{ appConfig.session_expiry_days }} days)
+              </span>
+            </span>
             <span v-if="selectedCount > 0" class="selected-count">
               ({{ selectedCount }} selected)
             </span>
@@ -163,6 +177,7 @@
                   :sessionId="sessionId"
                   :selectedModel="selectedModel"
                   :isOpenRouterConnected="openRouterConnected"
+                  :expiryDays="appConfig.session_expiry_days"
                   @image-click="handleImageClick"
                   @edit-click="handleEditClick"
                   @switchModel="handleSwitchModel"
@@ -467,7 +482,16 @@
             <div class="info-box">
               <p><strong>Session Information:</strong></p>
               <p><strong>Session ID:</strong> <code>{{ sessionId ? sessionId.substring(0, 16) + '...' : 'None' }}</code></p>
-              <p><strong>Images in Session:</strong> {{ imageCount }}</p>
+              <p><strong>Images in Session:</strong> {{ imageCount }} / {{ appConfig.max_images_per_session }}</p>
+            </div>
+            
+            <div class="info-box info-box-highlight">
+              <p><strong>⚠️ Important Information:</strong></p>
+              <ul>
+                <li><strong>Temporary Storage:</strong> All uploaded images are temporary and will be automatically removed after <strong>{{ appConfig.session_expiry_days }} days</strong></li>
+                <li><strong>Session Limit:</strong> You can upload a maximum of <strong>{{ appConfig.max_images_per_session }} images</strong> per session</li>
+                <li><strong>File Size Limit:</strong> Maximum upload size is <strong>{{ appConfig.max_upload_size_mb }} MB</strong> per image</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -755,6 +779,13 @@ const showAISettingsModal = ref(false);
 const showPresetSettingsModal = ref(false);
 const showAboutModal = ref(false);
 
+// App configuration state
+const appConfig = ref({
+  session_expiry_days: 7,
+  max_images_per_session: 5,
+  max_upload_size_mb: 20
+});
+
 // OpenRouter OAuth state
 const openRouterConnected = ref(false);
 const openRouterCredits = ref(null);
@@ -907,6 +938,20 @@ const availableTags = computed(() => {
   return Array.from(tags).sort();
 });
 
+// Fetch app configuration from backend
+const fetchAppConfig = async () => {
+  try {
+    const response = await fetch('/api/v1/settings/app-config');
+    if (response.ok) {
+      const data = await response.json();
+      appConfig.value = data;
+      console.log('App config loaded:', data);
+    }
+  } catch (error) {
+    console.error('Failed to fetch app config:', error);
+  }
+};
+
 // Filter models based on search query, free toggle, image editing toggle, and tag filter
 const filterModels = (models) => {
   return models.filter(model => {
@@ -1006,7 +1051,8 @@ const initializeApp = async () => {
     await sessionStore.initializeSession();
     await Promise.all([
       imageStore.loadSessionImages(),
-      imageStore.loadPresets()
+      imageStore.loadPresets(),
+      fetchAppConfig()
     ]);
     
     // Set session ID in OpenRouter service
@@ -1587,6 +1633,30 @@ body {
   position: relative;
 }
 
+.title-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-info-icon {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+  line-height: 1;
+}
+
+.btn-info-icon:hover {
+  opacity: 1;
+  background-color: rgba(0, 0, 0, 0.05);
+  transform: scale(1.1);
+}
+
 .header-right {
   flex-shrink: 0;
   margin-left: 2rem;
@@ -1663,6 +1733,13 @@ body {
 
 .image-count {
   font-weight: 600;
+}
+
+.expiry-info {
+  font-weight: 400;
+  opacity: 0.8;
+  font-size: 0.9em;
+  cursor: help;
 }
 
 .selected-count {
@@ -2368,6 +2445,21 @@ body {
   padding: 1rem;
   border-radius: 4px;
   margin-top: 1rem;
+}
+
+.info-box-highlight {
+  background-color: #fff8e1;
+  border-left: 3px solid #ffa726;
+}
+
+.info-box-highlight ul {
+  margin-left: 1.2rem;
+  margin-top: 0.5rem;
+}
+
+.info-box-highlight li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
 }
 
 .openrouter-intro {
