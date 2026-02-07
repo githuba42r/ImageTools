@@ -11,7 +11,32 @@ export const useSessionStore = defineStore('session', {
 
   actions: {
     async initializeSession() {
-      // Check localStorage for existing session
+      // Check for session override from environment (for testing multi-user sessions)
+      const sessionOverride = import.meta.env.VITE_SESSION_OVERRIDE;
+      
+      if (sessionOverride && sessionOverride.trim() !== '') {
+        console.log('Using session override:', sessionOverride);
+        // Use override value as session ID
+        this.sessionId = sessionOverride;
+        
+        // Try to validate and get session data
+        try {
+          const validation = await sessionService.validateSession(sessionOverride);
+          if (validation.valid) {
+            this.sessionData = await sessionService.getSession(sessionOverride);
+            console.log('Session override validated:', this.sessionId);
+            return;
+          }
+        } catch (error) {
+          console.log('Session override not found, creating new session with ID:', sessionOverride);
+        }
+        
+        // Create session with override ID
+        await this.createSession(null, sessionOverride);
+        return;
+      }
+      
+      // Normal flow: Check localStorage for existing session
       const storedSessionId = localStorage.getItem('imagetools_session_id');
 
       if (storedSessionId) {
@@ -33,17 +58,20 @@ export const useSessionStore = defineStore('session', {
       await this.createSession();
     },
 
-    async createSession(userId = null) {
+    async createSession(userId = null, customSessionId = null) {
       this.isLoading = true;
       this.error = null;
 
       try {
-        const session = await sessionService.createSession(userId);
+        const session = await sessionService.createSession(userId, customSessionId);
         this.sessionId = session.id;
         this.sessionData = session;
 
-        // Store in localStorage
-        localStorage.setItem('imagetools_session_id', session.id);
+        // Store in localStorage only if not using override
+        const sessionOverride = import.meta.env.VITE_SESSION_OVERRIDE;
+        if (!sessionOverride || sessionOverride.trim() === '') {
+          localStorage.setItem('imagetools_session_id', session.id);
+        }
 
         console.log('Session created:', this.sessionId);
       } catch (error) {

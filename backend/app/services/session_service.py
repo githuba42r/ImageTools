@@ -8,11 +8,24 @@ from app.core.config import settings
 
 class SessionService:
     @staticmethod
-    async def create_session(db: AsyncSession, user_id: str = None) -> Session:
+    async def create_session(db: AsyncSession, user_id: str = None, custom_session_id: str = None) -> Session:
         """Create a new session."""
-        session_id = str(uuid.uuid4())
+        # Use custom session ID if provided (for testing), otherwise generate UUID
+        session_id = custom_session_id if custom_session_id else str(uuid.uuid4())
         expires_at = datetime.utcnow() + timedelta(days=settings.SESSION_EXPIRY_DAYS)
         
+        # Check if session with this ID already exists
+        existing = await SessionService.get_session(db, session_id)
+        if existing:
+            # Update expiry time for existing session
+            existing.expires_at = expires_at
+            if user_id:
+                existing.user_id = user_id
+            await db.commit()
+            await db.refresh(existing)
+            return existing
+        
+        # Create new session
         session = Session(
             id=session_id,
             user_id=user_id,

@@ -13,7 +13,11 @@ async def create_session(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new session."""
-    session = await SessionService.create_session(db, session_data.user_id)
+    session = await SessionService.create_session(
+        db, 
+        session_data.user_id,
+        session_data.custom_session_id
+    )
     return session
 
 

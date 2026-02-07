@@ -5,6 +5,7 @@ from typing import Optional, List, Dict, Any
 
 class SessionCreate(BaseModel):
     user_id: Optional[str] = None
+    custom_session_id: Optional[str] = None
 
 
 class SessionResponse(BaseModel):

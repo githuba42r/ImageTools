@@ -11,8 +11,12 @@ export const api = axios.create({
 
 // Session API
 export const sessionService = {
-  async createSession(userId = null) {
-    const response = await api.post('/sessions', { user_id: userId });
+  async createSession(userId = null, customSessionId = null) {
+    const payload = { user_id: userId };
+    if (customSessionId) {
+      payload.custom_session_id = customSessionId;
+    }
+    const response = await api.post('/sessions', payload);
     return response.data;
   },
 
