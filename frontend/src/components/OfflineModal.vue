@@ -35,14 +35,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-
-const props = defineProps({
-  visible: {
-    type: Boolean,
-    default: true
-  }
-});
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 
 const emit = defineEmits(['retry']);
 
@@ -72,46 +65,41 @@ const startCountdown = () => {
   // Reset to full countdown
   remainingSeconds.value = totalSeconds;
   
+  console.log('[OfflineModal] Starting countdown from 15 seconds');
+  
   countdownInterval = setInterval(() => {
     remainingSeconds.value--;
     
     if (remainingSeconds.value <= 0) {
       clearInterval(countdownInterval);
       countdownInterval = null;
+      console.log('[OfflineModal] Countdown finished, emitting retry event');
       emit('retry');
-      // The retry will check backend; if still offline, countdown will restart
     }
   }, 1000);
 };
 
 const retryNow = () => {
+  console.log('[OfflineModal] Manual retry triggered');
   if (countdownInterval) {
     clearInterval(countdownInterval);
     countdownInterval = null;
   }
   emit('retry');
-  // The retry will check backend; if still offline, countdown will restart
 };
 
-// Watch for visibility changes to restart countdown
-watch(() => props.visible, (newVisible) => {
-  if (newVisible) {
-    startCountdown();
-  } else {
-    if (countdownInterval) {
-      clearInterval(countdownInterval);
-      countdownInterval = null;
-    }
-  }
-}, { immediate: true });
+// Expose method to parent component to restart countdown after failed retry
+defineExpose({
+  restartCountdown: startCountdown
+});
 
 onMounted(() => {
-  if (props.visible) {
-    startCountdown();
-  }
+  console.log('[OfflineModal] Modal mounted, starting initial countdown');
+  startCountdown();
 });
 
 onBeforeUnmount(() => {
+  console.log('[OfflineModal] Modal unmounting, clearing countdown');
   if (countdownInterval) {
     clearInterval(countdownInterval);
     countdownInterval = null;

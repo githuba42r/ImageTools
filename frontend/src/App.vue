@@ -844,7 +844,7 @@
     <!-- Offline Detection Modal -->
     <OfflineModal 
       v-if="showOfflineModal"
-      :visible="showOfflineModal"
+      ref="offlineModalRef"
       @retry="handleOfflineRetry"
     />
 
@@ -896,6 +896,7 @@ const viewerImage = ref(null);
 const editingImage = ref(null);
 const isSavingEdit = ref(false);
 const showOfflineModal = ref(false);
+const offlineModalRef = ref(null);
 
 // Settings menu state
 const showSettingsMenu = ref(false);
@@ -1736,18 +1737,24 @@ const handleKeyboardShortcuts = (event) => {
 
 const handleOfflineRetry = async () => {
   try {
+    console.log('[App] Attempting manual retry...');
     // Use the health check service to check if backend is back online
     await checkHealthNow();
     // If successful, modal will be hidden by the health check service's online callback
+    console.log('[App] Retry successful, backend is back online');
     // Also reset WebSocket reconnection attempts
     resetReconnectAttempts();
     // Reconnect WebSocket
     connectWebSocket();
   } catch (error) {
-    // Still offline - keep modal visible and it will restart countdown automatically
-    console.log('Still offline, health check will continue polling...');
+    // Still offline - keep modal visible and restart countdown
+    console.log('[App] Retry failed, backend still offline. Restarting countdown...');
     // Ensure modal stays visible
     showOfflineModal.value = true;
+    // Restart the countdown timer in the modal
+    if (offlineModalRef.value) {
+      offlineModalRef.value.restartCountdown();
+    }
   }
 };
 
