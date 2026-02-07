@@ -93,21 +93,9 @@ async def get_qr_code_data(
     if pairing.expires_at and pairing.expires_at < datetime.utcnow():
         raise HTTPException(status_code=410, detail="Pairing expired")
     
-    # Build instance URL from request origin
-    # The frontend makes this request, so we use the host header from the request
-    # In development, frontend is on port 5173 but backend is on port 8000
-    # In production, they're on the same host/port
-    scheme = request.url.scheme
-    host_header = request.headers.get("host", "")
-    
-    # If the request comes from the frontend dev server (port 5173), 
-    # we need to send the backend port (8000) to the mobile app
-    if ":5173" in host_header:
-        host = host_header.replace(":5173", ":8000")
-    else:
-        host = host_header
-    
-    instance_url = f"{scheme}://{host}"
+    # Use the configured INSTANCE_URL for mobile devices
+    # This must be set to an externally accessible URL (e.g., http://10.0.1.97:8000)
+    instance_url = settings.INSTANCE_URL
     
     return QRCodeDataResponse(
         instance_url=instance_url,

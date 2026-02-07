@@ -1,25 +1,97 @@
 package com.imagetools.mobile.ui.screens
 
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.imagetools.mobile.BuildConfig
+import com.imagetools.mobile.data.models.ValidateSecretRequest
+import com.imagetools.mobile.data.network.RetrofitClient
 import com.imagetools.mobile.utils.PairingPreferences
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+private const val TAG = "HomeScreen"
+
 @Composable
-fun HomeScreen(pairingPrefs: PairingPreferences) {
+fun HomeScreen(
+    pairingPrefs: PairingPreferences,
+    pendingPairingData: Map<String, String>? = null
+) {
+    val context = LocalContext.current
     var isPaired by remember { mutableStateOf(false) }
     var deviceName by remember { mutableStateOf<String?>(null) }
     var sessionId by remember { mutableStateOf<String?>(null) }
     var showScanner by remember { mutableStateOf(false) }
     var showUnpairDialog by remember { mutableStateOf(false) }
+    var isProcessingIntent by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    
+    // Handle pending pairing data from intent
+    LaunchedEffect(pendingPairingData) {
+        if (pendingPairingData != null && !isPaired && !isProcessingIntent) {
+            isProcessingIntent = true
+            Log.d(TAG, "Processing pending pairing data from intent")
+            
+            try {
+                val url = pendingPairingData["url"]!!
+                val secret = pendingPairingData["secret"]!!
+                val pairingId = pendingPairingData["pairing_id"]!!
+                val sessionIdValue = pendingPairingData["session_id"]!!
+                
+                // Set base URL
+                RetrofitClient.setBaseUrl(url)
+                
+                Log.d(TAG, "Validating secret with backend...")
+                // Validate secret
+                val validateRequest = ValidateSecretRequest(secret)
+                val response = RetrofitClient.getApi().validateSecret(validateRequest)
+                
+                Log.d(TAG, "Validation response: ${response.code()}, success: ${response.isSuccessful}")
+                
+                if (response.isSuccessful && response.body()?.valid == true) {
+                    val body = response.body()!!
+                    val deviceNameValue = body.deviceName ?: "Android Device"
+                    
+                    Log.d(TAG, "Pairing validated! Saving to preferences...")
+                    
+                    // Save pairing with long-term authorization secrets
+                    pairingPrefs.savePairing(
+                        instanceUrl = url,
+                        sharedSecret = secret,
+                        pairingId = body.pairingId ?: pairingId,
+                        sessionId = body.sessionId ?: sessionIdValue,
+                        deviceName = deviceNameValue,
+                        longTermSecret = body.longTermSecret ?: "",
+                        refreshSecret = body.refreshSecret ?: "",
+                        longTermExpiresAt = body.longTermExpiresAt ?: "",
+                        refreshExpiresAt = body.refreshExpiresAt ?: ""
+                    )
+                    
+                    isPaired = true
+                    deviceName = deviceNameValue
+                    sessionId = body.sessionId ?: sessionIdValue
+                    
+                    Toast.makeText(context, "Paired successfully via link!", Toast.LENGTH_SHORT).show()
+                } else {
+                    val errorBody = response.errorBody()?.string()
+                    Log.e(TAG, "Invalid pairing: ${response.code()} - $errorBody")
+                    Toast.makeText(context, "Invalid pairing link: ${response.code()}", Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing pairing intent", e)
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                isProcessingIntent = false
+            }
+        }
+    }
     
     LaunchedEffect(Unit) {
         isPaired = pairingPrefs.isPaired.first()

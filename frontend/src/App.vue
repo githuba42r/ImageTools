@@ -633,10 +633,26 @@
                 <p><strong>How to use:</strong></p>
                 <ol style="margin: 10px 0; padding-left: 20px;">
                   <li>Open the Image Tools app on your Android device</li>
-                  <li>Tap "Scan QR Code"</li>
-                  <li>Point your camera at this QR code</li>
+                  <li>Tap "Scan QR Code" to scan the code above</li>
                   <li>Once paired, share images from your Gallery to "Image Tools"</li>
                 </ol>
+                
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #dee2e6;">
+                  <p style="margin-bottom: 10px; font-weight: 600;">📱 Alternative: Direct Pairing Link</p>
+                  <p style="margin-bottom: 12px; font-size: 0.9em; color: #666;">
+                    Open this page on your Android device and tap the button below to pair directly:
+                  </p>
+                  <a 
+                    :href="getPairingIntentUrl()"
+                    class="btn-modal btn-primary"
+                    style="display: block; text-align: center; text-decoration: none; width: 100%;"
+                  >
+                    🔗 Pair This Device
+                  </a>
+                  <p style="margin-top: 10px; font-size: 0.85em; color: #666; text-align: center;">
+                    (This only works if you're viewing this page on your Android device)
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -1101,12 +1117,14 @@ const providerInfo = {
 // Mobile app pairing / QR code state
 const qrCodeDataUrl = ref(null);
 const qrCodePairingId = ref(null);
+const qrData = ref(null);
 const isGeneratingQRCode = ref(false);
 const qrCodeError = ref(null);
 const qrCodeExpiresAt = ref(null);
 const qrCodeSecondsRemaining = ref(0);
 const qrCodePaired = ref(false);
 const qrCodeSuccessCountdown = ref(30);
+const pairingCodeCopied = ref(false);
 let qrCodeTimerInterval = null;
 let qrCodePollingInterval = null;
 let qrCodeSuccessInterval = null;
@@ -1652,21 +1670,22 @@ const generateQRCode = async () => {
     qrCodePairingId.value = pairing.id;
 
     // Get QR code data
-    const qrData = await mobileService.getQRCodeData(pairing.id);
+    const qrDataResponse = await mobileService.getQRCodeData(pairing.id);
+    qrData.value = qrDataResponse; // Store for manual pairing display
 
     // Use instance_url from backend (which handles dev vs prod correctly)
     // In dev: backend will send its own port (8000) instead of frontend port (5173)
     // In prod: backend and frontend are on same host/port
-    const instanceUrl = qrData.instance_url;
+    const instanceUrl = qrDataResponse.instance_url;
     
     console.log('[Mobile QR] Instance URL for mobile app:', instanceUrl);
 
     // Create QR code payload as JSON
     const qrPayload = JSON.stringify({
       instance_url: instanceUrl,
-      shared_secret: qrData.shared_secret,
-      pairing_id: qrData.pairing_id,
-      session_id: qrData.session_id
+      shared_secret: qrDataResponse.shared_secret,
+      pairing_id: qrDataResponse.pairing_id,
+      session_id: qrDataResponse.session_id
     });
 
     // Generate QR code as data URL
@@ -1719,6 +1738,34 @@ const regenerateQRCode = async () => {
   qrCodeDataUrl.value = null;
   qrCodePairingId.value = null;
   await generateQRCode();
+};
+
+const copyPairingCode = async () => {
+  try {
+    const pairingText = `ImageTools Manual Pairing\n\nURL: ${qrData.value?.instance_url}\nCode: ${qrData.value?.shared_secret}`;
+    await navigator.clipboard.writeText(pairingText);
+    pairingCodeCopied.value = true;
+    setTimeout(() => {
+      pairingCodeCopied.value = false;
+    }, 3000);
+  } catch (err) {
+    console.error('Failed to copy pairing code:', err);
+  }
+};
+
+const getPairingIntentUrl = () => {
+  if (!qrData.value) return '#';
+  
+  // Create Android intent URL with pairing data
+  // Format: imagetools://pair?url=<encoded_url>&secret=<secret>&pairing_id=<id>&session_id=<session>
+  const params = new URLSearchParams({
+    url: qrData.value.instance_url,
+    secret: qrData.value.shared_secret,
+    pairing_id: qrData.value.pairing_id,
+    session_id: qrData.value.session_id
+  });
+  
+  return `imagetools://pair?${params.toString()}`;
 };
 
 // Watch for imageCardSize changes and save to localStorage
