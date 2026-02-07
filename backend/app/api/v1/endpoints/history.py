@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
+from pydantic import BaseModel
 from app.core.database import get_db
 from app.core.config import settings
 from app.schemas.schemas import HistoryResponse, UndoResponse
@@ -77,3 +78,37 @@ async def check_can_undo(
     """Check if undo is available for an image."""
     can_undo = await HistoryService.can_undo(db, image_id)
     return {"can_undo": can_undo}
+
+
+class RestoreRequest(BaseModel):
+    sequence: int
+
+
+@router.post("/{image_id}/restore", response_model=UndoResponse)
+async def restore_to_sequence(
+    image_id: str,
+    request: RestoreRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Restore image to a specific history sequence."""
+    # Verify image exists
+    image = await ImageService.get_image(db, image_id)
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    try:
+        restore_path, restore_size = await HistoryService.restore_to_sequence(
+            db, image_id, request.sequence
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    # Get updated image
+    updated_image = await ImageService.get_image(db, image_id)
+    
+    return UndoResponse(
+        image_id=image_id,
+        reverted_to_sequence=request.sequence,
+        current_size=updated_image.current_size,
+        image_url=f"{settings.API_PREFIX}/images/{image_id}/current"
+    )

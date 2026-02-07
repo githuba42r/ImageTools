@@ -213,6 +213,7 @@ class ChatResponse(BaseModel):
     model_recommendations: List[ModelRecommendation] = []  # New field for model suggestions
     image_updated: bool = False
     new_image_url: Optional[str] = None
+    history_sequence: Optional[int] = None  # Sequence number of the history entry for this version
     tokens_used: Optional[int] = None
     cost: Optional[float] = None
     total_conversation_cost: float

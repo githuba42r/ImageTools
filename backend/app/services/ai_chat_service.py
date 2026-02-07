@@ -64,7 +64,7 @@ AVAILABLE OPERATIONS (use ONLY these):
     Example: {"type": "grayscale", "params": {}}
 
 IMPORTANT RULES:
-- NEVER suggest operations not in this list (no "remove", "erase", "delete", "add", etc.)
+- NEVER suggest operations not in this list (no "remove", "erase", "delete", "add", "label", etc.)
 - If user asks for something not possible with these operations, include [MODEL_RECOMMENDATION_NEEDED] in your response
 - Always explain what you'll do BEFORE the JSON block
 - Keep responses concise and friendly
@@ -82,7 +82,7 @@ If you receive an impossible request, respond with:
 "[MODEL_RECOMMENDATION_NEEDED]
 I can't perform that operation with the current model. The operations I support are: brightness, contrast, saturation, blur, sharpen, grayscale, sepia, rotate, resize, and crop.
 
-For advanced image editing like removing objects, erasing backgrounds, or adding elements, you would need to switch to a model with image generation capabilities."
+For advanced image editing like removing objects, erasing backgrounds, adding text/labels, or adding elements, you would need to switch to a model with image generation capabilities."
 """
 
 # Enhanced system prompt for image generation/editing models
@@ -96,6 +96,7 @@ YOU HAVE TWO WAYS TO EDIT IMAGES:
    - Selectively edit parts of the image (faces, objects, backgrounds)
    - Erase or replace backgrounds
    - Add or modify elements in the image
+   - Add text, labels, or annotations to images
    - Inpaint, outpaint, or regenerate portions of the image
    
    For these requests, simply process the image and return the edited version directly.
@@ -110,12 +111,45 @@ YOU HAVE TWO WAYS TO EDIT IMAGES:
    {"operations": [{"type": "brightness", "params": {"value": 1.3}}]}
    ```
 
+SPECIAL RULES FOR ADDING TEXT/LABELS - CRITICAL INSTRUCTIONS:
+⚠️ BEFORE adding any text, labels, or annotations to the image, you MUST follow this process:
+
+STEP 1: CHECK SPELLING
+- Examine every word the user wants to add for potential spelling errors
+- Common errors: "recieve" → "receive", "unauthorised" → "unauthorized" (or vice versa for UK), "occured" → "occurred"
+
+STEP 2: IF SPELLING ERROR DETECTED - DO NOT ADD THE TEXT YET
+- STOP and ask the user to confirm
+- Example response: "I notice you wrote 'unauthorisded'. This appears to be a typo. Did you mean:
+  • 'unauthorized' (US spelling)
+  • 'unauthorised' (UK spelling)
+  • Or should I use exactly what you wrote: 'unauthorisded'?
+  
+  Please let me know which spelling to use, and I'll add the arrow and label."
+
+STEP 3: IF REGIONAL SPELLING VARIATION DETECTED (not an error)
+- If word is correctly spelled in one region but not another (e.g., "colour" vs "color"), proceed without asking
+- Examples of valid regional variations:
+  * authorised/authorized
+  * colour/color
+  * centre/center
+  * analyse/analyze
+  * labelled/labeled
+
+STEP 4: ONLY ADD TEXT AFTER CONFIRMATION
+- Wait for user's response if spelling error detected
+- Never "auto-correct" text without explicit permission
+- Respect the user's exact wording once confirmed
+
+⚠️ CRITICAL: If you detect ANY non-standard spelling (typos like "unauthorisded", "recieve", "occured"), you MUST ask for confirmation BEFORE generating the image. DO NOT proceed with image generation until the user confirms.
+
 IMPORTANT:
 - For requests involving specific objects, regions, or advanced editing: USE YOUR IMAGE EDITING CAPABILITIES (return edited image)
 - For simple filters like "make it brighter" or "rotate 90 degrees": USE JSON OPERATIONS
 - Always explain what you're doing before editing
 - Be concise and friendly
 - If asked to blur a license plate, face, or specific object: PROCESS THE IMAGE DIRECTLY and return the edited version
+- When adding text/labels, confirm spelling if uncertain
 """
 
 
@@ -309,9 +343,11 @@ class AIChatService:
         
         # Handle generated/edited images
         image_updated = False
+        history_sequence = None
         if generated_images:
             # Save the first generated image to replace the current image
-            image_updated = await self._save_generated_image(image, generated_images[0])
+            history_sequence = await self._save_generated_image(image, generated_images[0])
+            image_updated = history_sequence is not None
         
         # Parse operations from AI response
         operations = self._parse_operations(assistant_content)
@@ -331,6 +367,7 @@ class AIChatService:
             model_recommendations=model_recommendations,
             image_updated=image_updated or len(operations) > 0,
             new_image_url=f"/api/v1/images/{image.id}/current?t={int(datetime.utcnow().timestamp() * 1000)}" if (image_updated or operations) else None,
+            history_sequence=history_sequence,
             tokens_used=tokens_used,
             cost=cost,
             total_conversation_cost=conversation.total_cost
@@ -657,7 +694,7 @@ class AIChatService:
         
         return recommendations
     
-    async def _save_generated_image(self, image: Image, base64_image_url: str) -> bool:
+    async def _save_generated_image(self, image: Image, base64_image_url: str) -> Optional[int]:
         """
         Save a generated image from base64 data URL to storage
         
@@ -666,7 +703,7 @@ class AIChatService:
             base64_image_url: Base64 data URL (e.g., "data:image/png;base64,...")
             
         Returns:
-            True if image was saved successfully
+            History sequence number if image was saved successfully, None otherwise
         """
         try:
             import os
@@ -681,7 +718,7 @@ class AIChatService:
             # Parse base64 data URL
             if not base64_image_url.startswith("data:"):
                 logger.error(f"❌ Invalid image data URL format: {base64_image_url[:50]}")
-                return False
+                return None
             
             # Extract mime type and base64 data
             header, base64_data = base64_image_url.split(",", 1)
@@ -723,6 +760,9 @@ class AIChatService:
             # Get file size
             new_size = os.path.getsize(output_path)
             
+            # Get next sequence number
+            history_sequence = await self._get_next_sequence(image.id)
+            
             # Create history entry
             from app.models.models import History
             history_entry = History(
@@ -733,7 +773,7 @@ class AIChatService:
                 input_path=image.current_path,
                 output_path=output_path,
                 file_size=new_size,
-                sequence=await self._get_next_sequence(image.id)
+                sequence=history_sequence
             )
             self.db.add(history_entry)
             
@@ -757,13 +797,13 @@ class AIChatService:
             await self.db.commit()
             
             logger.info(f"✅ Successfully saved AI-generated image: {output_path}")
-            return True
+            return history_sequence
             
         except Exception as e:
             logger.error(f"Failed to save generated image: {str(e)}")
             import traceback
             traceback.print_exc()
-            return False
+            return None
     
     async def _get_next_sequence(self, image_id: str) -> int:
         """Get next sequence number for history."""

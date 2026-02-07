@@ -123,6 +123,62 @@ class HistoryService:
         return False
     
     @staticmethod
+    async def restore_to_sequence(db: AsyncSession, image_id: str, sequence: int) -> tuple[str, int]:
+        """Restore image to a specific history sequence number."""
+        image = await ImageService.get_image(db, image_id)
+        if not image:
+            raise ValueError(f"Image {image_id} not found")
+        
+        # Get history entries
+        history = await HistoryService.get_image_history(db, image_id)
+        
+        if not history:
+            raise ValueError("No history available")
+        
+        # Find the entry with the specified sequence
+        target_entry = None
+        for entry in history:
+            if entry.sequence == sequence:
+                target_entry = entry
+                break
+        
+        if not target_entry:
+            raise ValueError(f"History sequence {sequence} not found")
+        
+        # Get the file path to restore
+        restore_path = target_entry.output_path
+        restore_size = target_entry.file_size
+        
+        if not os.path.exists(restore_path):
+            raise ValueError(f"History file not found: {restore_path}")
+        
+        # Get dimensions from the restore file
+        with PILImage.open(restore_path) as img:
+            restore_width, restore_height = img.size
+            restore_format = img.format or "PNG"
+        
+        # Update image record
+        image.current_path = restore_path
+        image.current_size = restore_size
+        image.width = restore_width
+        image.height = restore_height
+        image.format = restore_format
+        
+        # Recreate thumbnail
+        if image.thumbnail_path and os.path.exists(image.thumbnail_path):
+            os.remove(image.thumbnail_path)
+        
+        ext = os.path.splitext(restore_path)[1]
+        thumbnail_path = os.path.join(settings.STORAGE_PATH, f"{image.id}_thumb{ext}")
+        ImageService._create_thumbnail(restore_path, thumbnail_path)
+        image.thumbnail_path = thumbnail_path
+        
+        await db.commit()
+        await db.refresh(image)
+        
+        return restore_path, restore_size
+    
+    @staticmethod
     async def cleanup_old_history(db: AsyncSession, image_id: str):
         """Remove history entries beyond undo limit."""
         history = await HistoryService.get_image_history(db, image_id)
