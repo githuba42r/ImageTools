@@ -1,0 +1,17 @@
+# Gradle files
+.gradle/
+build/
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+.DS_Store
+
+# Generated files
+*.apk
+*.ap_
+*.aab
+
+# Gradle wrapper (keep wrapper jar)
+!gradle-wrapper.jar

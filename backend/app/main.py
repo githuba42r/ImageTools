@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from app.core.config import settings
 from app.core.database import init_db
-from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router
+from app.core.websocket_manager import manager as ws_manager
+from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile
 import logging
 import os
 import asyncio
@@ -64,6 +65,7 @@ app.include_router(background.router, prefix=f"{settings.API_PREFIX}/background"
 app.include_router(openrouter_oauth.router, prefix=f"{settings.API_PREFIX}/openrouter")
 app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["chat"])
 app.include_router(settings_router.router, prefix=settings.API_PREFIX)
+app.include_router(mobile.router, prefix=f"{settings.API_PREFIX}/mobile", tags=["mobile"])
 
 # Serve frontend static files (if they exist)
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
@@ -76,13 +78,16 @@ async def health_check():
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, session_id: str = Query(...)):
     """
-    WebSocket endpoint for real-time connection monitoring.
-    Sends periodic ping messages to keep connection alive and detect disconnects.
+    WebSocket endpoint for real-time updates.
+    Sends periodic pings and broadcasts session-specific events (e.g. new images from mobile).
+    
+    Query Parameters:
+        session_id: The session ID to subscribe to
     """
-    await websocket.accept()
-    logger.info(f"WebSocket client connected from {websocket.client}")
+    await ws_manager.connect(websocket, session_id)
+    logger.info(f"WebSocket client connected for session {session_id}")
     
     try:
         while True:
@@ -91,9 +96,11 @@ async def websocket_endpoint(websocket: WebSocket):
             await asyncio.sleep(10)
             
     except WebSocketDisconnect:
-        logger.info(f"WebSocket client disconnected from {websocket.client}")
+        logger.info(f"WebSocket client disconnected for session {session_id}")
+        ws_manager.disconnect(websocket)
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
+        ws_manager.disconnect(websocket)
         try:
             await websocket.close()
         except:

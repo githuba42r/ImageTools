@@ -77,6 +77,50 @@ async def migrate_database():
                 await conn.execute(text("ALTER TABLE messages ADD COLUMN cost REAL"))
                 migrations_applied.append("Added cost to messages")
         
+        # Check if mobile_app_pairings table exists
+        result = await conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='mobile_app_pairings'"
+        ))
+        mobile_table_exists = result.fetchone() is not None
+        
+        if not mobile_table_exists:
+            logger.info("Creating mobile_app_pairings table...")
+            await conn.execute(text("""
+                CREATE TABLE mobile_app_pairings (
+                    id VARCHAR PRIMARY KEY,
+                    session_id VARCHAR NOT NULL,
+                    device_name VARCHAR,
+                    shared_secret VARCHAR NOT NULL UNIQUE,
+                    is_active BOOLEAN DEFAULT 1,
+                    used BOOLEAN DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    last_used_at DATETIME,
+                    expires_at DATETIME,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                )
+            """))
+            
+            # Create index on shared_secret for fast lookups
+            await conn.execute(text(
+                "CREATE INDEX ix_mobile_app_pairings_shared_secret ON mobile_app_pairings(shared_secret)"
+            ))
+            
+            # Create index on session_id for listing pairings
+            await conn.execute(text(
+                "CREATE INDEX ix_mobile_app_pairings_session_id ON mobile_app_pairings(session_id)"
+            ))
+            
+            migrations_applied.append("Created mobile_app_pairings table with indexes")
+        else:
+            # Check if 'used' column exists in mobile_app_pairings
+            result = await conn.execute(text("PRAGMA table_info(mobile_app_pairings)"))
+            mobile_columns = {row[1]: row for row in result.fetchall()}
+            
+            if 'used' not in mobile_columns:
+                logger.info("Adding 'used' column to mobile_app_pairings table...")
+                await conn.execute(text("ALTER TABLE mobile_app_pairings ADD COLUMN used BOOLEAN DEFAULT 0"))
+                migrations_applied.append("Added 'used' column to mobile_app_pairings")
+        
         if migrations_applied:
             logger.info(f"Applied {len(migrations_applied)} migrations:")
             for migration in migrations_applied:

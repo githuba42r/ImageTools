@@ -96,19 +96,30 @@ FRONTEND_PID=$!
 
 cd ..
 
+# Get local network IP
+LOCAL_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -1)
+
 echo ""
 echo "=========================================="
 echo "Image Tools is running in development mode!"
 echo "=========================================="
 echo ""
-echo "Backend:  http://localhost:8081"
-echo "API Docs: http://localhost:8081/docs"
-echo "Frontend: http://localhost:5173"
+echo "Local Access:"
+echo "  Backend:  http://localhost:8081"
+echo "  API Docs: http://localhost:8081/docs"
+echo "  Frontend: http://localhost:5173"
 echo ""
+if [ -n "$LOCAL_IP" ]; then
+echo "Network Access (for mobile devices):"
+echo "  Backend:  http://$LOCAL_IP:8081"
+echo "  Frontend: http://$LOCAL_IP:5173"
+echo ""
+fi
 echo "Features:"
 echo "  - Hot-reload enabled (changes auto-reload)"
 echo "  - Backend logs: backend.log"
 echo "  - Frontend logs: frontend.log"
+echo "  - Mobile app can connect from network"
 echo ""
 echo "Press Ctrl+C to stop all servers"
 echo ""

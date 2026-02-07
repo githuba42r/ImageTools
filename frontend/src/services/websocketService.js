@@ -17,22 +17,24 @@ let isConnected = false;
 let isIntentionallyClosed = false;
 let onOfflineCallback = null;
 let onOnlineCallback = null;
+let onNewImageCallback = null;
 let pingTimeout = null;
+let currentSessionId = null;
 
 /**
  * Get WebSocket URL based on current location
  */
-function getWebSocketUrl() {
+function getWebSocketUrl(sessionId) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   
   // In development, Vite proxy doesn't support WebSocket upgrade
   // So we connect directly to the backend port
   if (import.meta.env.DEV) {
-    return `${protocol}//${window.location.hostname}:8000/ws`;
+    return `${protocol}//${window.location.hostname}:8000/ws?session_id=${sessionId}`;
   }
   
   // In production, use same host as current page
-  return `${protocol}//${window.location.host}/ws`;
+  return `${protocol}//${window.location.host}/ws?session_id=${sessionId}`;
 }
 
 /**
@@ -65,7 +67,14 @@ function resetPingTimeout() {
 /**
  * Connect to WebSocket
  */
-export function connectWebSocket() {
+export function connectWebSocket(sessionId) {
+  if (!sessionId) {
+    console.warn('[WebSocket] Cannot connect without session ID');
+    return;
+  }
+  
+  currentSessionId = sessionId;
+  
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
     console.log('[WebSocket] Already connected or connecting');
     return;
@@ -85,7 +94,7 @@ export function connectWebSocket() {
     return;
   }
   
-  const url = getWebSocketUrl();
+  const url = getWebSocketUrl(sessionId);
   console.log(`[WebSocket] Connecting to ${url}... (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
   
   try {
@@ -112,6 +121,12 @@ export function connectWebSocket() {
         if (data.type === 'ping') {
           // Reset ping timeout on every ping received
           resetPingTimeout();
+        } else if (data.type === 'new_image') {
+          // Handle new image uploaded from mobile
+          console.log('[WebSocket] New image uploaded:', data.image_id);
+          if (onNewImageCallback) {
+            onNewImageCallback(data);
+          }
         }
         
         // Handle other message types here in the future
@@ -159,7 +174,7 @@ export function connectWebSocket() {
       console.log(`[WebSocket] Scheduling reconnection in ${delay}ms...`);
       
       reconnectTimeout = setTimeout(() => {
-        connectWebSocket();
+        connectWebSocket(currentSessionId);
       }, delay);
     };
     
@@ -181,7 +196,7 @@ export function connectWebSocket() {
     // Schedule reconnection
     const delay = getReconnectDelay();
     reconnectTimeout = setTimeout(() => {
-      connectWebSocket();
+      connectWebSocket(currentSessionId);
     }, delay);
   }
 }
@@ -225,6 +240,19 @@ export function setOfflineCallback(callback) {
 export function setOnlineCallback(callback) {
   onOnlineCallback = callback;
 }
+
+/**
+ * Set callback for when a new image is uploaded
+ */
+export function setNewImageCallback(callback) {
+  onNewImageCallback = callback;
+}
+
+/**
+ * Compatibility exports for old function names
+ */
+export const setWebSocketOfflineCallback = setOfflineCallback;
+export const setWebSocketOnlineCallback = setOnlineCallback;
 
 /**
  * Check if WebSocket is currently connected

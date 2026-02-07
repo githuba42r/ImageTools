@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
     
+    # Mobile/External Access
+    # URL that mobile devices and external clients will use to connect to this backend
+    # Example: http://10.0.1.97:8000 or https://yourdomain.com
+    INSTANCE_URL: str = "http://localhost:8000"
+    
     # Session
     SESSION_EXPIRY_DAYS: int = 7
     MAX_IMAGES_PER_SESSION: int = 5
@@ -56,7 +61,7 @@ class Settings(BaseSettings):
     
     # CORS
     CORS_ENABLED: bool = True
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:8000,http://localhost:8082"
+    CORS_ORIGINS: str = "*"  # Allow all origins for development. In production, set specific origins.
     
     # OpenRouter / AI Configuration
     OPENROUTER_APP_NAME: str = "ImageTools"
@@ -72,6 +77,8 @@ class Settings(BaseSettings):
     
     @property
     def cors_origins_list(self) -> List[str]:
+        if self.CORS_ORIGINS == "*":
+            return ["*"]
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
     
     @property

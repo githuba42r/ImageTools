@@ -242,3 +242,104 @@ class CostSummary(BaseModel):
     monthly_limit: Optional[float] = None
     remaining_budget: Optional[float] = None
 
+
+# Mobile App Pairing Schemas
+
+class MobileAppPairingCreate(BaseModel):
+    session_id: str = Field(..., description="Session ID to link the mobile app to")
+    device_name: Optional[str] = Field(None, description="Optional device identifier")
+
+
+class MobileAppPairingResponse(BaseModel):
+    id: str
+    session_id: str
+    device_name: Optional[str]
+    shared_secret: str
+    is_active: bool
+    used: bool
+    created_at: datetime
+    last_used_at: Optional[datetime]
+    expires_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+
+class QRCodeDataResponse(BaseModel):
+    """QR code data for mobile app linking"""
+    instance_url: str = Field(..., description="URL of the ImageTools instance")
+    shared_secret: str = Field(..., description="Shared secret for authentication")
+    pairing_id: str = Field(..., description="Pairing ID")
+    session_id: str = Field(..., description="Session ID this pairing is linked to")
+
+
+class ValidateSecretRequest(BaseModel):
+    """Request to validate a shared secret"""
+    shared_secret: str = Field(..., description="Shared secret to validate")
+
+
+class ValidateSecretResponse(BaseModel):
+    """Response from secret validation with long-term authorization"""
+    valid: bool = Field(..., description="Whether the secret is valid")
+    pairing_id: str = Field(..., description="Pairing ID")
+    session_id: str = Field(..., description="Session ID")
+    device_name: Optional[str] = Field(None, description="Device name")
+    long_term_secret: str = Field(..., description="Long-term secret for uploads (90 days)")
+    refresh_secret: str = Field(..., description="Refresh secret for renewal (180 days)")
+    long_term_expires_at: datetime = Field(..., description="Long-term secret expiration")
+    refresh_expires_at: datetime = Field(..., description="Refresh secret expiration")
+
+
+class MobileImageUploadRequest(BaseModel):
+    shared_secret: str = Field(..., description="Shared secret from QR code pairing")
+    filename: str = Field(..., description="Original filename")
+
+
+class MobileImageUploadResponse(BaseModel):
+    image_id: str
+    filename: str
+    size: int
+    width: int
+    height: int
+    format: str
+    thumbnail_url: str
+    image_url: str
+    uploaded_at: datetime
+
+
+class RefreshSecretRequest(BaseModel):
+    """Request to refresh long-term secret"""
+    refresh_secret: str = Field(..., description="Refresh secret for renewing")
+
+
+class RefreshSecretResponse(BaseModel):
+    """Response from refresh operation"""
+    long_term_secret: str = Field(..., description="New long-term secret")
+    long_term_expires_at: datetime = Field(..., description="New expiration date")
+
+
+class ValidateAuthRequest(BaseModel):
+    """Request to validate current auth status"""
+    long_term_secret: str = Field(..., description="Long-term secret to validate")
+
+
+class ValidateAuthResponse(BaseModel):
+    """Response from auth validation"""
+    valid: bool = Field(..., description="Whether auth is valid")
+    expires_at: Optional[datetime] = Field(None, description="Expiration date if valid")
+    needs_refresh: bool = Field(False, description="True if nearing expiration")
+
+
+class PairedDeviceInfo(BaseModel):
+    """Information about a paired device"""
+    id: str
+    device_name: Optional[str]
+    created_at: datetime
+    last_used_at: Optional[datetime]
+    long_term_expires_at: Optional[datetime]
+    is_active: bool
+    
+    class Config:
+        from_attributes = True
+
+

@@ -515,7 +515,122 @@
         </div>
         
         <div class="modal-footer">
+          <button class="btn-modal btn-secondary" @click="openMobileQRModal" style="margin-right: auto;">
+            📱 Mobile App Link
+          </button>
           <button class="btn-modal btn-primary" @click="showAboutModal = false">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile QR Code Modal -->
+    <div v-if="showMobileQRModal" class="modal-overlay" @click="showMobileQRModal = false">
+      <div class="settings-modal" @click.stop>
+        <button class="modal-close-btn" @click="showMobileQRModal = false">✕</button>
+        
+        <div class="modal-header">
+          <h2>📱 Mobile App Pairing</h2>
+        </div>
+        
+        <div class="settings-content">
+          <!-- Success State: Device Paired -->
+          <div v-if="qrCodePaired" class="pairing-success-container">
+            <div class="success-icon">✓</div>
+            <h3 style="color: #10b981; margin: 20px 0 10px;">Device Paired Successfully!</h3>
+            <p style="color: #666; margin-bottom: 30px;">
+              Your mobile device is now connected. You can share images from your gallery.
+            </p>
+            
+            <!-- Circular countdown -->
+            <div class="circular-countdown">
+              <svg class="countdown-svg" width="120" height="120">
+                <circle
+                  class="countdown-circle-bg"
+                  cx="60"
+                  cy="60"
+                  r="54"
+                  fill="none"
+                  stroke="#e5e7eb"
+                  stroke-width="8"
+                />
+                <circle
+                  class="countdown-circle"
+                  cx="60"
+                  cy="60"
+                  r="54"
+                  fill="none"
+                  stroke="#10b981"
+                  stroke-width="8"
+                  stroke-linecap="round"
+                  :stroke-dasharray="339.292"
+                  :stroke-dashoffset="339.292 * (1 - qrCodeSuccessCountdown / 30)"
+                  transform="rotate(-90 60 60)"
+                />
+                <text
+                  x="60"
+                  y="60"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                  font-size="28"
+                  font-weight="bold"
+                  fill="#10b981"
+                >
+                  {{ qrCodeSuccessCountdown }}
+                </text>
+              </svg>
+              <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+                Closing in {{ qrCodeSuccessCountdown }} seconds...
+              </p>
+            </div>
+          </div>
+          
+          <!-- Normal State: Show QR Code -->
+          <div v-else-if="!qrCodePaired" class="info-box">
+            <p style="margin-bottom: 15px;">
+              Scan this QR code with the Image Tools Android app to link your mobile device for easy image sharing.
+            </p>
+            
+            <div v-if="isGeneratingQRCode" class="qr-code-loading">
+              <div class="loading-spinner"></div>
+              <p>Generating QR code...</p>
+            </div>
+            
+            <div v-else-if="qrCodeError" class="qr-code-error">
+              <p>❌ {{ qrCodeError }}</p>
+              <button @click="regenerateQRCode" class="btn-modal btn-secondary" style="margin-top: 10px;">
+                Try Again
+              </button>
+            </div>
+            
+            <div v-else-if="qrCodeDataUrl" class="qr-code-container">
+              <div style="display: flex; justify-content: center; margin-bottom: 15px;">
+                <img :src="qrCodeDataUrl" alt="QR Code for Mobile App" class="qr-code-image" />
+              </div>
+              
+              <p style="margin-top: 10px; font-size: 0.9em; color: #666; text-align: center;">
+                This QR code pairs your mobile device with this session for secure image uploads.
+              </p>
+              <p style="margin-top: 8px; font-size: 1.1em; color: #ff6b35; font-weight: 600; text-align: center;">
+                ⏱️ Expires in {{ qrCodeTimeRemaining }} • Single-use only
+              </p>
+              
+              <div class="info-box info-box-highlight" style="margin-top: 20px;">
+                <p><strong>How to use:</strong></p>
+                <ol style="margin: 10px 0; padding-left: 20px;">
+                  <li>Open the Image Tools app on your Android device</li>
+                  <li>Tap "Scan QR Code"</li>
+                  <li>Point your camera at this QR code</li>
+                  <li>Once paired, share images from your Gallery to "Image Tools"</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer" v-if="!qrCodePaired">
+          <button class="btn-modal btn-primary" @click="showMobileQRModal = false">
             Close
           </button>
         </div>
@@ -859,6 +974,8 @@ import { storeToRefs } from 'pinia';
 import { imageService, sessionService, setOfflineCallback, markOnline } from './services/api';
 import { openRouterService, generateCodeVerifier, generateCodeChallenge } from './services/openRouterService';
 import { chatService } from './services/chatService';
+import mobileService from './services/mobileService';
+import QRCode from 'qrcode';
 import { 
   startHealthCheck, 
   stopHealthCheck, 
@@ -871,6 +988,7 @@ import {
   disconnectWebSocket,
   setOfflineCallback as setWebSocketOfflineCallback,
   setOnlineCallback as setWebSocketOnlineCallback,
+  setNewImageCallback,
   resetReconnectAttempts
 } from './services/websocketService';
 import UploadArea from './components/UploadArea.vue';
@@ -904,6 +1022,7 @@ const showAISettingsModal = ref(false);
 const showPresetSettingsModal = ref(false);
 const showAboutModal = ref(false);
 const showImageCardSettingsModal = ref(false);
+const showMobileQRModal = ref(false);
 
 // Image card settings
 const imageCardSize = ref(localStorage.getItem('imageCardSize') || 'small');
@@ -965,6 +1084,19 @@ const providerInfo = {
   'allenai': { icon: '🔬', color: '#00a4e4' },
   'default': { icon: '🤖', color: '#666' }
 };
+
+// Mobile app pairing / QR code state
+const qrCodeDataUrl = ref(null);
+const qrCodePairingId = ref(null);
+const isGeneratingQRCode = ref(false);
+const qrCodeError = ref(null);
+const qrCodeExpiresAt = ref(null);
+const qrCodeSecondsRemaining = ref(0);
+const qrCodePaired = ref(false);
+const qrCodeSuccessCountdown = ref(30);
+let qrCodeTimerInterval = null;
+let qrCodePollingInterval = null;
+let qrCodeSuccessInterval = null;
 
 // Get provider info from model ID
 const getProviderInfo = (modelId) => {
@@ -1091,6 +1223,14 @@ const username = computed(() => {
   }
   
   return null;
+});
+
+// Format QR code countdown timer
+const qrCodeTimeRemaining = computed(() => {
+  const seconds = qrCodeSecondsRemaining.value;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 });
 
 // Fetch app configuration from backend
@@ -1379,9 +1519,15 @@ const openPresetSettings = () => {
   showPresetSettingsModal.value = true;
 };
 
-const openAbout = () => {
+const openAbout = async () => {
   showSettingsMenu.value = false;
   showAboutModal.value = true;
+};
+
+const openMobileQRModal = async () => {
+  showMobileQRModal.value = true;
+  // Generate QR code when opening Mobile QR modal
+  await generateQRCode();
 };
 
 const openImageCardSettings = () => {
@@ -1389,10 +1535,187 @@ const openImageCardSettings = () => {
   showImageCardSettingsModal.value = true;
 };
 
+// Mobile app pairing / QR code generation
+const checkPairingStatus = async () => {
+  if (!qrCodePairingId.value) return;
+  
+  try {
+    const pairing = await mobileService.getPairing(qrCodePairingId.value);
+    console.log('[QR Pairing] Pairing status check:', { 
+      pairingId: qrCodePairingId.value, 
+      used: pairing.used, 
+      isActive: pairing.is_active 
+    });
+    
+    // Check if pairing has been used
+    if (pairing.used) {
+      console.log('[QR Pairing] ✅ Pairing has been used! Showing success countdown...');
+      qrCodePaired.value = true;
+      
+      // Clear the expiry timer
+      if (qrCodeTimerInterval) {
+        clearInterval(qrCodeTimerInterval);
+        qrCodeTimerInterval = null;
+      }
+      
+      // Clear the polling interval
+      if (qrCodePollingInterval) {
+        clearInterval(qrCodePollingInterval);
+        qrCodePollingInterval = null;
+      }
+      
+      // Start 30-second success countdown
+      qrCodeSuccessCountdown.value = 30;
+      qrCodeSuccessInterval = setInterval(() => {
+        qrCodeSuccessCountdown.value--;
+        console.log('[QR Pairing] Success countdown:', qrCodeSuccessCountdown.value);
+        
+        if (qrCodeSuccessCountdown.value <= 0) {
+          clearInterval(qrCodeSuccessInterval);
+          qrCodeSuccessInterval = null;
+          
+          console.log('[QR Pairing] Countdown complete, closing modal');
+          // Close the modal
+          showMobileQRModal.value = false;
+          
+          // Reset state
+          qrCodePaired.value = false;
+          qrCodeDataUrl.value = null;
+          qrCodePairingId.value = null;
+        }
+      }, 1000);
+    }
+  } catch (error) {
+    console.error('[QR Pairing] Failed to check pairing status:', error);
+  }
+};
+
+const generateQRCode = async () => {
+  if (!sessionId.value) {
+    qrCodeError.value = 'No active session';
+    return;
+  }
+
+  // Clear any existing timers
+  if (qrCodeTimerInterval) {
+    clearInterval(qrCodeTimerInterval);
+    qrCodeTimerInterval = null;
+  }
+  
+  if (qrCodePollingInterval) {
+    clearInterval(qrCodePollingInterval);
+    qrCodePollingInterval = null;
+  }
+  
+  if (qrCodeSuccessInterval) {
+    clearInterval(qrCodeSuccessInterval);
+    qrCodeSuccessInterval = null;
+  }
+  
+  // Reset state
+  qrCodePaired.value = false;
+  qrCodeSuccessCountdown.value = 30;
+
+  try {
+    isGeneratingQRCode.value = true;
+    qrCodeError.value = null;
+
+    // Create a new pairing (single-use, 2-minute timeout)
+    const pairing = await mobileService.createPairing(sessionId.value, 'Mobile Device');
+    qrCodePairingId.value = pairing.id;
+
+    // Get QR code data
+    const qrData = await mobileService.getQRCodeData(pairing.id);
+
+    // Use instance_url from backend (which handles dev vs prod correctly)
+    // In dev: backend will send its own port (8000) instead of frontend port (5173)
+    // In prod: backend and frontend are on same host/port
+    const instanceUrl = qrData.instance_url;
+    
+    console.log('[Mobile QR] Instance URL for mobile app:', instanceUrl);
+
+    // Create QR code payload as JSON
+    const qrPayload = JSON.stringify({
+      instance_url: instanceUrl,
+      shared_secret: qrData.shared_secret,
+      pairing_id: qrData.pairing_id,
+      session_id: qrData.session_id
+    });
+
+    // Generate QR code as data URL
+    const dataUrl = await QRCode.toDataURL(qrPayload, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#000000',
+        light: '#ffffff'
+      }
+    });
+
+    qrCodeDataUrl.value = dataUrl;
+    
+    // Set expiration time (2 minutes from now)
+    qrCodeExpiresAt.value = new Date(Date.now() + 2 * 60 * 1000);
+    qrCodeSecondsRemaining.value = 120;
+    
+    // Start countdown timer
+    qrCodeTimerInterval = setInterval(() => {
+      const now = new Date();
+      const remaining = Math.max(0, Math.floor((qrCodeExpiresAt.value - now) / 1000));
+      qrCodeSecondsRemaining.value = remaining;
+      
+      // Auto-regenerate when expired
+      if (remaining === 0) {
+        clearInterval(qrCodeTimerInterval);
+        qrCodeTimerInterval = null;
+        
+        // Only regenerate if the modal is still open and not paired
+        if (showMobileQRModal.value && !qrCodePaired.value) {
+          console.log('QR code expired, regenerating...');
+          regenerateQRCode();
+        }
+      }
+    }, 1000);
+    
+    // Start polling for pairing status every 2 seconds
+    qrCodePollingInterval = setInterval(checkPairingStatus, 2000);
+    
+  } catch (error) {
+    console.error('Failed to generate QR code:', error);
+    qrCodeError.value = 'Failed to generate QR code. Please try again.';
+  } finally {
+    isGeneratingQRCode.value = false;
+  }
+};
+
+const regenerateQRCode = async () => {
+  qrCodeDataUrl.value = null;
+  qrCodePairingId.value = null;
+  await generateQRCode();
+};
+
 // Watch for imageCardSize changes and save to localStorage
 watch(imageCardSize, (newSize) => {
   localStorage.setItem('imageCardSize', newSize);
   console.log('Image card size changed to:', newSize);
+});
+
+// Watch for mobile QR modal close and clear timers
+watch(showMobileQRModal, (isOpen) => {
+  if (!isOpen) {
+    if (qrCodeTimerInterval) {
+      clearInterval(qrCodeTimerInterval);
+      qrCodeTimerInterval = null;
+    }
+    if (qrCodePollingInterval) {
+      clearInterval(qrCodePollingInterval);
+      qrCodePollingInterval = null;
+    }
+    if (qrCodeSuccessInterval) {
+      clearInterval(qrCodeSuccessInterval);
+      qrCodeSuccessInterval = null;
+    }
+  }
 });
 
 // OpenRouter OAuth handlers
@@ -1778,6 +2101,13 @@ onMounted(() => {
     markOnline();
   });
   
+  // Handle new image events from mobile uploads
+  setNewImageCallback((data) => {
+    console.log('[App] New image from mobile:', data.image_id);
+    // Reload images to show the new upload
+    imageStore.loadSessionImages();
+  });
+  
   // 2. Axios interceptor (IMMEDIATE - for API errors during user actions)
   setOfflineCallback(() => {
     console.log('[App] Axios interceptor detected offline');
@@ -1796,8 +2126,25 @@ onMounted(() => {
     markOnline();
   });
   
-  // Start WebSocket connection
-  connectWebSocket();
+  // Start WebSocket connection with session ID
+  if (sessionId.value) {
+    connectWebSocket(sessionId.value);
+  }
+  
+  // Watch for session ID changes and reconnect WebSocket
+  watch(sessionId, (newSessionId, oldSessionId) => {
+    console.log('[App] Session ID changed:', { old: oldSessionId, new: newSessionId });
+    
+    // Disconnect old connection if session changed
+    if (oldSessionId && oldSessionId !== newSessionId) {
+      disconnectWebSocket();
+    }
+    
+    // Connect with new session ID
+    if (newSessionId) {
+      connectWebSocket(newSessionId);
+    }
+  });
   
   // Start periodic health checks (every 30 seconds) as fallback
   startHealthCheck();
@@ -1812,6 +2159,20 @@ onBeforeUnmount(() => {
   
   // Disconnect WebSocket
   disconnectWebSocket();
+  
+  // Clear QR code timers if active
+  if (qrCodeTimerInterval) {
+    clearInterval(qrCodeTimerInterval);
+    qrCodeTimerInterval = null;
+  }
+  if (qrCodePollingInterval) {
+    clearInterval(qrCodePollingInterval);
+    qrCodePollingInterval = null;
+  }
+  if (qrCodeSuccessInterval) {
+    clearInterval(qrCodeSuccessInterval);
+    qrCodeSuccessInterval = null;
+  }
 });
 </script>
 
@@ -3740,5 +4101,108 @@ body {
   .settings-modal {
     max-width: 600px;
   }
+}
+
+/* QR Code Styles */
+.qr-code-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+.qr-code-image {
+  max-width: 300px;
+  width: 100%;
+  height: auto;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background-color: white;
+  padding: 10px;
+}
+
+.qr-code-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.qr-code-loading .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 15px;
+}
+
+.qr-code-error {
+  text-align: center;
+  padding: 20px;
+  color: #d32f2f;
+}
+
+/* Pairing Success Styles */
+.pairing-success-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.success-icon {
+  width: 80px;
+  height: 80px;
+  background-color: #10b981;
+  color: white;
+  font-size: 48px;
+  font-weight: bold;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: successPop 0.5s ease-out;
+}
+
+@keyframes successPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Circular Countdown */
+.circular-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.countdown-svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.countdown-circle {
+  transition: stroke-dashoffset 1s linear;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>

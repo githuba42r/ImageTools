@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Image Tools</string>
+    <string name="scan_qr_code">Scan QR Code</string>
+    <string name="paired">Paired</string>
+    <string name="not_paired">Not Paired</string>
+    <string name="share_target_label">Share to Image Tools</string>
+</resources>
