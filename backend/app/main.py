@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -9,6 +9,7 @@ from app.core.database import init_db
 from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router
 import logging
 import os
+import asyncio
 
 # Configure logging
 logging.basicConfig(
@@ -72,6 +73,31 @@ frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time connection monitoring.
+    Sends periodic ping messages to keep connection alive and detect disconnects.
+    """
+    await websocket.accept()
+    logger.info(f"WebSocket client connected from {websocket.client}")
+    
+    try:
+        while True:
+            # Send ping every 10 seconds to keep connection alive
+            await websocket.send_json({"type": "ping", "timestamp": asyncio.get_event_loop().time()})
+            await asyncio.sleep(10)
+            
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket client disconnected from {websocket.client}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 
 if frontend_dist.exists():

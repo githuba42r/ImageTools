@@ -866,6 +866,13 @@ import {
   setOnlineCallback as setHealthOnlineCallback,
   checkHealthNow
 } from './services/healthCheckService';
+import {
+  connectWebSocket,
+  disconnectWebSocket,
+  setOfflineCallback as setWebSocketOfflineCallback,
+  setOnlineCallback as setWebSocketOnlineCallback,
+  resetReconnectAttempts
+} from './services/websocketService';
 import UploadArea from './components/UploadArea.vue';
 import ImageCard from './components/ImageCard.vue';
 import ImageViewer from './components/ImageViewer.vue';
@@ -1732,6 +1739,10 @@ const handleOfflineRetry = async () => {
     // Use the health check service to check if backend is back online
     await checkHealthNow();
     // If successful, modal will be hidden by the health check service's online callback
+    // Also reset WebSocket reconnection attempts
+    resetReconnectAttempts();
+    // Reconnect WebSocket
+    connectWebSocket();
   } catch (error) {
     // Still offline - keep modal visible and it will restart countdown automatically
     console.log('Still offline, health check will continue polling...');
@@ -1745,22 +1756,43 @@ onMounted(() => {
   document.addEventListener('click', handleClickOutside);
   document.addEventListener('keydown', handleKeyboardShortcuts);
   
-  // Setup offline detection from axios interceptor (for immediate API errors)
-  setOfflineCallback(() => {
+  // Setup triple offline detection system:
+  
+  // 1. WebSocket disconnection (IMMEDIATE - highest priority)
+  //    Shows modal after 3 failed reconnection attempts (~7 seconds total)
+  setWebSocketOfflineCallback(() => {
+    console.log('[App] WebSocket offline detected');
     showOfflineModal.value = true;
   });
   
-  // Setup health check service for periodic monitoring
-  setHealthOfflineCallback(() => {
-    showOfflineModal.value = true;
-  });
-  
-  setHealthOnlineCallback(() => {
+  setWebSocketOnlineCallback(() => {
+    console.log('[App] WebSocket back online');
     showOfflineModal.value = false;
     markOnline();
   });
   
-  // Start periodic health checks (every 30 seconds)
+  // 2. Axios interceptor (IMMEDIATE - for API errors during user actions)
+  setOfflineCallback(() => {
+    console.log('[App] Axios interceptor detected offline');
+    showOfflineModal.value = true;
+  });
+  
+  // 3. Health check service (PERIODIC - fallback, every 30 seconds)
+  setHealthOfflineCallback(() => {
+    console.log('[App] Health check detected offline');
+    showOfflineModal.value = true;
+  });
+  
+  setHealthOnlineCallback(() => {
+    console.log('[App] Health check detected online');
+    showOfflineModal.value = false;
+    markOnline();
+  });
+  
+  // Start WebSocket connection
+  connectWebSocket();
+  
+  // Start periodic health checks (every 30 seconds) as fallback
   startHealthCheck();
 });
 
@@ -1770,6 +1802,9 @@ onBeforeUnmount(() => {
   
   // Stop health check polling when component unmounts
   stopHealthCheck();
+  
+  // Disconnect WebSocket
+  disconnectWebSocket();
 });
 </script>
 
