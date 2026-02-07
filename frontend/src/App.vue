@@ -8,6 +8,7 @@
               🖼️ Image Tools
               <span class="tooltip-text">Image Tools v1.0 | Session: {{ sessionId ? sessionId.substring(0, 8) + '...' : 'None' }}</span>
             </h1>
+            
             <button 
               @click="openAbout" 
               class="btn-info-icon"
@@ -15,15 +16,15 @@
             >
               ℹ️
             </button>
+            
+            <!-- Username display -->
+            <div v-if="username" class="username-display">
+              <span class="user-icon">👤</span>
+              <span class="username-text">{{ username }}</span>
+            </div>
           </div>
           
-          <!-- Username display -->
-          <div v-if="username" class="username-display">
-            <span class="user-icon">👤</span>
-            <span class="username-text">{{ username }}</span>
-          </div>
-          
-          <p v-if="imageCount === 0 && !username" class="subtitle">Compress and manage your images</p>
+          <p v-if="imageCount === 0" class="subtitle">Compress and manage your images</p>
           
           <!-- Image count and selection info -->
           <div v-if="imageCount > 0" class="image-stats">
@@ -1867,18 +1868,17 @@ body {
 .username-display {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  padding: 0.4rem 0.8rem;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
   background: rgba(255, 255, 255, 0.15);
   border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  width: fit-content;
+  margin-left: 0.5rem;
 }
 
 .user-icon {
-  font-size: 1rem;
+  font-size: 0.9rem;
   line-height: 1;
 }
 
