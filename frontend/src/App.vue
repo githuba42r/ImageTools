@@ -783,16 +783,65 @@
             <!-- Browser Install Links -->
             <div class="info-box info-box-highlight" style="margin-top: 30px;">
               <p><strong>📥 Install Browser Addon:</strong></p>
-              <div style="margin-top: 15px; display: flex; gap: 10px;">
-                <a href="#" class="addon-install-link firefox" title="Firefox addon (Coming soon)">
-                  🦊 Firefox
+              
+              <!-- Current Browser (Highlighted) -->
+              <div style="margin-top: 15px;">
+                <a 
+                  v-if="currentBrowser.storeUrl" 
+                  :href="currentBrowser.storeUrl" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  class="addon-install-link current-browser"
+                  :title="`Install for ${currentBrowser.name}`"
+                >
+                  <span style="font-size: 1.5em;">{{ currentBrowser.icon }}</span>
+                  <span style="font-weight: 600;">Install for {{ currentBrowser.name }}</span>
+                  <span style="font-size: 0.85em; opacity: 0.8;">(Recommended)</span>
                 </a>
-                <a href="#" class="addon-install-link chrome" title="Chrome addon (Coming soon)">
-                  🔵 Chrome
-                </a>
+                <div 
+                  v-else
+                  class="addon-install-link disabled"
+                  :title="`${currentBrowser.name} addon not available yet`"
+                >
+                  <span style="font-size: 1.5em;">{{ currentBrowser.icon }}</span>
+                  <span style="font-weight: 600;">{{ currentBrowser.name }}</span>
+                  <span style="font-size: 0.85em; opacity: 0.8;">(Not available)</span>
+                </div>
               </div>
-              <p style="margin-top: 10px; font-size: 0.85em; color: #666;">
-                Note: Addons are currently in development. Check back soon!
+              
+              <!-- Other Browsers -->
+              <details style="margin-top: 15px;">
+                <summary style="cursor: pointer; font-size: 0.9em; color: #6b7280; user-select: none;">
+                  Install for other browsers
+                </summary>
+                <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                  <a 
+                    v-if="currentBrowser.name !== 'Firefox'"
+                    href="https://addons.mozilla.org/firefox/addon/[addon-slug-here]" 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="addon-install-link other-browser firefox"
+                    title="Install Firefox addon"
+                  >
+                    🦊 Firefox
+                  </a>
+                  
+                  <a 
+                    v-if="currentBrowser.name !== 'Chrome'"
+                    href="https://chrome.google.com/webstore/detail/[addon-id-here]" 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="addon-install-link other-browser chrome"
+                    title="Install Chrome addon (also works for Edge)"
+                  >
+                    🔵 Chrome / Edge
+                  </a>
+                </div>
+              </details>
+              
+              <p style="margin-top: 15px; font-size: 0.85em; color: #666; line-height: 1.5;">
+                💡 <strong>Note:</strong> The addons are ready to use! Click the link above to install for your browser. 
+                The store URLs will be updated once the addons are published.
               </p>
             </div>
           </div>
@@ -1413,6 +1462,22 @@ const qrCodeTimeRemaining = computed(() => {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+});
+
+// Detect current browser
+const currentBrowser = computed(() => {
+  const userAgent = navigator.userAgent;
+  
+  if (userAgent.indexOf('Firefox/') > -1) {
+    return { name: 'Firefox', icon: '🦊', storeUrl: 'https://addons.mozilla.org/firefox/addon/[addon-slug-here]' };
+  } else if (userAgent.indexOf('Chrome/') > -1 || userAgent.indexOf('Edg/') > -1) {
+    // Chrome or Edge (Edge users will get Chrome extension)
+    return { name: 'Chrome', icon: '🔵', storeUrl: 'https://chrome.google.com/webstore/detail/[addon-id-here]' };
+  } else if (userAgent.indexOf('Safari/') > -1 && userAgent.indexOf('Chrome') === -1) {
+    return { name: 'Safari', icon: '🧭', storeUrl: null };
+  } else {
+    return { name: 'Browser', icon: '🌐', storeUrl: null };
+  }
 });
 
 // Fetch app configuration from backend
@@ -4725,6 +4790,7 @@ body {
 .addon-install-link {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   padding: 10px 16px;
   background: #f3f4f6;
   border: 1px solid #e5e7eb;
@@ -4733,20 +4799,68 @@ body {
   color: #1f2937;
   font-weight: 500;
   transition: all 0.2s;
-  cursor: not-allowed;
-  opacity: 0.6;
+  width: 100%;
+  justify-content: center;
 }
 
 .addon-install-link:hover {
   background: #e5e7eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-decoration: none;
 }
 
+/* Current browser - highlighted */
+.addon-install-link.current-browser {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  border-color: #4f46e5;
+  cursor: pointer;
+  font-size: 1.05em;
+  padding: 14px 20px;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.addon-install-link.current-browser:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+  text-decoration: none;
+}
+
+/* Other browsers */
+.addon-install-link.other-browser {
+  cursor: pointer;
+  opacity: 1;
+  background: white;
+  font-size: 0.95em;
+}
+
+.addon-install-link.other-browser:hover {
+  background: #f9fafb;
+  text-decoration: none;
+}
+
+/* Disabled state */
+.addon-install-link.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Browser-specific colors */
 .addon-install-link.firefox {
   border-color: #ff9500;
 }
 
+.addon-install-link.firefox:hover {
+  border-color: #ff7700;
+}
+
 .addon-install-link.chrome {
   border-color: #4285f4;
+}
+
+.addon-install-link.chrome:hover {
+  border-color: #1a73e8;
 }
 
 .connected-device-item {
@@ -4818,5 +4932,22 @@ body {
 
 .btn-revoke-cancel:hover {
   background: #4b5563;
+}
+
+/* Browser addon details/summary styling */
+details summary {
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+details summary:hover {
+  background: #f3f4f6;
+}
+
+details[open] summary {
+  margin-bottom: 10px;
+  background: #f3f4f6;
 }
 </style>
