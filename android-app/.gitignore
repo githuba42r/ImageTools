@@ -3,6 +3,8 @@
 build/
 local.properties
 gradle.properties
+gradle-*/
+*.zip
 
 # Android Studio
 .idea/

@@ -29,6 +29,7 @@ dist/
 storage/
 *.db
 *.db-journal
+static/
 
 # Logs
 *.log
