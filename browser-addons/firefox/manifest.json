@@ -1,0 +1,39 @@
+{
+  "manifest_version": 2,
+  "name": "ImageTools Screenshot Capture",
+  "version": "1.0.0",
+  "description": "Capture screenshots (full page, visible area, or selection) and send them to ImageTools for editing and compression.",
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "storage",
+    "notifications",
+    "tabs",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "browser_action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "default_title": "ImageTools Screenshot",
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "imagetools",
+      "name": "ImageTools Protocol",
+      "uriTemplate": "popup.html?url=%s"
+    }
+  ]
+}

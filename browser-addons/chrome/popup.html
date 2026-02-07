@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ImageTools Screenshot Capture</title>
+  <style>
+    body {
+      width: 380px;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      margin: 0;
+    }
+    .header {
+      background: #6366f1;
+      color: white;
+      padding: 15px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+    .content {
+      padding: 15px;
+    }
+    .connect-section {
+      padding: 20px 0;
+    }
+    .instructions {
+      background: #f0f9ff;
+      border-left: 3px solid #2196F3;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .instructions strong {
+      display: block;
+      margin-bottom: 10px;
+      color: #1f2937;
+    }
+    .instructions ol {
+      margin: 10px 0 0 20px;
+      padding: 0;
+    }
+    .instructions li {
+      margin-bottom: 8px;
+    }
+    .input-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: #374151;
+    }
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: monospace;
+      box-sizing: border-box;
+      resize: vertical;
+      min-height: 80px;
+      transition: border-color 0.2s;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #4f46e5;
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: #ef4444;
+      margin-top: 10px;
+    }
+    button.secondary:hover {
+      background: #dc2626;
+    }
+    button.back-btn {
+      background: #6b7280;
+      margin-bottom: 15px;
+    }
+    button.back-btn:hover {
+      background: #4b5563;
+    }
+    .capture-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .info-text {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🧩 ImageTools</h1>
+  </div>
+  
+  <div class="content">
+    <!-- Not Connected - Initial State -->
+    <div id="initialSection">
+      <div class="connect-section">
+        <p style="color: #6b7280; margin-bottom: 15px; text-align: center;">
+          Connect to your ImageTools instance to capture screenshots
+        </p>
+        <button id="showConnectBtn">🔗 Connect to ImageTools</button>
+      </div>
+    </div>
+    
+    <!-- Not Connected - Connection Form -->
+    <div id="connectSection" style="display: none;">
+      <button id="backBtn" class="back-btn">← Back</button>
+      
+      <div class="instructions">
+        <strong>How to get your connection string:</strong>
+        <ol>
+          <li>Open ImageTools in your browser</li>
+          <li>Go to Settings → About → Browser Addon</li>
+          <li>Click "Get Connection String"</li>
+          <li>The string will be copied automatically</li>
+        </ol>
+      </div>
+      
+      <div class="input-group">
+        <label for="connectionString">Connection String:</label>
+        <textarea id="connectionString" placeholder="Paste your connection string here"></textarea>
+        <p class="info-text">Paste the base64 encoded string from ImageTools</p>
+      </div>
+      
+      <button id="connectBtn">Connect</button>
+    </div>
+    
+    <!-- Connected State -->
+    <div id="captureSection" style="display: none;">
+      <div class="capture-buttons">
+        <button id="captureVisibleBtn">📸 Capture Visible Area</button>
+        <button id="captureFullBtn">📄 Capture Full Page</button>
+        <button id="captureSelectionBtn">✂️ Capture Selection</button>
+      </div>
+      <button id="logoutBtn" class="secondary">Disconnect</button>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

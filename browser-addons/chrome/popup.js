@@ -1,0 +1,165 @@
+// ImageTools Popup Script (Chrome)
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Get DOM elements
+  const initialSection = document.getElementById('initialSection');
+  const connectSection = document.getElementById('connectSection');
+  const captureSection = document.getElementById('captureSection');
+  const showConnectBtn = document.getElementById('showConnectBtn');
+  const backBtn = document.getElementById('backBtn');
+  const connectionStringInput = document.getElementById('connectionString');
+  const connectBtn = document.getElementById('connectBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const captureVisibleBtn = document.getElementById('captureVisibleBtn');
+  const captureFullBtn = document.getElementById('captureFullBtn');
+  const captureSelectionBtn = document.getElementById('captureSelectionBtn');
+  
+  // Check auth state on load
+  await updateUI();
+  
+  // Show connect form button
+  showConnectBtn.addEventListener('click', () => {
+    initialSection.style.display = 'none';
+    connectSection.style.display = 'block';
+    connectionStringInput.focus();
+  });
+  
+  // Back button
+  backBtn.addEventListener('click', () => {
+    connectSection.style.display = 'none';
+    initialSection.style.display = 'block';
+    connectionStringInput.value = '';
+  });
+  
+  // Connect button click
+  connectBtn.addEventListener('click', async () => {
+    const connectionString = connectionStringInput.value.trim();
+    if (!connectionString) {
+      alert('Please enter a connection string');
+      return;
+    }
+    
+    try {
+      // Decode base64 connection string
+      const jsonString = atob(connectionString);
+      const connectionData = JSON.parse(jsonString);
+      
+      if (!connectionData.code || !connectionData.instance) {
+        throw new Error('Invalid connection string format');
+      }
+      
+      connectBtn.disabled = true;
+      connectBtn.textContent = 'Connecting...';
+      
+      // Send authorization request to background script
+      const response = await chrome.runtime.sendMessage({
+        action: 'authorize',
+        authorizationCode: connectionData.code,
+        instanceUrl: connectionData.instance
+      });
+      
+      if (response.success) {
+        connectionStringInput.value = '';
+        await updateUI();
+      } else {
+        alert(`Failed to connect: ${response.error}`);
+      }
+    } catch (error) {
+      console.error('Connection error:', error);
+      alert(`Error: ${error.message || 'Invalid connection string'}`);
+    } finally {
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Connect';
+    }
+  });
+  
+  // Allow Enter key to submit connection
+  connectionStringInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      connectBtn.click();
+    }
+  });
+  
+  // Logout button
+  logoutBtn.addEventListener('click', async () => {
+    if (confirm('Disconnect from ImageTools?')) {
+      await chrome.runtime.sendMessage({ action: 'logout' });
+      await updateUI();
+    }
+  });
+  
+  // Capture buttons
+  captureVisibleBtn.addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await chrome.runtime.sendMessage({ action: 'captureVisible', tabId: tab.id });
+    window.close();
+  });
+  
+  captureFullBtn.addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await chrome.runtime.sendMessage({ action: 'captureFull', tabId: tab.id });
+    window.close();
+  });
+  
+  captureSelectionBtn.addEventListener('click', async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await chrome.runtime.sendMessage({ action: 'captureSelection', tabId: tab.id });
+    window.close();
+  });
+  
+  async function updateUI() {
+    const response = await chrome.runtime.sendMessage({ action: 'getAuthState' });
+    const { authState } = response;
+    
+    if (authState && authState.accessToken && authState.instanceUrl) {
+      // Connected - show capture buttons
+      initialSection.style.display = 'none';
+      connectSection.style.display = 'none';
+      captureSection.style.display = 'block';
+      
+      // Check if current tab can be captured
+      const tabCheck = await chrome.runtime.sendMessage({ action: 'checkCurrentTab' });
+      
+      if (!tabCheck.canCapture) {
+        // Disable capture buttons and show message
+        captureVisibleBtn.disabled = true;
+        captureFullBtn.disabled = true;
+        captureSelectionBtn.disabled = true;
+        
+        // Add warning message if not already present
+        let warningMsg = document.getElementById('captureWarning');
+        if (!warningMsg) {
+          warningMsg = document.createElement('div');
+          warningMsg.id = 'captureWarning';
+          warningMsg.style.cssText = 'background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #92400e; line-height: 1.5;';
+          
+          if (tabCheck.isImageTools) {
+            warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on ImageTools pages for security.';
+          } else if (tabCheck.isRestricted) {
+            warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on browser internal pages.';
+          } else {
+            warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>This page cannot be captured.';
+          }
+          
+          captureSection.insertBefore(warningMsg, captureSection.firstChild);
+        }
+      } else {
+        // Enable capture buttons
+        captureVisibleBtn.disabled = false;
+        captureFullBtn.disabled = false;
+        captureSelectionBtn.disabled = false;
+        
+        // Remove warning message if present
+        const warningMsg = document.getElementById('captureWarning');
+        if (warningMsg) {
+          warningMsg.remove();
+        }
+      }
+    } else {
+      // Not connected - show initial screen
+      initialSection.style.display = 'block';
+      connectSection.style.display = 'none';
+      captureSection.style.display = 'none';
+    }
+  }
+});

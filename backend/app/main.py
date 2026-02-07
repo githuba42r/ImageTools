@@ -7,7 +7,7 @@ from pathlib import Path
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.websocket_manager import manager as ws_manager
-from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile
+from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon
 import logging
 import os
 import asyncio
@@ -66,6 +66,7 @@ app.include_router(openrouter_oauth.router, prefix=f"{settings.API_PREFIX}/openr
 app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["chat"])
 app.include_router(settings_router.router, prefix=settings.API_PREFIX)
 app.include_router(mobile.router, prefix=f"{settings.API_PREFIX}/mobile", tags=["mobile"])
+app.include_router(addon.router, prefix=f"{settings.API_PREFIX}/addon", tags=["addon"])
 
 # Serve frontend static files (if they exist)
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"

@@ -343,3 +343,92 @@ class PairedDeviceInfo(BaseModel):
         from_attributes = True
 
 
+# Browser Addon Authorization Schemas
+
+class AddonAuthorizationCreate(BaseModel):
+    """Request to create a new addon authorization"""
+    session_id: str = Field(..., description="Session ID to link the addon to")
+    browser_name: Optional[str] = Field(None, description="Browser type: firefox or chrome")
+    addon_identifier: Optional[str] = Field(None, description="Optional addon ID")
+
+
+class AddonAuthorizationResponse(BaseModel):
+    """Response with authorization details"""
+    id: str
+    session_id: str
+    browser_name: Optional[str]
+    authorization_code: str
+    registration_url: str
+    code_expires_at: datetime
+    is_active: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class AddonTokenExchangeRequest(BaseModel):
+    """Request to exchange authorization code for tokens"""
+    authorization_code: str = Field(..., description="Authorization code from registration URL")
+
+
+class AddonTokenExchangeResponse(BaseModel):
+    """Response with access and refresh tokens"""
+    access_token: str = Field(..., description="Access token for screenshot uploads (30 days)")
+    refresh_token: str = Field(..., description="Refresh token for renewal (90 days)")
+    access_expires_at: datetime = Field(..., description="Access token expiration")
+    refresh_expires_at: datetime = Field(..., description="Refresh token expiration")
+    session_id: str = Field(..., description="Session ID this authorization is linked to")
+    instance_url: str = Field(..., description="Image Tools instance URL")
+
+
+class AddonRefreshTokenRequest(BaseModel):
+    """Request to refresh access token"""
+    refresh_token: str = Field(..., description="Refresh token for renewing")
+
+
+class AddonRefreshTokenResponse(BaseModel):
+    """Response from token refresh"""
+    access_token: str = Field(..., description="New access token")
+    access_expires_at: datetime = Field(..., description="New expiration date")
+
+
+class AddonValidateTokenRequest(BaseModel):
+    """Request to validate current token"""
+    access_token: str = Field(..., description="Access token to validate")
+
+
+class AddonValidateTokenResponse(BaseModel):
+    """Response from token validation"""
+    valid: bool = Field(..., description="Whether token is valid")
+    expires_at: Optional[datetime] = Field(None, description="Expiration date if valid")
+    needs_refresh: bool = Field(False, description="True if nearing expiration (within 3 days)")
+    session_id: Optional[str] = Field(None, description="Session ID if valid")
+
+
+class AddonScreenshotUploadResponse(BaseModel):
+    """Response from screenshot upload"""
+    image_id: str
+    filename: str
+    size: int
+    width: int
+    height: int
+    format: str
+    thumbnail_url: str
+    image_url: str
+    uploaded_at: datetime
+
+
+class ConnectedAddonInfo(BaseModel):
+    """Information about a connected addon"""
+    id: str
+    browser_name: Optional[str]
+    created_at: datetime
+    last_used_at: Optional[datetime]
+    access_expires_at: Optional[datetime]
+    is_active: bool
+    
+    class Config:
+        from_attributes = True
+
+

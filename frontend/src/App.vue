@@ -518,6 +518,9 @@
           <button class="btn-modal btn-secondary" @click="openMobileQRModal" style="margin-right: auto;">
             📱 Mobile App Link
           </button>
+          <button class="btn-modal btn-secondary" @click="openAddonModal">
+            🧩 Browser Addon
+          </button>
           <button class="btn-modal btn-primary" @click="showAboutModal = false">
             Close
           </button>
@@ -660,6 +663,112 @@
         
         <div class="modal-footer" v-if="!qrCodePaired">
           <button class="btn-modal btn-primary" @click="showMobileQRModal = false">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Browser Addon Connection Modal -->
+    <div v-if="showAddonModal" class="modal-overlay" @click="showAddonModal = false">
+      <div class="settings-modal" @click.stop>
+        <button class="modal-close-btn" @click="showAddonModal = false">✕</button>
+        
+        <div class="modal-header">
+          <h2>🧩 Browser Addon Connection</h2>
+        </div>
+        
+        <div class="settings-content">
+          <div class="settings-section">
+            <div class="info-box">
+              <p><strong>Connect Browser Addon for Screenshot Capture</strong></p>
+              <p style="margin-top: 10px;">
+                Install our browser addon to capture screenshots (full page, visible area, or selected region) 
+                and send them directly to Image Tools.
+              </p>
+            </div>
+            
+            <!-- Generate Connection String Button -->
+            <div v-if="!addonRegistrationUrl" style="margin-top: 20px;">
+              <button 
+                class="btn-modal btn-primary" 
+                @click="generateAddonRegistrationUrl"
+                :disabled="isGeneratingAddonUrl"
+                style="width: 100%;"
+              >
+                {{ isGeneratingAddonUrl ? 'Generating...' : '🔗 Get Connection String' }}
+              </button>
+            </div>
+            
+            <!-- Connection Instructions (after string is generated and copied) -->
+            <div v-if="addonRegistrationUrl" class="info-box info-box-success" style="margin-top: 20px;">
+              <p style="margin-bottom: 15px;">
+                <strong>✓ Connection string copied to clipboard!</strong>
+              </p>
+              
+              <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 15px; border: 1px solid #a5d6a7;">
+                <code style="word-break: break-all; font-size: 11px; color: #2e7d32;">{{ addonRegistrationUrl }}</code>
+              </div>
+              
+              <p style="margin-bottom: 10px;"><strong>How to connect:</strong></p>
+              <ol style="margin-left: 20px; line-height: 1.8;">
+                <li>Click the ImageTools extension icon in your browser toolbar</li>
+                <li>Click the "Connect to ImageTools" button</li>
+                <li>Paste the connection string when prompted</li>
+                <li>Click "Connect" to complete the setup</li>
+              </ol>
+              <p style="margin-top: 15px; font-size: 0.85em; color: #666;">
+                💡 Connection string expires in 5 minutes. 
+                <a href="#" @click.prevent="addonRegistrationUrl = null" style="color: #6366f1; text-decoration: underline;">
+                  Generate new string
+                </a>
+              </p>
+            </div>
+            
+            <!-- Connected Addons List -->
+            <div v-if="connectedAddons && connectedAddons.length > 0" style="margin-top: 30px;">
+              <h3 style="margin-bottom: 10px;">Connected Addons:</h3>
+              <div v-for="addon in connectedAddons" :key="addon.id" class="connected-device-item">
+                <div class="device-info">
+                  <span class="device-icon">🧩</span>
+                  <div class="device-details">
+                    <strong>{{ addon.browser_name || 'Browser' }}</strong>
+                    <p style="font-size: 0.85em; color: #666; margin-top: 4px;">
+                      Connected: {{ formatDate(addon.created_at) }}
+                      <span v-if="addon.last_used_at"> • Last used: {{ formatDate(addon.last_used_at) }}</span>
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  class="btn-revoke" 
+                  @click="revokeAddonAuthorization(addon.id)"
+                  title="Revoke this connection"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            
+            <!-- Browser Install Links -->
+            <div class="info-box info-box-highlight" style="margin-top: 30px;">
+              <p><strong>📥 Install Browser Addon:</strong></p>
+              <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <a href="#" class="addon-install-link firefox" title="Firefox addon (Coming soon)">
+                  🦊 Firefox
+                </a>
+                <a href="#" class="addon-install-link chrome" title="Chrome addon (Coming soon)">
+                  🔵 Chrome
+                </a>
+              </div>
+              <p style="margin-top: 10px; font-size: 0.85em; color: #666;">
+                Note: Addons are currently in development. Check back soon!
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-modal btn-primary" @click="showAddonModal = false">
             Close
           </button>
         </div>
@@ -1004,6 +1113,7 @@ import { imageService, sessionService, setOfflineCallback, markOnline } from './
 import { openRouterService, generateCodeVerifier, generateCodeChallenge } from './services/openRouterService';
 import { chatService } from './services/chatService';
 import mobileService from './services/mobileService';
+import addonService from './services/addonService';
 import QRCode from 'qrcode';
 import { 
   startHealthCheck, 
@@ -1052,6 +1162,13 @@ const showPresetSettingsModal = ref(false);
 const showAboutModal = ref(false);
 const showImageCardSettingsModal = ref(false);
 const showMobileQRModal = ref(false);
+const showAddonModal = ref(false);
+
+// Addon authorization state
+const addonRegistrationUrl = ref(null);
+const isGeneratingAddonUrl = ref(false);
+const addonUrlCopied = ref(false);
+const connectedAddons = ref([]);
 
 // Image card settings
 const imageCardSize = ref(localStorage.getItem('imageCardSize') || 'small');
@@ -1769,6 +1886,133 @@ const getPairingIntentUrl = () => {
   console.log('Generated pairing deep link:', deepLink);
   return deepLink;
 };
+
+// Browser Addon Authorization Functions
+const openAddonModal = async () => {
+  showSettingsMenu.value = false;
+  showAboutModal.value = false;
+  showAddonModal.value = true;
+  
+  // Load connected addons when opening modal
+  await loadConnectedAddons();
+};
+
+const generateAddonRegistrationUrl = async () => {
+  if (!sessionId.value) {
+    console.error('[Addon] No session ID available');
+    return;
+  }
+  
+  isGeneratingAddonUrl.value = true;
+  
+  try {
+    const authorization = await addonService.createAuthorization(sessionId.value);
+    
+    // Parse the registration URL to extract code and instance
+    const url = new URL(authorization.registration_url);
+    const code = url.searchParams.get('code');
+    const instance = url.searchParams.get('instance');
+    
+    if (!code || !instance) {
+      throw new Error('Invalid registration URL format');
+    }
+    
+    // Create JSON object with connection info
+    const connectionData = {
+      code: code,
+      instance: instance
+    };
+    
+    // Base64 encode the connection string
+    const jsonString = JSON.stringify(connectionData);
+    const base64String = btoa(jsonString);
+    
+    addonRegistrationUrl.value = base64String;
+    
+    console.log('[Addon] Generated connection string:', base64String);
+    
+    // Automatically copy to clipboard
+    try {
+      await navigator.clipboard.writeText(base64String);
+      addonUrlCopied.value = true;
+      console.log('[Addon] Connection string automatically copied to clipboard');
+      
+      // Show temporary success message
+      setTimeout(() => {
+        addonUrlCopied.value = false;
+      }, 3000);
+    } catch (clipboardError) {
+      console.error('[Addon] Failed to auto-copy to clipboard:', clipboardError);
+      addonUrlCopied.value = false;
+    }
+    
+    // Auto-expire after 5 minutes
+    setTimeout(() => {
+      if (addonRegistrationUrl.value === base64String) {
+        addonRegistrationUrl.value = null;
+        console.log('[Addon] Connection string expired');
+      }
+    }, 5 * 60 * 1000);
+    
+  } catch (error) {
+    console.error('[Addon] Failed to generate connection string:', error);
+    alert('Failed to generate connection string. Please try again.');
+  } finally {
+    isGeneratingAddonUrl.value = false;
+  }
+};
+
+const copyAddonUrl = async () => {
+  if (!addonRegistrationUrl.value) return;
+  
+  try {
+    await navigator.clipboard.writeText(addonRegistrationUrl.value);
+    addonUrlCopied.value = true;
+    setTimeout(() => {
+      addonUrlCopied.value = false;
+    }, 3000);
+  } catch (err) {
+    console.error('[Addon] Failed to copy URL:', err);
+  }
+};
+
+const loadConnectedAddons = async () => {
+  if (!sessionId.value) return;
+  
+  try {
+    connectedAddons.value = await addonService.listConnectedAddons(sessionId.value);
+  } catch (error) {
+    console.error('[Addon] Failed to load connected addons:', error);
+  }
+};
+
+const revokeAddonAuthorization = async (authId) => {
+  if (!confirm('Are you sure you want to disconnect this addon?')) {
+    return;
+  }
+  
+  try {
+    await addonService.revokeAuthorization(authId);
+    await loadConnectedAddons();
+  } catch (error) {
+    console.error('[Addon] Failed to revoke authorization:', error);
+    alert('Failed to disconnect addon. Please try again.');
+  }
+};
+
+const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+// Watch for addon modal close and cleanup
+watch(showAddonModal, (isOpen) => {
+  if (!isOpen) {
+    // Reset state when modal is closed
+    addonRegistrationUrl.value = null;
+    addonUrlCopied.value = false;
+  }
+});
 
 // Watch for imageCardSize changes and save to localStorage
 watch(imageCardSize, (newSize) => {
@@ -3225,6 +3469,11 @@ body {
   border-left: 3px solid #ffa726;
 }
 
+.info-box-success {
+  background-color: #e8f5e9;
+  border-left: 3px solid #4caf50;
+}
+
 .info-box-highlight ul {
   margin-left: 1.2rem;
   margin-top: 0.5rem;
@@ -4280,5 +4529,112 @@ body {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Addon Modal Styles */
+.url-container {
+  padding: 15px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.url-display-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.registration-url {
+  flex: 1;
+  font-size: 0.85em;
+  word-break: break-all;
+  color: #1f2937;
+  background: transparent;
+}
+
+.btn-copy {
+  padding: 8px 12px;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background 0.2s;
+}
+
+.btn-copy:hover {
+  background: #4f46e5;
+}
+
+.addon-install-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #1f2937;
+  font-weight: 500;
+  transition: all 0.2s;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.addon-install-link:hover {
+  background: #e5e7eb;
+}
+
+.addon-install-link.firefox {
+  border-color: #ff9500;
+}
+
+.addon-install-link.chrome {
+  border-color: #4285f4;
+}
+
+.connected-device-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.device-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.device-icon {
+  font-size: 1.5em;
+}
+
+.device-details strong {
+  color: #1f2937;
+}
+
+.btn-revoke {
+  padding: 6px 12px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background 0.2s;
+}
+
+.btn-revoke:hover {
+  background: #dc2626;
 }
 </style>

@@ -131,3 +131,39 @@ class MobileAppPairing(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_used_at = Column(DateTime(timezone=True), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)  # Initial pairing expiry (2 min)
+
+
+class BrowserAddonAuthorization(Base):
+    """
+    Store browser addon authorizations for screenshot uploads
+    
+    OAuth2-style Authorization Flow:
+    1. User clicks "Connect Addon" in web UI -> generates registration_url
+    2. User pastes URL in addon -> addon extracts authorization_code
+    3. Addon exchanges code for access_token + refresh_token
+    4. Addon uses access_token for screenshot uploads (Bearer token)
+    5. When access_token expires, use refresh_token to get new one
+    """
+    __tablename__ = "browser_addon_authorizations"
+    
+    id = Column(String, primary_key=True, index=True)  # UUID
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    browser_name = Column(String, nullable=True)  # "firefox" or "chrome"
+    addon_identifier = Column(String, nullable=True)  # Optional addon ID
+    
+    # Authorization code (short-lived, single-use, 5 minutes)
+    authorization_code = Column(String, nullable=False, unique=True, index=True)
+    code_used = Column(Boolean, default=False)
+    code_expires_at = Column(DateTime(timezone=True), nullable=False)
+    
+    # Access token (30 days)
+    access_token = Column(String, nullable=True, unique=True, index=True)
+    access_expires_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Refresh token (90 days, can renew access token)
+    refresh_token = Column(String, nullable=True, unique=True, index=True)
+    refresh_expires_at = Column(DateTime(timezone=True), nullable=True)
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
