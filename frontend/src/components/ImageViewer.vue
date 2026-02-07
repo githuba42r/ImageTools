@@ -45,13 +45,40 @@
         <!-- EXIF Data Section (collapsible) -->
         <div v-if="showExif && exifData" class="exif-section">
           <h3 class="exif-title">EXIF Metadata</h3>
+          
+          <!-- GPS Coordinates if available -->
+          <div v-if="hasGpsData" class="gps-section">
+            <div class="gps-header">
+              <span class="gps-icon">📍</span>
+              <span class="gps-title">Location</span>
+            </div>
+            <div class="gps-info">
+              <div class="gps-coords">
+                <span class="coord-label">Latitude:</span>
+                <span class="coord-value">{{ formatLatitude(exifData.GPS.latitude, exifData.GPS.latitude_ref) }}</span>
+              </div>
+              <div class="gps-coords">
+                <span class="coord-label">Longitude:</span>
+                <span class="coord-value">{{ formatLongitude(exifData.GPS.longitude, exifData.GPS.longitude_ref) }}</span>
+              </div>
+              <div v-if="exifData.GPS.altitude" class="gps-coords">
+                <span class="coord-label">Altitude:</span>
+                <span class="coord-value">{{ formatAltitude(exifData.GPS.altitude) }}</span>
+              </div>
+            </div>
+            <button @click="openGoogleMaps" class="btn-maps" title="View location on Google Maps">
+              <span class="maps-icon">🗺️</span>
+              Open in Google Maps
+            </button>
+          </div>
+          
           <div class="exif-grid">
-            <div v-for="(value, key) in exifData" :key="key" class="exif-item">
+            <div v-for="(value, key) in filteredExifData" :key="key" class="exif-item">
               <span class="exif-key">{{ key }}:</span>
-              <span class="exif-value">{{ value }}</span>
+              <span class="exif-value">{{ formatExifValue(key, value) }}</span>
             </div>
           </div>
-          <p v-if="Object.keys(exifData).length === 0" class="no-exif">No EXIF data available</p>
+          <p v-if="Object.keys(filteredExifData).length === 0 && !hasGpsData" class="no-exif">No EXIF data available</p>
         </div>
 
         <!-- Navigation buttons -->
@@ -140,6 +167,21 @@ const hasNext = computed(() => {
   return currentIndex.value < props.allImages.length - 1;
 });
 
+// GPS-related computed properties
+const hasGpsData = computed(() => {
+  return exifData.value.GPS && 
+         exifData.value.GPS.latitude !== undefined && 
+         exifData.value.GPS.longitude !== undefined;
+});
+
+const filteredExifData = computed(() => {
+  if (!exifData.value) return {};
+  // Filter out GPS data as it's displayed separately
+  const filtered = { ...exifData.value };
+  delete filtered.GPS;
+  return filtered;
+});
+
 const formatSize = (bytes) => {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -184,6 +226,42 @@ const toggleExif = async () => {
       isLoadingExif.value = false;
     }
   }
+};
+
+// GPS formatting functions
+const formatLatitude = (lat, ref) => {
+  if (!lat) return '';
+  const absLat = Math.abs(lat);
+  const direction = ref || (lat >= 0 ? 'N' : 'S');
+  return `${absLat.toFixed(6)}° ${direction}`;
+};
+
+const formatLongitude = (lon, ref) => {
+  if (!lon) return '';
+  const absLon = Math.abs(lon);
+  const direction = ref || (lon >= 0 ? 'E' : 'W');
+  return `${absLon.toFixed(6)}° ${direction}`;
+};
+
+const formatAltitude = (alt) => {
+  if (alt === undefined) return '';
+  const absAlt = Math.abs(alt);
+  const direction = alt >= 0 ? 'above' : 'below';
+  return `${absAlt.toFixed(1)}m ${direction} sea level`;
+};
+
+const formatExifValue = (key, value) => {
+  // Don't format if value is an object (like GPS which is already filtered)
+  if (typeof value === 'object') return JSON.stringify(value);
+  return value;
+};
+
+const openGoogleMaps = () => {
+  if (!hasGpsData.value) return;
+  const lat = exifData.value.GPS.latitude;
+  const lon = exifData.value.GPS.longitude;
+  const url = `https://www.google.com/maps?q=${lat},${lon}`;
+  window.open(url, '_blank');
 };
 
 const handleKeydown = (event) => {
@@ -375,6 +453,91 @@ onBeforeUnmount(() => {
   letter-spacing: 0.5px;
   margin-bottom: 0.75rem;
   font-weight: 600;
+}
+
+.gps-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background-color: #242424;
+  border-radius: 6px;
+  border: 1px solid #3a3a3a;
+}
+
+.gps-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.gps-icon {
+  font-size: 1.2rem;
+}
+
+.gps-title {
+  font-size: 0.9rem;
+  color: #fff;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.gps-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.gps-coords {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.coord-label {
+  font-size: 0.8rem;
+  color: #999;
+  min-width: 80px;
+  font-weight: 500;
+}
+
+.coord-value {
+  font-size: 0.9rem;
+  color: #4CAF50;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+
+.btn-maps {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.btn-maps:hover {
+  background: linear-gradient(135deg, #45a049, #3d8b40);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-maps:active {
+  transform: translateY(0);
+}
+
+.maps-icon {
+  font-size: 1.1rem;
 }
 
 .exif-grid {

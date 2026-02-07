@@ -587,7 +587,7 @@ class ImageService:
                 exif = img._getexif() if hasattr(img, '_getexif') else None
                 
                 if exif:
-                    from PIL.ExifTags import TAGS
+                    from PIL.ExifTags import TAGS, GPSTAGS
                     
                     # Common EXIF tags to extract
                     interesting_tags = {
@@ -597,9 +597,17 @@ class ImageService:
                         'Orientation', 'XResolution', 'YResolution'
                     }
                     
+                    gps_info = {}
+                    
                     for tag_id, value in exif.items():
                         tag_name = TAGS.get(tag_id, tag_id)
-                        if tag_name in interesting_tags:
+                        
+                        # Handle GPS data separately
+                        if tag_name == 'GPSInfo':
+                            for gps_tag_id, gps_value in value.items():
+                                gps_tag_name = GPSTAGS.get(gps_tag_id, gps_tag_id)
+                                gps_info[gps_tag_name] = gps_value
+                        elif tag_name in interesting_tags:
                             # Convert value to string representation
                             if isinstance(value, bytes):
                                 try:
@@ -614,6 +622,10 @@ class ImageService:
                                     value = str(value)
                             
                             exif_data[tag_name] = str(value)
+                    
+                    # Process GPS data if available
+                    if gps_info:
+                        exif_data['GPS'] = ImageService._parse_gps_info(gps_info)
                 
                 # Add basic image info
                 exif_data['Format'] = img.format
@@ -624,4 +636,69 @@ class ImageService:
                 
         except Exception as e:
             return {'error': f'Failed to extract EXIF: {str(e)}'}
+    
+    @staticmethod
+    def _parse_gps_info(gps_info: dict) -> dict:
+        """Parse GPS information and convert to decimal degrees."""
+        result = {}
+        
+        try:
+            # Get GPS coordinates
+            lat = gps_info.get('GPSLatitude')
+            lat_ref = gps_info.get('GPSLatitudeRef')
+            lon = gps_info.get('GPSLongitude')
+            lon_ref = gps_info.get('GPSLongitudeRef')
+            
+            if lat and lon and lat_ref and lon_ref:
+                # Convert to decimal degrees
+                lat_decimal = ImageService._convert_to_degrees(lat)
+                if lat_ref == 'S':
+                    lat_decimal = -lat_decimal
+                    
+                lon_decimal = ImageService._convert_to_degrees(lon)
+                if lon_ref == 'W':
+                    lon_decimal = -lon_decimal
+                
+                result['latitude'] = lat_decimal
+                result['longitude'] = lon_decimal
+                result['latitude_ref'] = lat_ref
+                result['longitude_ref'] = lon_ref
+            
+            # Get altitude if available
+            altitude = gps_info.get('GPSAltitude')
+            altitude_ref = gps_info.get('GPSAltitudeRef')
+            if altitude:
+                # Altitude is typically a tuple (numerator, denominator)
+                if isinstance(altitude, tuple) and len(altitude) == 2 and altitude[1] != 0:
+                    altitude_meters = altitude[0] / altitude[1]
+                    # altitude_ref: 0 = above sea level, 1 = below sea level
+                    if altitude_ref == 1:
+                        altitude_meters = -altitude_meters
+                    result['altitude'] = altitude_meters
+            
+            # Get timestamp if available
+            date_stamp = gps_info.get('GPSDateStamp')
+            time_stamp = gps_info.get('GPSTimeStamp')
+            if date_stamp:
+                result['date'] = date_stamp
+            if time_stamp:
+                # time_stamp is typically a tuple of (hours, minutes, seconds)
+                if isinstance(time_stamp, tuple) and len(time_stamp) == 3:
+                    result['time'] = f"{int(time_stamp[0]):02d}:{int(time_stamp[1]):02d}:{int(time_stamp[2]):02d}"
+        
+        except Exception as e:
+            result['error'] = f'Failed to parse GPS data: {str(e)}'
+        
+        return result
+    
+    @staticmethod
+    def _convert_to_degrees(value):
+        """Convert GPS coordinates from degrees/minutes/seconds to decimal degrees."""
+        # value is typically ((degrees_num, degrees_den), (minutes_num, minutes_den), (seconds_num, seconds_den))
+        d = value[0][0] / value[0][1] if value[0][1] != 0 else value[0][0]
+        m = value[1][0] / value[1][1] if value[1][1] != 0 else value[1][0]
+        s = value[2][0] / value[2][1] if value[2][1] != 0 else value[2][0]
+        
+        return d + (m / 60.0) + (s / 3600.0)
+
 

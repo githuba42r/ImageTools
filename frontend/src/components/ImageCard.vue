@@ -82,11 +82,11 @@
           <button 
             @click="openChatInterface" 
             class="btn-icon btn-ai"
-            :disabled="isProcessing"
-            :title="'AI Chat - Ask AI to modify image'"
+            :disabled="isProcessing || !props.selectedModel"
+            :title="getAiChatTooltip()"
           >
             <span class="icon">💬</span>
-            <span class="tooltip">AI Chat</span>
+            <span class="tooltip">{{ getAiChatTooltipText() }}</span>
           </button>
 
           <!-- Delete Button -->
@@ -201,18 +201,20 @@
         </div>
       </div>
 
-    <!-- Chat Interface Modal -->
-    <ChatInterface
-      v-if="showChatInterface"
-      :image="image"
-      :sessionId="sessionId"
-      :selectedModel="selectedModel"
-      :isConnected="isOpenRouterConnected"
-      @close="closeChatInterface"
-      @operationsApplied="handleOperationsApplied"
-      @switchModel="handleSwitchModel"
-      @showModelDetails="handleShowModelDetails"
-    />
+    <!-- Chat Interface Modal - Teleported to body to avoid z-index issues -->
+    <Teleport to="body">
+      <ChatInterface
+        v-if="showChatInterface"
+        :image="image"
+        :sessionId="sessionId"
+        :selectedModel="selectedModel"
+        :isConnected="isOpenRouterConnected"
+        @close="closeChatInterface"
+        @operationsApplied="handleOperationsApplied"
+        @switchModel="handleSwitchModel"
+        @showModelDetails="handleShowModelDetails"
+      />
+    </Teleport>
 
     <!-- Resize Modal -->
     <div v-if="showResizeModal" class="modal-backdrop" @click="closeResizeModal">
@@ -789,6 +791,21 @@ watch(() => props.image.thumbnail_path, (newPath, oldPath) => {
     imageRefreshKey.value = Date.now();
   }
 });
+
+// AI Chat tooltip helpers
+const getAiChatTooltip = () => {
+  if (!props.selectedModel) {
+    return 'Please connect to OpenRouter and select a model in Settings to use AI Chat';
+  }
+  return 'AI Chat - Ask AI to modify image';
+};
+
+const getAiChatTooltipText = () => {
+  if (!props.selectedModel) {
+    return 'No AI Model';
+  }
+  return 'AI Chat';
+};
 
 // Watch updated_at to catch any image updates
 watch(() => props.image.updated_at, (newTime, oldTime) => {
