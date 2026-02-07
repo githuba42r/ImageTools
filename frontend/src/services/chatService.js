@@ -6,15 +6,8 @@
 
 class ChatService {
   constructor() {
-    // Dynamically determine API URL based on environment
-    // In production (Docker), frontend and backend are served from same origin
-    // In development, backend runs on port 8081
-    const isDevelopment = window.location.hostname === 'localhost' && window.location.port === '5173';
-    const apiBase = isDevelopment 
-      ? 'http://localhost:8081'
-      : window.location.origin;
-    
-    this.baseURL = `${apiBase}/api/v1/chat`;
+    // Use relative URL - Vite proxy handles dev, production serves from same origin
+    this.baseURL = '/api/v1/chat';
     this.sessionId = null;
   }
 

@@ -49,15 +49,8 @@ function base64URLEncode(buffer) {
 
 class OpenRouterService {
   constructor() {
-    // Dynamically determine API URL based on environment
-    // In production (Docker), frontend and backend are served from same origin
-    // In development, backend runs on port 8081
-    const isDevelopment = window.location.hostname === 'localhost' && window.location.port === '5173';
-    const apiBase = isDevelopment 
-      ? 'http://localhost:8081'
-      : window.location.origin;
-    
-    this.baseURL = `${apiBase}/api/v1/openrouter`;
+    // Use relative URL - works in both development (Vite proxy) and production
+    this.baseURL = '/api/v1/openrouter';
     this.sessionId = null;
   }
 
@@ -195,8 +188,7 @@ class OpenRouterService {
    * @returns {Promise<Object>} { selected_model_id: string|null }
    */
   async getSettings() {
-    const apiBase = this._getApiBase();
-    const response = await fetch(`${apiBase}/api/v1/settings`, {
+    const response = await fetch('/api/v1/settings', {
       method: 'GET',
       headers: this._getHeaders()
     });
@@ -215,8 +207,7 @@ class OpenRouterService {
    * @returns {Promise<Object>} { selected_model_id: string }
    */
   async updateModel(modelId) {
-    const apiBase = this._getApiBase();
-    const response = await fetch(`${apiBase}/api/v1/settings/model`, {
+    const response = await fetch('/api/v1/settings/model', {
       method: 'PUT',
       headers: this._getHeaders(),
       body: JSON.stringify({ model_id: modelId })
@@ -228,16 +219,6 @@ class OpenRouterService {
     }
 
     return response.json();
-  }
-
-  /**
-   * Get base API URL based on environment
-   * @returns {string} Base API URL
-   * @private
-   */
-  _getApiBase() {
-    const isDevelopment = window.location.hostname === 'localhost' && window.location.port === '5173';
-    return isDevelopment ? 'http://localhost:8081' : window.location.origin;
   }
 }
 
