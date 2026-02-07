@@ -1,0 +1,86 @@
+# Docker Compose configuration for ImageTools with Nginx reverse proxy and Basic Auth
+# 
+# This setup includes:
+# - ImageTools backend + frontend in a single container
+# - Nginx reverse proxy with HTTP Basic Authentication
+# - Persistent volumes for data and auth
+# - WebSocket support
+
+version: '3.8'
+
+services:
+  # Nginx reverse proxy with basic auth
+  nginx:
+    image: nginx:alpine
+    container_name: imagetools-nginx
+    ports:
+      - "80:80"
+    volumes:
+      # Nginx configuration (as template for envsubst)
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf.template:ro
+      # Entrypoint script for htpasswd generation
+      - ./nginx/docker-entrypoint.sh:/docker-entrypoint.sh:ro
+      # Volume for htpasswd file (persistent)
+      - nginx-htpasswd:/etc/nginx/htpasswd
+    environment:
+      # Application name (displayed in browser auth prompt)
+      - APP_NAME=${APP_NAME:-Image Tools}
+      
+      # Simple authentication (optional)
+      # If provided, creates htpasswd file automatically
+      # Will NOT overwrite existing htpasswd file in mounted volume
+      - DFLT_USERNAME=${DFLT_USERNAME:-}
+      - DFLT_PASSWORD=${DFLT_PASSWORD:-}
+    entrypoint: /docker-entrypoint.sh
+    depends_on:
+      imagetools:
+        condition: service_healthy
+    networks:
+      - imagetools-network
+    restart: unless-stopped
+
+  # ImageTools application (backend + frontend)
+  imagetools:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: imagetools-app
+    environment:
+      # Backend configuration
+      - DEBUG=False
+      - LOG_LEVEL=INFO
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8081
+      - SESSION_EXPIRY_DAYS=${SESSION_EXPIRY_DAYS:-7}
+      - MAX_IMAGES_PER_SESSION=${MAX_IMAGES_PER_SESSION:-5}
+      - MAX_UPLOAD_SIZE_MB=${MAX_UPLOAD_SIZE_MB:-20}
+      
+      # OpenRouter OAuth (optional)
+      - OPENROUTER_CLIENT_ID=${OPENROUTER_CLIENT_ID:-}
+      - OPENROUTER_CLIENT_SECRET=${OPENROUTER_CLIENT_SECRET:-}
+      - OAUTH_REDIRECT_URL=${OAUTH_REDIRECT_URL:-}
+    volumes:
+      # Persistent storage for uploaded images and database
+      - imagetools-storage:/app/storage
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8081/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - imagetools-network
+    restart: unless-stopped
+
+networks:
+  imagetools-network:
+    driver: bridge
+
+volumes:
+  # Persistent storage for images and database
+  imagetools-storage:
+    driver: local
+  
+  # Persistent storage for htpasswd file
+  nginx-htpasswd:
+    driver: local
