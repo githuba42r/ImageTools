@@ -518,7 +518,7 @@
           <button class="btn-modal btn-secondary" @click="openMobileQRModal" style="margin-right: auto;">
             📱 Mobile App Link
           </button>
-          <button class="btn-modal btn-secondary" @click="openAddonModal">
+          <button class="btn-modal btn-secondary" @click="openAddonModal" style="margin-left: 0.5rem;">
             🧩 Browser Addon
           </button>
           <button class="btn-modal btn-primary" @click="showAboutModal = false">
@@ -1181,6 +1181,9 @@
       @retry="handleOfflineRetry"
     />
 
+    <!-- Toast Notifications -->
+    <ToastNotification />
+
   </div>
 </template>
 
@@ -1215,6 +1218,7 @@ import ImageCard from './components/ImageCard.vue';
 import ImageViewer from './components/ImageViewer.vue';
 import ImageEditor from './components/ImageEditor.vue';
 import OfflineModal from './components/OfflineModal.vue';
+import ToastNotification from './components/ToastNotification.vue';
 
 const sessionStore = useSessionStore();
 const imageStore = useImageStore();

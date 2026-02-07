@@ -78,6 +78,17 @@
             <span class="tooltip">Download</span>
           </button>
 
+          <!-- Copy to Clipboard Button -->
+          <button 
+            @click="handleCopyToClipboard" 
+            class="btn-icon"
+            :disabled="isProcessing"
+            :title="'Copy image to clipboard'"
+          >
+            <span class="icon">📋</span>
+            <span class="tooltip">Copy</span>
+          </button>
+
           <!-- AI Chat Button -->
           <button 
             @click="openChatInterface" 
@@ -319,6 +330,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useImageStore } from '../stores/imageStore';
 import { historyService } from '../services/api';
 import ChatInterface from './ChatInterface.vue';
+import { useToast } from '../composables/useToast';
 
 const props = defineProps({
   image: {
@@ -355,6 +367,7 @@ const props = defineProps({
 const emit = defineEmits(['image-click', 'edit-click', 'switchModel', 'showModelDetails']);
 
 const imageStore = useImageStore();
+const { showToast } = useToast();
 const selectedPreset = ref('');
 const isProcessing = ref(false);
 const processingMessage = ref('');
@@ -591,6 +604,55 @@ const handleUndo = async () => {
 
 const handleDownload = () => {
   window.open(props.image.image_url, '_blank');
+};
+
+const handleCopyToClipboard = async () => {
+  const isSecureContext = window.isSecureContext;
+  
+  try {
+    // Only try direct image copy on HTTPS/localhost
+    if (isSecureContext && navigator.clipboard && window.ClipboardItem) {
+      try {
+        const response = await fetch(props.image.image_url);
+        const blob = await response.blob();
+        
+        const clipboardItem = new ClipboardItem({
+          [blob.type]: blob
+        });
+        
+        await navigator.clipboard.write([clipboardItem]);
+        
+        // Show success feedback with toast
+        showToast('Copied to clipboard!', 'success', 2000);
+        return;
+      } catch (clipboardError) {
+        console.log('Image copy failed:', clipboardError);
+      }
+    }
+    
+    // For non-secure contexts (HTTP), create a download link that opens in new tab
+    // This is the most reliable cross-platform solution
+    const link = document.createElement('a');
+    link.href = props.image.image_url;
+    link.download = props.image.original_filename || 'image.jpg';
+    link.target = '_blank';
+    
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Show feedback with toast
+    if (isSecureContext) {
+      showToast('Downloaded!', 'success', 2000);
+    } else {
+      showToast('Clipboard requires HTTPS. Opening image in new tab - use browser right-click to copy.', 'warning', 4000);
+    }
+    
+  } catch (error) {
+    console.error('Copy/download failed:', error);
+    showToast('Failed to copy image. Please try the Download button instead.', 'error', 3000);
+  }
 };
 
 const handleEdit = () => {
