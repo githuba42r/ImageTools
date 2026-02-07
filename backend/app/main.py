@@ -1,10 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
+from pathlib import Path
 from app.core.config import settings
 from app.core.database import init_db
 from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router
 import logging
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -60,22 +64,37 @@ app.include_router(openrouter_oauth.router, prefix=f"{settings.API_PREFIX}/openr
 app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["chat"])
 app.include_router(settings_router.router, prefix=settings.API_PREFIX)
 
-
-@app.get("/")
-async def root():
-    """API root endpoint."""
-    return {
-        "name": "Image Tools API",
-        "version": "1.0.0",
-        "status": "running",
-        "docs": f"{settings.API_PREFIX}/docs"
-    }
+# Serve frontend static files (if they exist)
+frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
 
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+if frontend_dist.exists():
+    # Mount static files for assets
+    app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
+    
+    # Serve index.html for SPA routes (catch-all - must be last!)
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve frontend application for non-API routes."""
+        # If it's an API route or health check, let it fall through to 404
+        if full_path.startswith("api/") or full_path.startswith("uploads/") or full_path == "health":
+            return {"detail": "Not Found"}
+        
+        # Check if requesting a specific file
+        file_path = frontend_dist / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        
+        # Default to index.html for SPA routing
+        return FileResponse(frontend_dist / "index.html")
+else:
+    logger.warning("Frontend build not found. Only API endpoints will be available.")
 
 
 if __name__ == "__main__":

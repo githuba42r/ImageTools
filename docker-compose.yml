@@ -1,15 +1,13 @@
-version: '3.8'
-
 services:
-  backend:
+  imagetools:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: imagetools-backend
+    container_name: imagetools
     ports:
-      - "8081:8081"
+      - "8082:8081"  # Using 8082 to avoid conflicts with existing services
     volumes:
-      - backend-storage:/app/storage
+      - imagetools-storage:/app/storage
     environment:
       - DEBUG=False
       - LOG_LEVEL=INFO
@@ -21,31 +19,12 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/api/v1/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    networks:
-      - imagetools-network
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: imagetools-frontend
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
-    networks:
-      - imagetools-network
 
 volumes:
-  backend-storage:
+  imagetools-storage:
     driver: local
-
-networks:
-  imagetools-network:
-    driver: bridge
