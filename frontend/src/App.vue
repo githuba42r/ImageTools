@@ -16,7 +16,14 @@
               ℹ️
             </button>
           </div>
-          <p v-if="imageCount === 0" class="subtitle">Compress and manage your images</p>
+          
+          <!-- Username display -->
+          <div v-if="username" class="username-display">
+            <span class="user-icon">👤</span>
+            <span class="username-text">{{ username }}</span>
+          </div>
+          
+          <p v-if="imageCount === 0 && !username" class="subtitle">Compress and manage your images</p>
           
           <!-- Image count and selection info -->
           <div v-if="imageCount > 0" class="image-stats">
@@ -490,6 +497,7 @@
             
             <div class="info-box">
               <p><strong>Session Information:</strong></p>
+              <p v-if="username"><strong>User:</strong> <code>{{ username }}</code></p>
               <p><strong>Session ID:</strong> <code>{{ sessionId ? sessionId.substring(0, 16) + '...' : 'None' }}</code></p>
               <p><strong>Images in Session:</strong> {{ imageCount }} / {{ appConfig.max_images_per_session }}</p>
             </div>
@@ -1032,6 +1040,32 @@ const availableTags = computed(() => {
     model.tags.forEach(tag => tags.add(tag));
   });
   return Array.from(tags).sort();
+});
+
+// Get username from session
+const username = computed(() => {
+  // First check if sessionData has user_id
+  if (sessionStore.sessionData && sessionStore.sessionData.user_id) {
+    return sessionStore.sessionData.user_id;
+  }
+  
+  // Check if session override is being used (for testing)
+  const sessionOverride = import.meta.env.VITE_SESSION_OVERRIDE;
+  if (sessionOverride && sessionOverride.trim() !== '') {
+    return sessionOverride;
+  }
+  
+  // Check if sessionId looks like a username (not a UUID)
+  if (sessionId.value) {
+    // UUIDs have format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId.value);
+    if (!isUUID) {
+      // Session ID doesn't look like UUID, might be a username
+      return sessionId.value;
+    }
+  }
+  
+  return null;
 });
 
 // Fetch app configuration from backend
@@ -1828,6 +1862,28 @@ body {
 .subtitle {
   font-size: 0.88rem;
   opacity: 0.9;
+}
+
+.username-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  width: fit-content;
+}
+
+.user-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.username-text {
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .image-stats {
