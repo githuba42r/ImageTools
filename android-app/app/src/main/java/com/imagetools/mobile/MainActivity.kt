@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     
     private lateinit var pairingPrefs: PairingPreferences
-    private var pendingPairingData: PairingData? = null
+    private val pendingPairingData = mutableStateOf<PairingData?>(null)
     
     data class PairingData(
         val url: String,
@@ -37,6 +37,8 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
         
         setContent {
+            val currentPairingData by pendingPairingData
+            
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -44,7 +46,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     HomeScreen(
                         pairingPrefs = pairingPrefs,
-                        pendingPairingData = pendingPairingData?.let {
+                        pendingPairingData = currentPairingData?.let {
                             mapOf(
                                 "url" to it.url,
                                 "secret" to it.secret,
@@ -69,15 +71,21 @@ class MainActivity : ComponentActivity() {
         
         if (data != null && data.scheme == "imagetools" && data.host == "pair") {
             Log.d("MainActivity", "Deep link received: $data")
+            Log.d("MainActivity", "Full URI: ${data.toString()}")
+            Log.d("MainActivity", "Scheme: ${data.scheme}, Host: ${data.host}, Path: ${data.path}")
+            Log.d("MainActivity", "Query string: ${data.query}")
+            Log.d("MainActivity", "Encoded query: ${data.encodedQuery}")
             
             val url = data.getQueryParameter("url")
             val secret = data.getQueryParameter("secret")
             val pairingId = data.getQueryParameter("pairing_id")
             val sessionId = data.getQueryParameter("session_id")
             
+            Log.d("MainActivity", "Parsed parameters: url=$url, secret=${secret?.take(20)}..., pairingId=$pairingId, sessionId=$sessionId")
+            
             if (url != null && secret != null && pairingId != null && sessionId != null) {
                 Log.d("MainActivity", "Valid pairing data received")
-                pendingPairingData = PairingData(url, secret, pairingId, sessionId)
+                pendingPairingData.value = PairingData(url, secret, pairingId, sessionId)
             } else {
                 Log.e("MainActivity", "Invalid pairing data: url=$url, secret=$secret, pairingId=$pairingId, sessionId=$sessionId")
             }

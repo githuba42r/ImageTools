@@ -35,15 +35,17 @@ fun HomeScreen(
     
     // Handle pending pairing data from intent
     LaunchedEffect(pendingPairingData) {
-        if (pendingPairingData != null && !isPaired && !isProcessingIntent) {
+        if (pendingPairingData != null && !isProcessingIntent) {
             isProcessingIntent = true
-            Log.d(TAG, "Processing pending pairing data from intent")
+            Log.d(TAG, "Processing pending pairing data from intent (isPaired=$isPaired)")
             
             try {
                 val url = pendingPairingData["url"]!!
                 val secret = pendingPairingData["secret"]!!
                 val pairingId = pendingPairingData["pairing_id"]!!
                 val sessionIdValue = pendingPairingData["session_id"]!!
+                
+                Log.d(TAG, "Pairing parameters: url=$url, pairingId=$pairingId, sessionId=$sessionIdValue")
                 
                 // Set base URL
                 RetrofitClient.setBaseUrl(url)
@@ -78,6 +80,7 @@ fun HomeScreen(
                     deviceName = deviceNameValue
                     sessionId = body.sessionId ?: sessionIdValue
                     
+                    Log.d(TAG, "Pairing complete!")
                     Toast.makeText(context, "Paired successfully via link!", Toast.LENGTH_SHORT).show()
                 } else {
                     val errorBody = response.errorBody()?.string()

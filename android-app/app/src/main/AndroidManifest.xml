@@ -40,7 +40,10 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="imagetools" android:host="pair" />
+                <data 
+                    android:scheme="imagetools" 
+                    android:host="pair"
+                    android:pathPrefix="/link" />
             </intent-filter>
         </activity>
 

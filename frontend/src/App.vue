@@ -1756,8 +1756,8 @@ const copyPairingCode = async () => {
 const getPairingIntentUrl = () => {
   if (!qrData.value) return '#';
   
-  // Create Android intent URL with pairing data
-  // Format: imagetools://pair?url=<encoded_url>&secret=<secret>&pairing_id=<id>&session_id=<session>
+  // Create Android deep link with pairing data
+  // Format: imagetools://pair/link?url=<encoded_url>&secret=<secret>&pairing_id=<id>&session_id=<session>
   const params = new URLSearchParams({
     url: qrData.value.instance_url,
     secret: qrData.value.shared_secret,
@@ -1765,7 +1765,9 @@ const getPairingIntentUrl = () => {
     session_id: qrData.value.session_id
   });
   
-  return `imagetools://pair?${params.toString()}`;
+  const deepLink = `imagetools://pair/link?${params.toString()}`;
+  console.log('Generated pairing deep link:', deepLink);
+  return deepLink;
 };
 
 // Watch for imageCardSize changes and save to localStorage
