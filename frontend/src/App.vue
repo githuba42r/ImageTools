@@ -841,6 +841,12 @@
       </div>
     </div>
 
+    <!-- Offline Detection Modal -->
+    <OfflineModal 
+      v-if="showOfflineModal"
+      @retry="handleOfflineRetry"
+    />
+
   </div>
 </template>
 
@@ -849,13 +855,21 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useSessionStore } from './stores/sessionStore';
 import { useImageStore } from './stores/imageStore';
 import { storeToRefs } from 'pinia';
-import { imageService } from './services/api';
+import { imageService, sessionService, setOfflineCallback, markOnline } from './services/api';
 import { openRouterService, generateCodeVerifier, generateCodeChallenge } from './services/openRouterService';
 import { chatService } from './services/chatService';
+import { 
+  startHealthCheck, 
+  stopHealthCheck, 
+  setOfflineCallback as setHealthOfflineCallback,
+  setOnlineCallback as setHealthOnlineCallback,
+  checkHealthNow
+} from './services/healthCheckService';
 import UploadArea from './components/UploadArea.vue';
 import ImageCard from './components/ImageCard.vue';
 import ImageViewer from './components/ImageViewer.vue';
 import ImageEditor from './components/ImageEditor.vue';
+import OfflineModal from './components/OfflineModal.vue';
 
 const sessionStore = useSessionStore();
 const imageStore = useImageStore();
@@ -873,6 +887,7 @@ const isClearingAll = ref(false);
 const viewerImage = ref(null);
 const editingImage = ref(null);
 const isSavingEdit = ref(false);
+const showOfflineModal = ref(false);
 
 // Settings menu state
 const showSettingsMenu = ref(false);
@@ -1711,15 +1726,47 @@ const handleKeyboardShortcuts = (event) => {
   }
 };
 
+const handleOfflineRetry = async () => {
+  try {
+    // Use the health check service to check if backend is back online
+    await checkHealthNow();
+    // If successful, modal will be hidden by the health check service's online callback
+  } catch (error) {
+    // Still offline, health check service will continue polling with backoff
+    console.log('Still offline, health check will continue polling...');
+  }
+};
+
 onMounted(() => {
   initializeApp();
   document.addEventListener('click', handleClickOutside);
   document.addEventListener('keydown', handleKeyboardShortcuts);
+  
+  // Setup offline detection from axios interceptor (for immediate API errors)
+  setOfflineCallback(() => {
+    showOfflineModal.value = true;
+  });
+  
+  // Setup health check service for periodic monitoring
+  setHealthOfflineCallback(() => {
+    showOfflineModal.value = true;
+  });
+  
+  setHealthOnlineCallback(() => {
+    showOfflineModal.value = false;
+    markOnline();
+  });
+  
+  // Start periodic health checks (every 30 seconds)
+  startHealthCheck();
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside);
   document.removeEventListener('keydown', handleKeyboardShortcuts);
+  
+  // Stop health check polling when component unmounts
+  stopHealthCheck();
 });
 </script>
 

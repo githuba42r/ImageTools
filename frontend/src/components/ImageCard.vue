@@ -827,6 +827,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .image-card {
+  display: flex;
+  flex-direction: column;
   border: 2px solid #ddd;
   border-radius: 8px;
   padding: 0.75rem;
@@ -1116,6 +1118,7 @@ onBeforeUnmount(() => {
   position: relative;
   overflow: visible;
   z-index: 1;
+  margin-top: auto;
 }
 
 .preset-selector-wrapper {

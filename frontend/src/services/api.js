@@ -7,7 +7,37 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000, // 10 second timeout
 });
+
+// Track if we're currently showing offline modal
+let isOffline = false;
+let offlineCallback = null;
+
+// Set callback for offline detection
+export const setOfflineCallback = (callback) => {
+  offlineCallback = callback;
+};
+
+// Response interceptor to detect offline
+api.interceptors.response.use(
+  response => response,
+  error => {
+    // Check if error is network error (backend offline)
+    if (!error.response && (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED')) {
+      if (!isOffline && offlineCallback) {
+        isOffline = true;
+        offlineCallback();
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Call this when connection is restored
+export const markOnline = () => {
+  isOffline = false;
+};
 
 // Session API
 export const sessionService = {
