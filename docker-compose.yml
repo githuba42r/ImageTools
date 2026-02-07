@@ -30,12 +30,12 @@ services:
       - CORS_ORIGINS=http://localhost:8082,http://127.0.0.1:8082
       
       # OpenRouter OAuth Configuration
-      # CRITICAL: Set these to your actual deployment URL for OAuth to work
+      # CRITICAL: Set this to your actual deployment URL for OAuth to work
+      # The callback URL will automatically be: {OPENROUTER_APP_URL}/oauth/callback
       # Examples:
-      #   Localhost: http://localhost:8082/oauth/callback
-      #   LAN: http://192.168.1.100:8082/oauth/callback (replace with your server IP)
-      #   Domain: https://yourdomain.com/oauth/callback
-      - OPENROUTER_OAUTH_CALLBACK_URL=${OPENROUTER_OAUTH_CALLBACK_URL:-http://localhost:8082/oauth/callback}
+      #   Localhost: http://localhost:8082
+      #   LAN: http://192.168.1.100:8082 (replace with your server IP)
+      #   Domain: https://yourdomain.com
       - OPENROUTER_APP_URL=${OPENROUTER_APP_URL:-http://localhost:8082}
       - OPENROUTER_APP_NAME=ImageTools
       

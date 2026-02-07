@@ -64,7 +64,8 @@ class OpenRouterOAuthService:
         Returns:
             Authorization URL to redirect user to
         """
-        callback_url = settings.OPENROUTER_OAUTH_CALLBACK_URL
+        # Derive callback URL from app URL automatically
+        callback_url = settings.openrouter_oauth_callback_url
         
         params = {
             "callback_url": callback_url,

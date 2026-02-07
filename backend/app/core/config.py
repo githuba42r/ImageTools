@@ -59,12 +59,10 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:8000,http://localhost:8082"
     
     # OpenRouter / AI Configuration
-    # In production, set OPENROUTER_OAUTH_CALLBACK_URL to your domain's OAuth callback URL
-    # Example: https://yourdomain.com/oauth/callback or http://your-ip:8082/oauth/callback
-    OPENROUTER_OAUTH_CALLBACK_URL: str = "http://localhost:5173/oauth/callback"
     OPENROUTER_APP_NAME: str = "ImageTools"
     # In production, set OPENROUTER_APP_URL to match your deployment URL
     # Example: https://yourdomain.com or http://your-ip:8082
+    # The OAuth callback URL will automatically be: {OPENROUTER_APP_URL}/oauth/callback
     OPENROUTER_APP_URL: str = "http://localhost:5173"
     OPENROUTER_API_KEY: str = ""  # Optional fallback API key
     
@@ -75,6 +73,11 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+    
+    @property
+    def openrouter_oauth_callback_url(self) -> str:
+        """Derive OAuth callback URL from app URL"""
+        return f"{self.OPENROUTER_APP_URL.rstrip('/')}/oauth/callback"
     
     class Config:
         env_file = ".env"

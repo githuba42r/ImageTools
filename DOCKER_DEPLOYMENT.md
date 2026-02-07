@@ -93,30 +93,31 @@ The following environment variables can be configured in `docker-compose.yml` or
 
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
-| `OPENROUTER_OAUTH_CALLBACK_URL` | `http://localhost:5173/oauth/callback` | **YES** | OAuth callback URL - MUST match your deployment URL |
-| `OPENROUTER_APP_URL` | `http://localhost:5173` | **YES** | Your application's public URL |
+| `OPENROUTER_APP_URL` | `http://localhost:5173` | **YES** | Your application's public URL - callback URL is auto-derived |
 | `OPENROUTER_APP_NAME` | `ImageTools` | No | Application name shown in OpenRouter |
 | `OPENROUTER_API_KEY` | (empty) | No | Optional fallback API key (not for user auth) |
 
-**How to set these for your deployment:**
+**How to set this for your deployment:**
+
+The OAuth callback URL is automatically derived as `{OPENROUTER_APP_URL}/oauth/callback`, so you only need to set one variable:
 
 1. **For localhost access (same machine)**:
    ```bash
-   OPENROUTER_OAUTH_CALLBACK_URL=http://localhost:8082/oauth/callback
    OPENROUTER_APP_URL=http://localhost:8082
+   # Callback URL will be: http://localhost:8082/oauth/callback
    ```
 
 2. **For LAN access (other devices on network)**:
    ```bash
    # Replace 192.168.1.100 with your server's IP address
-   OPENROUTER_OAUTH_CALLBACK_URL=http://192.168.1.100:8082/oauth/callback
    OPENROUTER_APP_URL=http://192.168.1.100:8082
+   # Callback URL will be: http://192.168.1.100:8082/oauth/callback
    ```
 
 3. **For production domain**:
    ```bash
-   OPENROUTER_OAUTH_CALLBACK_URL=https://yourdomain.com/oauth/callback
    OPENROUTER_APP_URL=https://yourdomain.com
+   # Callback URL will be: https://yourdomain.com/oauth/callback
    ```
 
 See the [OpenRouter OAuth Setup](#openrouter-oauth-setup) section below for detailed instructions.
@@ -281,8 +282,8 @@ server {
 
 **IMPORTANT**: When using a reverse proxy, remember to update your environment variables:
 ```bash
-OPENROUTER_OAUTH_CALLBACK_URL=https://imagetools.example.com/oauth/callback
 OPENROUTER_APP_URL=https://imagetools.example.com
+# Callback URL will automatically be: https://imagetools.example.com/oauth/callback
 CORS_ORIGINS=https://imagetools.example.com
 ```
 
@@ -319,8 +320,9 @@ Edit your `.env` file or `docker-compose.yml`:
 
 ```bash
 # Example for LAN deployment at 192.168.1.100
-OPENROUTER_OAUTH_CALLBACK_URL=http://192.168.1.100:8082/oauth/callback
 OPENROUTER_APP_URL=http://192.168.1.100:8082
+# OAuth callback URL will automatically be: http://192.168.1.100:8082/oauth/callback
+
 CORS_ORIGINS=http://192.168.1.100:8082,http://localhost:8082
 
 # Generate a secure session secret
@@ -332,7 +334,7 @@ Or use the provided template:
 # Copy production environment template
 cp .env.production.example .env
 
-# Edit the file and update the URLs
+# Edit the file and update the URL
 nano .env
 ```
 
@@ -364,24 +366,23 @@ docker exec imagetools printenv | grep OPENROUTER
 
 #### Error: "Failed to connect to localhost:8082"
 
-**Cause**: The environment variables are still set to default localhost URLs, but you're accessing from a different device.
+**Cause**: The environment variable is still set to default localhost URL, but you're accessing from a different device.
 
 **Fix**:
-1. Update `OPENROUTER_OAUTH_CALLBACK_URL` to match how you access the app
-2. Update `OPENROUTER_APP_URL` to match the same URL
-3. Rebuild: `docker-compose up --build -d`
+1. Update `OPENROUTER_APP_URL` to match how you access the app
+2. Rebuild: `docker-compose up --build -d`
 
 #### Error: "Redirect URI mismatch"
 
 **Cause**: The callback URL doesn't match what OpenRouter expects.
 
-**Fix**: The callback URL must be `[YOUR_APP_URL]/oauth/callback` exactly. For example:
-- If accessing at `http://192.168.1.100:8082`, callback should be `http://192.168.1.100:8082/oauth/callback`
-- If accessing at `https://yourdomain.com`, callback should be `https://yourdomain.com/oauth/callback`
+**Fix**: The callback URL is automatically `{OPENROUTER_APP_URL}/oauth/callback`. Ensure your `OPENROUTER_APP_URL` matches exactly how you access the app:
+- If accessing at `http://192.168.1.100:8082`, set `OPENROUTER_APP_URL=http://192.168.1.100:8082`
+- If accessing at `https://yourdomain.com`, set `OPENROUTER_APP_URL=https://yourdomain.com`
 
 #### OAuth redirects to localhost:5173 instead of my deployment URL
 
-**Cause**: Environment variables weren't properly set or container wasn't rebuilt.
+**Cause**: Environment variable wasn't properly set or container wasn't rebuilt.
 
 **Fix**:
 ```bash
@@ -408,10 +409,10 @@ CORS_ORIGINS=http://localhost:8082,http://192.168.1.100:8082,https://yourdomain.
 
 1. **User initiates**: Clicks "Connect OpenRouter" in the app
 2. **Frontend generates**: PKCE code verifier and challenge
-3. **Backend provides**: OAuth authorization URL with callback
+3. **Backend provides**: OAuth authorization URL with callback (`{OPENROUTER_APP_URL}/oauth/callback`)
 4. **User redirects**: To OpenRouter's authorization page
 5. **User authorizes**: Grants ImageTools access to their account
-6. **OpenRouter redirects**: Back to `OPENROUTER_OAUTH_CALLBACK_URL`
+6. **OpenRouter redirects**: Back to the callback URL
 7. **Frontend exchanges**: Authorization code for API key via backend
 8. **Backend stores**: Encrypted API key in database (never exposed to frontend)
 9. **Future requests**: Backend retrieves and uses stored key automatically
