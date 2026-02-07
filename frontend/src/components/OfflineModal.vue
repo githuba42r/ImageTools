@@ -35,7 +35,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+
+const props = defineProps({
+  visible: {
+    type: Boolean,
+    default: true
+  }
+});
 
 const emit = defineEmits(['retry']);
 
@@ -57,12 +64,22 @@ const circleStyle = computed(() => {
 });
 
 const startCountdown = () => {
+  // Clear any existing countdown
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+  }
+  
+  // Reset to full countdown
+  remainingSeconds.value = totalSeconds;
+  
   countdownInterval = setInterval(() => {
     remainingSeconds.value--;
     
     if (remainingSeconds.value <= 0) {
       clearInterval(countdownInterval);
+      countdownInterval = null;
       emit('retry');
+      // The retry will check backend; if still offline, countdown will restart
     }
   }, 1000);
 };
@@ -70,17 +87,34 @@ const startCountdown = () => {
 const retryNow = () => {
   if (countdownInterval) {
     clearInterval(countdownInterval);
+    countdownInterval = null;
   }
   emit('retry');
+  // The retry will check backend; if still offline, countdown will restart
 };
 
+// Watch for visibility changes to restart countdown
+watch(() => props.visible, (newVisible) => {
+  if (newVisible) {
+    startCountdown();
+  } else {
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+  }
+}, { immediate: true });
+
 onMounted(() => {
-  startCountdown();
+  if (props.visible) {
+    startCountdown();
+  }
 });
 
 onBeforeUnmount(() => {
   if (countdownInterval) {
     clearInterval(countdownInterval);
+    countdownInterval = null;
   }
 });
 </script>

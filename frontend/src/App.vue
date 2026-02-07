@@ -844,6 +844,7 @@
     <!-- Offline Detection Modal -->
     <OfflineModal 
       v-if="showOfflineModal"
+      :visible="showOfflineModal"
       @retry="handleOfflineRetry"
     />
 
@@ -1732,8 +1733,10 @@ const handleOfflineRetry = async () => {
     await checkHealthNow();
     // If successful, modal will be hidden by the health check service's online callback
   } catch (error) {
-    // Still offline, health check service will continue polling with backoff
+    // Still offline - keep modal visible and it will restart countdown automatically
     console.log('Still offline, health check will continue polling...');
+    // Ensure modal stays visible
+    showOfflineModal.value = true;
   }
 };
 
