@@ -9,13 +9,37 @@ services:
     volumes:
       - imagetools-storage:/app/storage
     environment:
+      # Server Configuration
       - DEBUG=False
       - LOG_LEVEL=INFO
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8081
+      
+      # Session & Upload Limits
       - SESSION_EXPIRY_DAYS=7
       - MAX_IMAGES_PER_SESSION=5
       - MAX_UPLOAD_SIZE_MB=20
+      
+      # Security - IMPORTANT: Change this in production!
+      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY:-change-this-secret-key-in-production-min-32-chars}
+      
+      # CORS - Add your deployment URL here
+      # For localhost: http://localhost:8082
+      # For LAN: http://192.168.1.100:8082 (replace with your server IP)
+      # For domain: https://yourdomain.com
+      - CORS_ORIGINS=http://localhost:8082,http://127.0.0.1:8082
+      
+      # OpenRouter OAuth Configuration
+      # CRITICAL: Set these to your actual deployment URL for OAuth to work
+      # Examples:
+      #   Localhost: http://localhost:8082/oauth/callback
+      #   LAN: http://192.168.1.100:8082/oauth/callback (replace with your server IP)
+      #   Domain: https://yourdomain.com/oauth/callback
+      - OPENROUTER_OAUTH_CALLBACK_URL=${OPENROUTER_OAUTH_CALLBACK_URL:-http://localhost:8082/oauth/callback}
+      - OPENROUTER_APP_URL=${OPENROUTER_APP_URL:-http://localhost:8082}
+      - OPENROUTER_APP_NAME=ImageTools
+      
+      # Optional: Fallback API key (leave empty to require user enrollment)
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
     restart: unless-stopped
     healthcheck:

@@ -73,6 +73,8 @@ docker rm imagetools
 
 The following environment variables can be configured in `docker-compose.yml` or passed via `-e` flags:
 
+#### Server & Application
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DEBUG` | `False` | Enable debug mode |
@@ -82,7 +84,42 @@ The following environment variables can be configured in `docker-compose.yml` or
 | `SESSION_EXPIRY_DAYS` | `7` | Session expiration time |
 | `MAX_IMAGES_PER_SESSION` | `5` | Maximum images per session |
 | `MAX_UPLOAD_SIZE_MB` | `20` | Maximum upload file size |
-| `OPENROUTER_API_KEY` | (empty) | OpenRouter API key for AI features |
+| `SESSION_SECRET_KEY` | (auto) | Secret key for encryption (min 32 chars) |
+| `CORS_ORIGINS` | (localhost) | Comma-separated list of allowed origins |
+
+#### OpenRouter OAuth Configuration
+
+**CRITICAL**: These settings are **required** for AI features (chat, image editing) to work in production.
+
+| Variable | Default | Required | Description |
+|----------|---------|----------|-------------|
+| `OPENROUTER_OAUTH_CALLBACK_URL` | `http://localhost:5173/oauth/callback` | **YES** | OAuth callback URL - MUST match your deployment URL |
+| `OPENROUTER_APP_URL` | `http://localhost:5173` | **YES** | Your application's public URL |
+| `OPENROUTER_APP_NAME` | `ImageTools` | No | Application name shown in OpenRouter |
+| `OPENROUTER_API_KEY` | (empty) | No | Optional fallback API key (not for user auth) |
+
+**How to set these for your deployment:**
+
+1. **For localhost access (same machine)**:
+   ```bash
+   OPENROUTER_OAUTH_CALLBACK_URL=http://localhost:8082/oauth/callback
+   OPENROUTER_APP_URL=http://localhost:8082
+   ```
+
+2. **For LAN access (other devices on network)**:
+   ```bash
+   # Replace 192.168.1.100 with your server's IP address
+   OPENROUTER_OAUTH_CALLBACK_URL=http://192.168.1.100:8082/oauth/callback
+   OPENROUTER_APP_URL=http://192.168.1.100:8082
+   ```
+
+3. **For production domain**:
+   ```bash
+   OPENROUTER_OAUTH_CALLBACK_URL=https://yourdomain.com/oauth/callback
+   OPENROUTER_APP_URL=https://yourdomain.com
+   ```
+
+See the [OpenRouter OAuth Setup](#openrouter-oauth-setup) section below for detailed instructions.
 
 ### Port Mapping
 
@@ -242,6 +279,153 @@ server {
 }
 ```
 
+**IMPORTANT**: When using a reverse proxy, remember to update your environment variables:
+```bash
+OPENROUTER_OAUTH_CALLBACK_URL=https://imagetools.example.com/oauth/callback
+OPENROUTER_APP_URL=https://imagetools.example.com
+CORS_ORIGINS=https://imagetools.example.com
+```
+
+## OpenRouter OAuth Setup
+
+ImageTools uses **OpenRouter OAuth2 PKCE flow** for secure AI feature authentication. Users connect their own OpenRouter accounts directly through the application.
+
+### Why OAuth Configuration Matters
+
+When running in Docker/production, the default development URLs (`http://localhost:5173`) won't work. OpenRouter needs to redirect users back to your actual deployment URL after authorization.
+
+### Step-by-Step Setup
+
+#### 1. Find Your Deployment URL
+
+Determine how users will access your deployment:
+
+- **Same machine**: `http://localhost:8082`
+- **LAN access**: `http://192.168.1.100:8082` (replace with your server's IP)
+- **Public domain**: `https://yourdomain.com`
+
+To find your LAN IP:
+```bash
+# Linux/Mac
+ip addr show | grep "inet " | grep -v 127.0.0.1
+
+# Windows
+ipconfig | findstr "IPv4"
+```
+
+#### 2. Update Environment Variables
+
+Edit your `.env` file or `docker-compose.yml`:
+
+```bash
+# Example for LAN deployment at 192.168.1.100
+OPENROUTER_OAUTH_CALLBACK_URL=http://192.168.1.100:8082/oauth/callback
+OPENROUTER_APP_URL=http://192.168.1.100:8082
+CORS_ORIGINS=http://192.168.1.100:8082,http://localhost:8082
+
+# Generate a secure session secret
+SESSION_SECRET_KEY=$(openssl rand -base64 32)
+```
+
+Or use the provided template:
+```bash
+# Copy production environment template
+cp .env.production.example .env
+
+# Edit the file and update the URLs
+nano .env
+```
+
+#### 3. Rebuild and Restart
+
+```bash
+# Stop existing container
+docker-compose down
+
+# Rebuild with new configuration
+docker-compose up --build -d
+
+# Verify environment variables were applied
+docker exec imagetools printenv | grep OPENROUTER
+```
+
+#### 4. Test OAuth Flow
+
+1. Access your deployment at `http://your-url:8082`
+2. Upload an image
+3. Click the chat/AI button
+4. Click "Connect OpenRouter"
+5. You should be redirected to OpenRouter's authorization page
+6. After authorization, you should be redirected back to your app
+
+**If this fails**, check the troubleshooting section below.
+
+### Common OAuth Issues
+
+#### Error: "Failed to connect to localhost:8082"
+
+**Cause**: The environment variables are still set to default localhost URLs, but you're accessing from a different device.
+
+**Fix**:
+1. Update `OPENROUTER_OAUTH_CALLBACK_URL` to match how you access the app
+2. Update `OPENROUTER_APP_URL` to match the same URL
+3. Rebuild: `docker-compose up --build -d`
+
+#### Error: "Redirect URI mismatch"
+
+**Cause**: The callback URL doesn't match what OpenRouter expects.
+
+**Fix**: The callback URL must be `[YOUR_APP_URL]/oauth/callback` exactly. For example:
+- If accessing at `http://192.168.1.100:8082`, callback should be `http://192.168.1.100:8082/oauth/callback`
+- If accessing at `https://yourdomain.com`, callback should be `https://yourdomain.com/oauth/callback`
+
+#### OAuth redirects to localhost:5173 instead of my deployment URL
+
+**Cause**: Environment variables weren't properly set or container wasn't rebuilt.
+
+**Fix**:
+```bash
+# Check current environment
+docker exec imagetools printenv | grep OPENROUTER
+
+# Should show your deployment URL, not localhost:5173
+# If it shows localhost:5173, rebuild:
+docker-compose down
+docker-compose up --build -d
+```
+
+#### Frontend can't reach backend API
+
+**Cause**: CORS origins don't include your deployment URL.
+
+**Fix**:
+```bash
+# Add your deployment URL to CORS_ORIGINS
+CORS_ORIGINS=http://localhost:8082,http://192.168.1.100:8082,https://yourdomain.com
+```
+
+### How OAuth Works (Technical Details)
+
+1. **User initiates**: Clicks "Connect OpenRouter" in the app
+2. **Frontend generates**: PKCE code verifier and challenge
+3. **Backend provides**: OAuth authorization URL with callback
+4. **User redirects**: To OpenRouter's authorization page
+5. **User authorizes**: Grants ImageTools access to their account
+6. **OpenRouter redirects**: Back to `OPENROUTER_OAUTH_CALLBACK_URL`
+7. **Frontend exchanges**: Authorization code for API key via backend
+8. **Backend stores**: Encrypted API key in database (never exposed to frontend)
+9. **Future requests**: Backend retrieves and uses stored key automatically
+
+### Security Notes
+
+- API keys are **never** sent to the frontend
+- Keys are encrypted at rest using `SESSION_SECRET_KEY`
+- Keys are tied to user sessions (browser-based)
+- PKCE flow prevents authorization code interception
+- Set a **strong** `SESSION_SECRET_KEY` in production (min 32 chars)
+
+
+
 ## Troubleshooting
 
 ### Container won't start
@@ -298,23 +482,27 @@ docker exec imagetools python -c "from PIL import Image; from rembg import remov
 
 If this fails, the image may need rebuilding with correct dependencies.
 
-### API Key not working
+### OpenRouter Connection Issues
 
-**Verify environment variable**:
+**Verify OAuth environment variables**:
 ```bash
 docker exec imagetools printenv | grep OPENROUTER
 ```
 
-**Set it properly**:
-```bash
-# In docker-compose.yml
-environment:
-  - OPENROUTER_API_KEY=sk-or-v1-xxxxx
+Should show your deployment URL, not `localhost:5173`.
 
-# Or create .env file
-echo "OPENROUTER_API_KEY=sk-or-v1-xxxxx" > .env
-docker-compose up -d
+**Common fixes**:
+```bash
+# Update environment variables in docker-compose.yml
+environment:
+  - OPENROUTER_OAUTH_CALLBACK_URL=http://your-ip:8082/oauth/callback
+  - OPENROUTER_APP_URL=http://your-ip:8082
+
+# Rebuild container
+docker-compose down && docker-compose up --build -d
 ```
+
+See [OpenRouter OAuth Setup](#openrouter-oauth-setup) for detailed troubleshooting.
 
 ## Performance Optimization
 

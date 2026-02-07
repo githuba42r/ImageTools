@@ -6,7 +6,15 @@
 
 class ChatService {
   constructor() {
-    this.baseURL = 'http://localhost:8081/api/v1/chat';
+    // Dynamically determine API URL based on environment
+    // In production (Docker), frontend and backend are served from same origin
+    // In development, backend runs on port 8081
+    const isDevelopment = window.location.hostname === 'localhost' && window.location.port === '5173';
+    const apiBase = isDevelopment 
+      ? 'http://localhost:8081'
+      : window.location.origin;
+    
+    this.baseURL = `${apiBase}/api/v1/chat`;
     this.sessionId = null;
   }
 

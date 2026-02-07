@@ -56,11 +56,15 @@ class Settings(BaseSettings):
     
     # CORS
     CORS_ENABLED: bool = True
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:8000"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://localhost:8000,http://localhost:8082"
     
     # OpenRouter / AI Configuration
+    # In production, set OPENROUTER_OAUTH_CALLBACK_URL to your domain's OAuth callback URL
+    # Example: https://yourdomain.com/oauth/callback or http://your-ip:8082/oauth/callback
     OPENROUTER_OAUTH_CALLBACK_URL: str = "http://localhost:5173/oauth/callback"
     OPENROUTER_APP_NAME: str = "ImageTools"
+    # In production, set OPENROUTER_APP_URL to match your deployment URL
+    # Example: https://yourdomain.com or http://your-ip:8082
     OPENROUTER_APP_URL: str = "http://localhost:5173"
     OPENROUTER_API_KEY: str = ""  # Optional fallback API key
     
