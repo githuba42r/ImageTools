@@ -584,6 +584,13 @@
                 Closing in {{ qrCodeSuccessCountdown }} seconds...
               </p>
             </div>
+            
+            <!-- Close button -->
+            <div style="margin-top: 30px;">
+              <button class="btn-modal btn-primary" @click="closeMobileQRAndAbout">
+                Close
+              </button>
+            </div>
           </div>
           
           <!-- Normal State: Show QR Code -->
@@ -615,6 +622,12 @@
               <p style="margin-top: 8px; font-size: 1.1em; color: #ff6b35; font-weight: 600; text-align: center;">
                 ⏱️ Expires in {{ qrCodeTimeRemaining }} • Single-use only
               </p>
+              
+              <div style="display: flex; justify-content: center; margin-top: 15px;">
+                <button @click="regenerateQRCode" class="btn-modal btn-secondary">
+                  🔄 Regenerate QR Code
+                </button>
+              </div>
               
               <div class="info-box info-box-highlight" style="margin-top: 20px;">
                 <p><strong>How to use:</strong></p>
@@ -1528,6 +1541,20 @@ const openMobileQRModal = async () => {
   showMobileQRModal.value = true;
   // Generate QR code when opening Mobile QR modal
   await generateQRCode();
+};
+
+const closeMobileQRAndAbout = () => {
+  // Clear countdown interval
+  if (qrCodeSuccessInterval) {
+    clearInterval(qrCodeSuccessInterval);
+    qrCodeSuccessInterval = null;
+  }
+  
+  // Close both modals
+  showMobileQRModal.value = false;
+  showAboutModal.value = false;
+  
+  console.log('[QR Pairing] Manually closed both modals');
 };
 
 const openImageCardSettings = () => {
