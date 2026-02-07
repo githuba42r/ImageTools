@@ -2,6 +2,7 @@
 .gradle/
 build/
 local.properties
+gradle.properties
 
 # Android Studio
 .idea/
@@ -12,6 +13,12 @@ local.properties
 *.apk
 *.ap_
 *.aab
+
+# Backup files
+*.bak
+
+# Source folder (using app/src instead)
+src/
 
 # Gradle wrapper (keep wrapper jar)
 !gradle-wrapper.jar
