@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "ImageTools Screenshot Capture",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Capture screenshots (full page, visible area, or selection) and send them to ImageTools for editing and compression.",
   "permissions": [
     "activeTab",
