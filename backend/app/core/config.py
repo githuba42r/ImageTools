@@ -12,7 +12,10 @@ class Settings(BaseSettings):
     
     # Mobile/External Access
     # URL that mobile devices and external clients will use to connect to this backend
-    # Example: http://10.0.1.97:8000 or https://yourdomain.com
+    # When deployed behind a reverse proxy (nginx, Traefik, etc.), the system will 
+    # automatically detect the public URL from X-Forwarded-Host and X-Forwarded-Proto headers.
+    # This setting is used as a fallback when headers are not available.
+    # Examples: http://10.0.1.97:8000 or https://yourdomain.com
     INSTANCE_URL: str = "http://localhost:8000"
     
     # Session
@@ -70,6 +73,21 @@ class Settings(BaseSettings):
     # The OAuth callback URL will automatically be: {OPENROUTER_APP_URL}/oauth/callback
     OPENROUTER_APP_URL: str = "http://localhost:5173"
     OPENROUTER_API_KEY: str = ""  # Optional fallback API key
+    
+    # Internal Authentication (Defense in Depth)
+    # Enable this in production Hardened (B) deployments for defense-in-depth security
+    REQUIRE_INTERNAL_AUTH: bool = False
+    # Secret value for X-Internal-Auth header validation
+    # Generate with: openssl rand -hex 32
+    # Must match the secret configured in your reverse proxy (Traefik/nginx)
+    INTERNAL_AUTH_SECRET: str = ""
+    
+    # Authelia Integration
+    # When deployed behind Authelia, user information is automatically extracted from:
+    # - Remote-User header: Username/email from Authelia authentication
+    # - Remote-Name header: Display name from Authelia user profile
+    # These headers are automatically captured by the middleware and stored in sessions.
+    # No additional configuration required - just ensure your reverse proxy forwards these headers.
     
     @property
     def allowed_extensions_list(self) -> List[str]:

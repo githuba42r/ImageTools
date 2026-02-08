@@ -40,13 +40,22 @@ mkdir -p storage/temp
 echo "Storage directories ready."
 echo ""
 
+# Load environment variables from .env.development if it exists
+if [ -f ".env.development" ]; then
+    echo "Loading environment from .env.development..."
+    export $(grep -v '^#' .env.development | xargs)
+fi
+
+# Use SERVER_PORT from environment or default to 8081
+BACKEND_PORT=${SERVER_PORT:-8081}
+
 # Run the backend
 echo "=========================================="
-echo "Backend starting on http://localhost:8081"
-echo "API docs: http://localhost:8081/docs"
+echo "Backend starting on http://localhost:$BACKEND_PORT"
+echo "API docs: http://localhost:$BACKEND_PORT/docs"
 echo "=========================================="
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload
+python -m uvicorn app.main:app --host 0.0.0.0 --port $BACKEND_PORT --reload

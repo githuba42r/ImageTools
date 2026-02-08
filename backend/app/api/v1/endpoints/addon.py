@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.websocket_manager import manager as ws_manager
 from app.core.config import settings
+from app.core.url_utils import get_instance_url
 from app.services.addon_service import AddonService
 from app.services.image_service import ImageService
 from app.schemas.schemas import (
@@ -47,8 +48,8 @@ async def create_authorization(
             addon_identifier=auth_data.addon_identifier
         )
         
-        # Build registration URL using configured instance URL
-        instance_url = settings.INSTANCE_URL
+        # Build registration URL using auto-detected or configured instance URL
+        instance_url = get_instance_url(request)
         registration_url = AddonService.build_registration_url(authorization, instance_url)
         
         return AddonAuthorizationResponse(
@@ -69,7 +70,8 @@ async def create_authorization(
 
 @router.post("/token", response_model=AddonTokenExchangeResponse)
 async def exchange_token(
-    request: AddonTokenExchangeRequest,
+    token_request: AddonTokenExchangeRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -80,17 +82,17 @@ async def exchange_token(
     """
     authorization = await AddonService.exchange_code_for_tokens(
         db=db,
-        authorization_code=request.authorization_code,
-        browser_name=request.browser_name,
-        browser_version=request.browser_version,
-        os_name=request.os_name,
-        user_agent=request.user_agent
+        authorization_code=token_request.authorization_code,
+        browser_name=token_request.browser_name,
+        browser_version=token_request.browser_version,
+        os_name=token_request.os_name,
+        user_agent=token_request.user_agent
     )
     if not authorization:
         raise HTTPException(status_code=401, detail="Invalid or expired authorization code")
     
-    # Get instance URL for response
-    instance_url = settings.INSTANCE_URL
+    # Get instance URL from request headers or fallback to config
+    instance_url = get_instance_url(request)
     
     return AddonTokenExchangeResponse(
         access_token=authorization.access_token,
@@ -156,6 +158,7 @@ async def validate_token(
 
 @router.post("/upload", response_model=AddonScreenshotUploadResponse)
 async def upload_screenshot(
+    request: Request,
     file: UploadFile = File(...),
     authorization: str = Header(..., description="Bearer token"),
     db: Session = Depends(get_db)
@@ -203,8 +206,8 @@ async def upload_screenshot(
             }
         )
         
-        # Get instance URL for building URLs
-        instance_url = settings.INSTANCE_URL
+        # Get instance URL from request headers or fallback to config
+        instance_url = get_instance_url(request)
         base_url = f"{instance_url}/api/v1"
         
         return AddonScreenshotUploadResponse(

@@ -55,12 +55,22 @@ pip install -q -r requirements.txt
 
 # Create storage directories
 mkdir -p storage/temp
+
+# Load environment variables from .env.development if it exists
+if [ -f ".env.development" ]; then
+    echo "Loading environment from .env.development..."
+    export $(grep -v '^#' .env.development | xargs)
+fi
+
+# Use SERVER_PORT from environment or default to 8081
+BACKEND_PORT=${SERVER_PORT:-8081}
+
 echo "Backend setup complete."
 echo ""
 
 # Start backend in background
-echo "Starting backend server on http://localhost:8081..."
-./venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload > ../backend.log 2>&1 &
+echo "Starting backend server on http://localhost:$BACKEND_PORT..."
+./venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port $BACKEND_PORT --reload > ../backend.log 2>&1 &
 BACKEND_PID=$!
 
 cd ..
@@ -105,13 +115,13 @@ echo "Image Tools is running in development mode!"
 echo "=========================================="
 echo ""
 echo "Local Access:"
-echo "  Backend:  http://localhost:8081"
-echo "  API Docs: http://localhost:8081/docs"
+echo "  Backend:  http://localhost:$BACKEND_PORT"
+echo "  API Docs: http://localhost:$BACKEND_PORT/docs"
 echo "  Frontend: http://localhost:5173"
 echo ""
 if [ -n "$LOCAL_IP" ]; then
 echo "Network Access (for mobile devices):"
-echo "  Backend:  http://$LOCAL_IP:8081"
+echo "  Backend:  http://$LOCAL_IP:$BACKEND_PORT"
 echo "  Frontend: http://$LOCAL_IP:5173"
 echo ""
 fi

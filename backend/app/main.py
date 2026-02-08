@@ -7,10 +7,12 @@ from pathlib import Path
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.websocket_manager import manager as ws_manager
+from app.middleware import InternalAuthMiddleware
 from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon
 import logging
 import os
 import asyncio
+import json
 
 # Configure logging
 logging.basicConfig(
@@ -18,6 +20,19 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Load version information from version.json
+def load_version_info():
+    """Load version information from version.json file."""
+    try:
+        version_file = Path(__file__).parent.parent.parent / "version.json"
+        with open(version_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not load version.json: {e}")
+        return {"version": "1.2.0", "buildDate": "unknown", "versionCode": 3}
+
+VERSION_INFO = load_version_info()
 
 
 @asynccontextmanager
@@ -38,12 +53,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Image Tools API",
     description="Backend API for image manipulation and compression",
-    version="1.0.0",
+    version=VERSION_INFO["version"],
     docs_url=f"{settings.API_PREFIX}/docs",
     redoc_url=f"{settings.API_PREFIX}/redoc",
     openapi_url=f"{settings.API_PREFIX}/openapi.json",
     lifespan=lifespan
 )
+
+# Add Internal Authentication Middleware (must be added before CORS)
+# This provides defense-in-depth security for Hardened (B) deployments
+app.add_middleware(InternalAuthMiddleware)
 
 # Configure CORS
 if settings.CORS_ENABLED:
@@ -76,6 +95,22 @@ frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+@app.get("/version")
+async def get_version():
+    """
+    Get version information.
+    
+    This endpoint is unprotected and returns the current version,
+    build date, and version code of the backend service.
+    """
+    return {
+        "version": VERSION_INFO["version"],
+        "buildDate": VERSION_INFO["buildDate"],
+        "versionCode": VERSION_INFO.get("versionCode", 0),
+        "service": "ImageTools Backend API"
+    }
 
 
 @app.websocket("/ws")

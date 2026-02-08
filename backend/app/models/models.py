@@ -7,7 +7,9 @@ class Session(Base):
     __tablename__ = "sessions"
     
     id = Column(String, primary_key=True, index=True)
-    user_id = Column(String, nullable=True, index=True)
+    user_id = Column(String, nullable=True, index=True)  # Legacy field, kept for compatibility
+    username = Column(String, nullable=True, index=True)  # Remote-User from Authelia
+    display_name = Column(String, nullable=True)  # Remote-Name from Authelia
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)
     last_activity = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

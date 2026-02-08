@@ -4,13 +4,17 @@ from typing import Optional, List, Dict, Any
 
 
 class SessionCreate(BaseModel):
-    user_id: Optional[str] = None
+    user_id: Optional[str] = None  # Legacy field
+    username: Optional[str] = None  # Remote-User from Authelia
+    display_name: Optional[str] = None  # Remote-Name from Authelia
     custom_session_id: Optional[str] = None
 
 
 class SessionResponse(BaseModel):
     id: str
     user_id: Optional[str]
+    username: Optional[str]
+    display_name: Optional[str]
     created_at: datetime
     expires_at: datetime
     

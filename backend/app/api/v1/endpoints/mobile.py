@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.websocket_manager import manager as ws_manager
 from app.core.config import settings
+from app.core.url_utils import get_instance_url
 from app.services.mobile_service import MobileService
 from app.services.image_service import ImageService
 from app.schemas.schemas import (
@@ -93,9 +94,8 @@ async def get_qr_code_data(
     if pairing.expires_at and pairing.expires_at < datetime.utcnow():
         raise HTTPException(status_code=410, detail="Pairing expired")
     
-    # Use the configured INSTANCE_URL for mobile devices
-    # This must be set to an externally accessible URL (e.g., http://10.0.1.97:8000)
-    instance_url = settings.INSTANCE_URL
+    # Auto-detect instance URL from reverse proxy headers or use configured INSTANCE_URL
+    instance_url = get_instance_url(request)
     
     return QRCodeDataResponse(
         instance_url=instance_url,
@@ -150,6 +150,7 @@ async def revoke_all_pairings(
 
 @router.post("/upload", response_model=MobileImageUploadResponse)
 async def upload_image_from_mobile(
+    request: Request,
     long_term_secret: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
@@ -192,9 +193,8 @@ async def upload_image_from_mobile(
             }
         )
         
-        # Get instance URL for building URLs
-        # Use configured INSTANCE_URL from settings
-        instance_url = settings.INSTANCE_URL
+        # Get instance URL from request headers or fallback to config
+        instance_url = get_instance_url(request)
         base_url = f"{instance_url}/api/v1"
         
         return MobileImageUploadResponse(

@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  imagetools:
+    image: yourusername/imagetools:latest
+    # Or build locally:
+    # build: ../../..
+    container_name: imagetools-app
+    environment:
+      - DEBUG=False
+      - LOG_LEVEL=INFO
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8081
+      - SESSION_EXPIRY_DAYS=7
+      - MAX_IMAGES_PER_SESSION=5
+      - MAX_UPLOAD_SIZE_MB=20
+      
+      # Internal Authentication (Hardened) - REQUIRED
+      - REQUIRE_INTERNAL_AUTH=true
+      - INTERNAL_AUTH_SECRET=${INTERNAL_AUTH_SECRET}
+      
+      # Optional: OpenRouter OAuth
+      - OPENROUTER_CLIENT_ID=${OPENROUTER_CLIENT_ID:-}
+      - OPENROUTER_CLIENT_SECRET=${OPENROUTER_CLIENT_SECRET:-}
+      - OAUTH_REDIRECT_URL=https://imagetools.yourdomain.com/auth/callback  # ← Replace domain
+    volumes:
+      - imagetools-storage:/app/storage
+    networks:
+      - traefik-network  # ← Replace with your Traefik network name
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8081/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"  # ← Replace with your Traefik network name
+      
+      # Service definition
+      - "traefik.http.services.imagetools-svc.loadbalancer.server.port=8081"
+      
+      # Basic Auth middleware definition
+      - "traefik.http.middlewares.imagetools-basicauth.basicauth.users=${BASIC_AUTH_USERS}"
+      
+      # Internal Auth middleware definition
+      - "traefik.http.middlewares.imagetools-internal-auth.headers.customrequestheaders.X-Internal-Auth=${INTERNAL_AUTH_SECRET}"
+      
+      # High priority: Mobile API router - bypasses all auth
+      - "traefik.http.routers.imagetools-api-mobile.rule=Host(`imagetools.yourdomain.com`) && PathPrefix(`/api/v1/mobile`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-api-mobile.entrypoints=https"
+      - "traefik.http.routers.imagetools-api-mobile.tls=true"
+      - "traefik.http.routers.imagetools-api-mobile.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-api-mobile.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-api-mobile.priority=100"
+      # No middleware = bypasses all auth
+      
+      # High priority: Addon API router - bypasses all auth
+      - "traefik.http.routers.imagetools-api-addon.rule=Host(`imagetools.yourdomain.com`) && PathPrefix(`/api/v1/addon`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-api-addon.entrypoints=https"
+      - "traefik.http.routers.imagetools-api-addon.tls=true"
+      - "traefik.http.routers.imagetools-api-addon.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-api-addon.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-api-addon.priority=100"
+      # No middleware = bypasses all auth
+      
+      # High priority: Health check - bypasses all auth
+      - "traefik.http.routers.imagetools-health.rule=Host(`imagetools.yourdomain.com`) && Path(`/health`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-health.entrypoints=https"
+      - "traefik.http.routers.imagetools-health.tls=true"
+      - "traefik.http.routers.imagetools-health.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-health.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-health.priority=100"
+      # No middleware = bypasses all auth
+      
+      # Default priority: Web router - requires Basic Auth + Internal Auth
+      - "traefik.http.routers.imagetools-web.rule=Host(`imagetools.yourdomain.com`)"  # ← Replace with your domain
+      - "traefik.http.routers.imagetools-web.entrypoints=https"
+      - "traefik.http.routers.imagetools-web.tls=true"
+      - "traefik.http.routers.imagetools-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-web.middlewares=imagetools-basicauth@docker,imagetools-internal-auth@docker"
+      - "traefik.http.routers.imagetools-web.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-web.priority=1"
+
+networks:
+  traefik-network:  # ← Replace with your Traefik network name
+    external: true
+
+volumes:
+  imagetools-storage:
+    driver: local

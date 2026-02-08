@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  imagetools:
+    image: yourusername/imagetools:latest
+    # Or build locally:
+    # build: ../../..
+    container_name: imagetools-app
+    environment:
+      - DEBUG=False
+      - LOG_LEVEL=INFO
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8081
+      - SESSION_EXPIRY_DAYS=7
+      - MAX_IMAGES_PER_SESSION=5
+      - MAX_UPLOAD_SIZE_MB=20
+      # Internal auth is DISABLED for Simplified variant
+      - REQUIRE_INTERNAL_AUTH=false
+    volumes:
+      - imagetools-storage:/app/storage
+    networks:
+      - traefik-network  # ← Replace with your Traefik network name
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8081/health\")' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"  # ← Replace with your Traefik network name
+      
+      # Service definition
+      - "traefik.http.services.imagetools-svc.loadbalancer.server.port=8081"
+      
+      # Basic Auth middleware definition
+      # ⚠️ Replace with your actual password hash from htpasswd
+      # Important: Escape $ signs by using $$
+      - "traefik.http.middlewares.imagetools-basicauth.basicauth.users=${BASIC_AUTH_USERS}"
+      
+      # High priority: Mobile API router - bypasses Basic Auth
+      - "traefik.http.routers.imagetools-api-mobile.rule=Host(`imagetools.yourdomain.com`) && PathPrefix(`/api/v1/mobile`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-api-mobile.entrypoints=https"
+      - "traefik.http.routers.imagetools-api-mobile.tls=true"
+      - "traefik.http.routers.imagetools-api-mobile.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-api-mobile.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-api-mobile.priority=100"
+      # No middleware = bypasses Basic Auth
+      
+      # High priority: Addon API router - bypasses Basic Auth
+      - "traefik.http.routers.imagetools-api-addon.rule=Host(`imagetools.yourdomain.com`) && PathPrefix(`/api/v1/addon`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-api-addon.entrypoints=https"
+      - "traefik.http.routers.imagetools-api-addon.tls=true"
+      - "traefik.http.routers.imagetools-api-addon.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-api-addon.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-api-addon.priority=100"
+      # No middleware = bypasses Basic Auth
+      
+      # High priority: Health check - bypasses Basic Auth
+      - "traefik.http.routers.imagetools-health.rule=Host(`imagetools.yourdomain.com`) && Path(`/health`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-health.entrypoints=https"
+      - "traefik.http.routers.imagetools-health.tls=true"
+      - "traefik.http.routers.imagetools-health.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-health.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-health.priority=100"
+      # No middleware = bypasses Basic Auth
+      
+      # Default priority: Web router - requires Basic Auth
+      - "traefik.http.routers.imagetools-web.rule=Host(`imagetools.yourdomain.com`)"  # ← Replace with your domain
+      - "traefik.http.routers.imagetools-web.entrypoints=https"
+      - "traefik.http.routers.imagetools-web.tls=true"
+      - "traefik.http.routers.imagetools-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-web.middlewares=imagetools-basicauth@docker"
+      - "traefik.http.routers.imagetools-web.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-web.priority=1"
+
+networks:
+  traefik-network:  # ← Replace with your Traefik network name
+    external: true
+
+volumes:
+  imagetools-storage:
+    driver: local

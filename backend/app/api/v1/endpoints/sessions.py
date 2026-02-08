@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.schemas.schemas import SessionCreate, SessionResponse
@@ -10,13 +10,29 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 @router.post("", response_model=SessionResponse)
 async def create_session(
     session_data: SessionCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a new session."""
+    """
+    Create a new session.
+    
+    If Authelia headers (Remote-User, Remote-Name) are present in the request,
+    they will be automatically extracted and stored in the session.
+    """
+    # Extract Authelia user information from request state (set by middleware)
+    remote_user = getattr(request.state, 'remote_user', None)
+    remote_name = getattr(request.state, 'remote_name', None)
+    
+    # Use Authelia headers if available, otherwise use provided data
+    username = remote_user or session_data.username
+    display_name = remote_name or session_data.display_name
+    
     session = await SessionService.create_session(
         db, 
         session_data.user_id,
-        session_data.custom_session_id
+        username=username,
+        display_name=display_name,
+        custom_session_id=session_data.custom_session_id
     )
     return session
 

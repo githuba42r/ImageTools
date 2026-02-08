@@ -30,7 +30,11 @@ function getWebSocketUrl(sessionId) {
   // In development, Vite proxy doesn't support WebSocket upgrade
   // So we connect directly to the backend port
   if (import.meta.env.DEV) {
-    return `${protocol}//${window.location.hostname}:8000/ws?session_id=${sessionId}`;
+    // Extract port from VITE_API_URL if available, otherwise use default 8081
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+    const url = new URL(apiUrl);
+    const port = url.port || '8081';
+    return `${protocol}//${window.location.hostname}:${port}/ws?session_id=${sessionId}`;
   }
   
   // In production, use same host as current page

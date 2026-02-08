@@ -1,6 +1,12 @@
 // ImageTools Popup Script (Chrome)
 
+// Get build date from manifest (injected at build time)
+const BUILD_DATE = '2026-02-08T00:00:00.000Z';  // Will be updated by build script
+
 document.addEventListener('DOMContentLoaded', async () => {
+  // Display version information
+  displayVersionInfo();
+  
   // Get DOM elements
   const initialSection = document.getElementById('initialSection');
   const connectSection = document.getElementById('connectSection');
@@ -161,5 +167,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       connectSection.style.display = 'none';
       captureSection.style.display = 'none';
     }
+  }
+  
+  function displayVersionInfo() {
+    // Get version from manifest
+    const manifest = chrome.runtime.getManifest();
+    const version = manifest.version;
+    
+    // Format build date
+    let buildDateStr = 'Unknown';
+    try {
+      const buildDate = new Date(BUILD_DATE);
+      buildDateStr = buildDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch (e) {
+      console.error('Error formatting build date:', e);
+    }
+    
+    // Update UI
+    document.getElementById('versionText').textContent = `v${version}`;
+    document.getElementById('buildDateText').textContent = buildDateStr;
   }
 });

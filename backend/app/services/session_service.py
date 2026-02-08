@@ -8,8 +8,14 @@ from app.core.config import settings
 
 class SessionService:
     @staticmethod
-    async def create_session(db: AsyncSession, user_id: str = None, custom_session_id: str = None) -> Session:
-        """Create a new session."""
+    async def create_session(
+        db: AsyncSession, 
+        user_id: str = None, 
+        username: str = None,
+        display_name: str = None,
+        custom_session_id: str = None
+    ) -> Session:
+        """Create a new session with optional Authelia user information."""
         # Use custom session ID if provided (for testing), otherwise generate UUID
         session_id = custom_session_id if custom_session_id else str(uuid.uuid4())
         expires_at = datetime.utcnow() + timedelta(days=settings.SESSION_EXPIRY_DAYS)
@@ -17,10 +23,14 @@ class SessionService:
         # Check if session with this ID already exists
         existing = await SessionService.get_session(db, session_id)
         if existing:
-            # Update expiry time for existing session
+            # Update expiry time and user info for existing session
             existing.expires_at = expires_at
             if user_id:
                 existing.user_id = user_id
+            if username:
+                existing.username = username
+            if display_name:
+                existing.display_name = display_name
             await db.commit()
             await db.refresh(existing)
             return existing
@@ -29,6 +39,8 @@ class SessionService:
         session = Session(
             id=session_id,
             user_id=user_id,
+            username=username,
+            display_name=display_name,
             expires_at=expires_at
         )
         

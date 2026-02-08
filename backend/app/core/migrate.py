@@ -15,6 +15,25 @@ async def migrate_database():
     Adds missing columns to existing tables.
     """
     async with engine.begin() as conn:
+        # Check sessions table for new Authelia user fields
+        result = await conn.execute(text("PRAGMA table_info(sessions)"))
+        session_columns = {row[1]: row for row in result.fetchall()}
+        
+        migrations_applied = []
+        
+        # Add username column for Authelia Remote-User header
+        if 'username' not in session_columns:
+            logger.info("Adding username column to sessions table...")
+            await conn.execute(text("ALTER TABLE sessions ADD COLUMN username VARCHAR"))
+            await conn.execute(text("CREATE INDEX ix_sessions_username ON sessions(username)"))
+            migrations_applied.append("Added 'username' column to sessions with index")
+        
+        # Add display_name column for Authelia Remote-Name header
+        if 'display_name' not in session_columns:
+            logger.info("Adding display_name column to sessions table...")
+            await conn.execute(text("ALTER TABLE sessions ADD COLUMN display_name VARCHAR"))
+            migrations_applied.append("Added 'display_name' column to sessions")
+        
         # Check if tokens_used column exists in messages table
         result = await conn.execute(text("PRAGMA table_info(messages)"))
         columns = {row[1]: row for row in result.fetchall()}
