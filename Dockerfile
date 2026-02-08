@@ -1,5 +1,9 @@
 # Multi-stage build for ImageTools - Single container with frontend + backend
 
+# Build arguments
+ARG VERSION=dev
+ARG BUILD_DATE=unknown
+
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
@@ -10,6 +14,10 @@ RUN npm run build
 
 # Stage 2: Final image with backend + built frontend
 FROM python:3.11-slim
+
+# Re-declare build arguments for this stage
+ARG VERSION=dev
+ARG BUILD_DATE=unknown
 
 # Set working directory
 WORKDIR /app
@@ -44,6 +52,12 @@ ENV SERVER_PORT=8081
 ENV SESSION_EXPIRY_DAYS=7
 ENV MAX_IMAGES_PER_SESSION=5
 ENV MAX_UPLOAD_SIZE_MB=20
+
+# Add version and build date labels
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.title="ImageTools"
+LABEL org.opencontainers.image.description="Multi-user image sharing and management platform"
 
 # Run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8081"]

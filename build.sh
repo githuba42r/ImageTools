@@ -54,9 +54,7 @@ cd "$SCRIPT_DIR"
 BUILD_DOCKER=true
 BUILD_ANDROID=true
 BUILD_BROWSER=true
-BUILD_FRONTEND=true
 DOCKER_REGISTRY="ghcr.io/githuba42r"
-SKIP_TESTS=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -72,14 +70,6 @@ while [[ $# -gt 0 ]]; do
             BUILD_BROWSER=false
             shift
             ;;
-        --skip-frontend)
-            BUILD_FRONTEND=false
-            shift
-            ;;
-        --skip-tests)
-            SKIP_TESTS=true
-            shift
-            ;;
         --registry)
             DOCKER_REGISTRY="$2"
             shift 2
@@ -88,11 +78,9 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: ./build.sh [options]"
             echo ""
             echo "Options:"
-            echo "  --skip-docker      Skip Docker image build"
+            echo "  --skip-docker      Skip Docker image build (includes frontend)"
             echo "  --skip-android     Skip Android APK build"
             echo "  --skip-browser     Skip browser addon packaging"
-            echo "  --skip-frontend    Skip frontend build"
-            echo "  --skip-tests       Skip running tests"
             echo "  --registry <url>   Docker registry (default: ghcr.io/githuba42r)"
             echo "  --help             Show this help message"
             exit 0
@@ -139,39 +127,11 @@ mkdir -p "$DIST_DIR/logs"
 print_success "Created dist directory: $DIST_DIR"
 
 ###############################################################################
-# Build Frontend
-###############################################################################
-
-if [ "$BUILD_FRONTEND" = true ]; then
-    print_header "🎨 Building Frontend"
-    
-    cd "$SCRIPT_DIR/frontend"
-    
-    print_info "Installing dependencies..."
-    npm install --silent
-    
-    print_info "Building production bundle..."
-    npm run build
-    
-    # Copy build artifacts to dist
-    if [ -d "dist" ]; then
-        cp -r dist "$DIST_DIR/frontend-dist"
-        print_success "Frontend built successfully"
-        print_info "Output: $DIST_DIR/frontend-dist/"
-    else
-        print_error "Frontend build failed - dist directory not found"
-        exit 1
-    fi
-    
-    cd "$SCRIPT_DIR"
-fi
-
-###############################################################################
-# Build Docker Image
+# Build Docker Image (includes frontend build)
 ###############################################################################
 
 if [ "$BUILD_DOCKER" = true ]; then
-    print_header "🐳 Building Docker Image"
+    print_header "🐳 Building Docker Image (includes frontend)"
     
     IMAGE_NAME="imagetools"
     IMAGE_TAG_VERSIONED="${DOCKER_REGISTRY}/${IMAGE_NAME}:${VERSION}"
@@ -196,15 +156,13 @@ if [ "$BUILD_DOCKER" = true ]; then
         echo "Image: $IMAGE_TAG_VERSIONED" > "$DIST_DIR/docker-image-info.txt"
         echo "Image: $IMAGE_TAG_LATEST" >> "$DIST_DIR/docker-image-info.txt"
         echo "Size: $(docker images --format "{{.Size}}" "$IMAGE_TAG_VERSIONED")" >> "$DIST_DIR/docker-image-info.txt"
+        echo "Version: $VERSION" >> "$DIST_DIR/docker-image-info.txt"
+        echo "Build Date: $BUILD_DATE" >> "$DIST_DIR/docker-image-info.txt"
         
         print_info "Image tags:"
         print_info "  - $IMAGE_TAG_VERSIONED"
         print_info "  - $IMAGE_TAG_LATEST"
-        
-        # Optional: Save image to tar file
-        print_info "Exporting Docker image to tar archive..."
-        docker save "$IMAGE_TAG_VERSIONED" | gzip > "$DIST_DIR/imagetools-${VERSION}-docker.tar.gz"
-        print_success "Docker image exported to: imagetools-${VERSION}-docker.tar.gz"
+        print_info "Image size: $(docker images --format "{{.Size}}" "$IMAGE_TAG_VERSIONED")"
     else
         print_error "Docker build failed! Check logs: $DIST_DIR/logs/docker-build.log"
         exit 1
@@ -348,12 +306,13 @@ Build Artifacts
 EOF
 
 if [ "$BUILD_DOCKER" = true ]; then
+    DOCKER_SIZE=$(docker images --format "{{.Size}}" "${DOCKER_REGISTRY}/imagetools:${VERSION}")
     cat >> "$BUILD_REPORT" << EOF
 
 Docker Images:
   - ${DOCKER_REGISTRY}/imagetools:${VERSION}
   - ${DOCKER_REGISTRY}/imagetools:latest
-  - Exported: imagetools-${VERSION}-docker.tar.gz
+  - Size: ${DOCKER_SIZE}
 EOF
 fi
 
@@ -377,14 +336,6 @@ if [ "$BUILD_BROWSER" = true ]; then
 Browser Addons:
   - Firefox: imagetools-firefox-${VERSION}.zip
   - Chrome:  imagetools-chrome-${VERSION}.zip
-EOF
-fi
-
-if [ "$BUILD_FRONTEND" = true ]; then
-    cat >> "$BUILD_REPORT" << EOF
-
-Frontend:
-  - Build artifacts in: frontend-dist/
 EOF
 fi
 
@@ -458,10 +409,6 @@ fi
 if [ "$BUILD_BROWSER" = true ]; then
     echo "  🦊 Firefox: imagetools-firefox-${VERSION}.zip"
     echo "  🌐 Chrome:  imagetools-chrome-${VERSION}.zip"
-fi
-
-if [ "$BUILD_FRONTEND" = true ]; then
-    echo "  🎨 Frontend: frontend-dist/"
 fi
 
 echo ""

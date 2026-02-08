@@ -6,8 +6,8 @@ This document describes how to build all ImageTools components for release.
 
 ### Required Tools
 
-- **Node.js** (v18+) - For version management and frontend builds
-- **Docker** - For building container images
+- **Node.js** (v18+) - For version management
+- **Docker** - For building container images (includes frontend build)
 - **Java JDK** (v11+) - For Android builds
 - **Android SDK** - For Android APK compilation
 - **zip** - For packaging browser addons
@@ -15,12 +15,11 @@ This document describes how to build all ImageTools components for release.
 ### Environment Setup
 
 ```bash
-# Install Node.js dependencies
-cd frontend && npm install && cd ..
-
 # Set ANDROID_HOME environment variable
 export ANDROID_HOME=/path/to/android-sdk
 ```
+
+Note: Frontend dependencies are installed automatically during the Docker build process.
 
 ## Build Process
 
@@ -47,12 +46,12 @@ Build all components:
 
 This will create the following artifacts in `/dist`:
 
-- **Docker Image**: `imagetools-1.2.2-docker.tar.gz`
+- **Docker Image**: Tagged as `ghcr.io/githuba42r/imagetools:1.2.2` and `:latest` (includes built frontend)
 - **Android APK**: `imagetools-1.2.2-10202.apk`
 - **Firefox Addon**: `imagetools-firefox-1.2.2.zip`
 - **Chrome Addon**: `imagetools-chrome-1.2.2.zip`
-- **Frontend Build**: `frontend-dist/`
 - **Build Report**: `BUILD-REPORT.txt`
+- **Docker Image Info**: `docker-image-info.txt`
 
 ### 3. Selective Builds
 
@@ -60,13 +59,13 @@ Build only specific components:
 
 ```bash
 # Build only browser addons
-./build.sh --skip-docker --skip-android --skip-frontend
+./build.sh --skip-docker --skip-android
 
-# Build only Docker image
-./build.sh --skip-android --skip-browser --skip-frontend
+# Build only Docker image (includes frontend)
+./build.sh --skip-android --skip-browser
 
 # Build only Android APK
-./build.sh --skip-docker --skip-browser --skip-frontend
+./build.sh --skip-docker --skip-browser
 ```
 
 ### 4. Custom Docker Registry
@@ -88,19 +87,17 @@ All build artifacts are placed in `/dist`:
 ```
 dist/
 ├── BUILD-REPORT.txt                    # Summary of build
-├── imagetools-1.2.2-docker.tar.gz      # Docker image (compressed)
+├── docker-image-info.txt               # Docker image details (tags, size, version)
 ├── imagetools-1.2.2-10202.apk          # Android APK
 ├── imagetools-firefox-1.2.2.zip        # Firefox addon
 ├── imagetools-chrome-1.2.2.zip         # Chrome addon
-├── frontend-dist/                      # Frontend static files
-│   ├── index.html
-│   ├── assets/
-│   └── ...
 └── logs/                               # Build logs
     ├── docker-build.log
     ├── android-build.log
     └── android-clean.log
 ```
+
+Note: The Docker image contains the built frontend - no separate frontend artifacts are generated.
 
 ## Publishing Releases
 
@@ -114,12 +111,7 @@ docker push ghcr.io/githuba42r/imagetools:1.2.2
 docker push ghcr.io/githuba42r/imagetools:latest
 ```
 
-Or load from tar archive:
-
-```bash
-docker load < dist/imagetools-1.2.2-docker.tar.gz
-docker push ghcr.io/githuba42r/imagetools:1.2.2
-```
+The Docker image includes the built frontend, so no separate deployment is needed for the web app.
 
 ### 2. Publish Android APK
 
@@ -163,9 +155,10 @@ gh release create v1.2.2 \
   --notes "Release notes here" \
   dist/imagetools-1.2.2-10202.apk \
   dist/imagetools-firefox-1.2.2.zip \
-  dist/imagetools-chrome-1.2.2.zip \
-  dist/imagetools-1.2.2-docker.tar.gz
+  dist/imagetools-chrome-1.2.2.zip
 ```
+
+Note: Docker images are pushed to the container registry (not included in GitHub releases).
 
 ## Build Script Options
 
@@ -173,11 +166,9 @@ gh release create v1.2.2 \
 Usage: ./build.sh [options]
 
 Options:
-  --skip-docker      Skip Docker image build
+  --skip-docker      Skip Docker image build (includes frontend)
   --skip-android     Skip Android APK build
   --skip-browser     Skip browser addon packaging
-  --skip-frontend    Skip frontend build
-  --skip-tests       Skip running tests
   --registry <url>   Docker registry (default: ghcr.io/githuba42r)
   --help             Show this help message
 ```

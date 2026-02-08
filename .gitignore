@@ -14,6 +14,14 @@ node_modules/
 dist/
 .cache/
 
+# Build artifacts and deliverables
+*.apk
+*.zip
+*.tar.gz
+*.aab
+docker-image-info.txt
+BUILD-REPORT.txt
+
 # IDE
 .vscode/
 .idea/
