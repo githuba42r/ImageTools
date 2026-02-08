@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.config import settings as app_settings
+from app.core.url_utils import get_instance_url
 from app.services.settings_service import SettingsService
 from pydantic import BaseModel
 from typing import Optional
@@ -30,13 +31,17 @@ class AppConfigResponse(BaseModel):
 
 
 @router.get("/app-config", response_model=AppConfigResponse)
-async def get_app_config():
+async def get_app_config(request: Request):
     """Get application configuration."""
     debug_info = None
     if app_settings.DEBUG_ENROLMENT:
+        # Use auto-detected instance URL from request headers (same as mobile/addon)
+        instance_url = get_instance_url(request)
+        oauth_callback = f"{instance_url.rstrip('/')}/oauth/callback"
+        
         debug_info = DebugEnrolmentInfo(
-            openrouter_oauth_callback_url=app_settings.openrouter_oauth_callback_url,
-            instance_url=app_settings.INSTANCE_URL
+            openrouter_oauth_callback_url=oauth_callback,
+            instance_url=instance_url
         )
     
     return AppConfigResponse(

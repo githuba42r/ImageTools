@@ -5,12 +5,13 @@ These endpoints proxy the OAuth2 PKCE flow for OpenRouter,
 keeping API keys secure on the backend and never exposing them to the frontend.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.url_utils import get_instance_url
 from app.services.openrouter_oauth_service import OpenRouterOAuthService
 
 router = APIRouter(tags=["OpenRouter OAuth"])
@@ -62,7 +63,8 @@ class RevokeKeyResponse(BaseModel):
 
 @router.post("/oauth/authorize-url", response_model=OAuthURLResponse)
 async def get_oauth_authorize_url(
-    request: OAuthURLRequest,
+    oauth_request: OAuthURLRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -81,10 +83,15 @@ async def get_oauth_authorize_url(
     Returns the authorization URL to redirect the user to.
     """
     try:
+        # Get auto-detected instance URL from request headers
+        instance_url = get_instance_url(request)
+        callback_url = f"{instance_url.rstrip('/')}/oauth/callback"
+        
         service = OpenRouterOAuthService(db)
         auth_url = service.generate_oauth_url(
-            code_challenge=request.code_challenge,
-            code_challenge_method=request.code_challenge_method
+            code_challenge=oauth_request.code_challenge,
+            code_challenge_method=oauth_request.code_challenge_method,
+            callback_url=callback_url
         )
         
         return OAuthURLResponse(auth_url=auth_url)

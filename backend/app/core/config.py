@@ -101,11 +101,6 @@ class Settings(BaseSettings):
             return ["*"]
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
     
-    @property
-    def openrouter_oauth_callback_url(self) -> str:
-        """Derive OAuth callback URL from instance URL (same as Android/addon enrollments)"""
-        return f"{self.INSTANCE_URL.rstrip('/')}/oauth/callback"
-    
     class Config:
         env_file = ".env"
         case_sensitive = True
