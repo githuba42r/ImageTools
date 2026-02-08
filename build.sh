@@ -188,6 +188,24 @@ if [ "$BUILD_ANDROID" = true ]; then
         # Make gradlew executable
         chmod +x gradlew
         
+        # Ensure debug keystore exists for signing
+        DEBUG_KEYSTORE="$HOME/.android/debug.keystore"
+        if [ ! -f "$DEBUG_KEYSTORE" ]; then
+            print_info "Generating debug keystore for APK signing..."
+            mkdir -p "$HOME/.android"
+            keytool -genkey -v -keystore "$DEBUG_KEYSTORE" \
+                -storepass android -alias androiddebugkey \
+                -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Android Debug,O=Android,C=US" \
+                > "$DIST_DIR/logs/keystore-generation.log" 2>&1
+            
+            if [ $? -ne 0 ]; then
+                print_warning "Failed to generate debug keystore - APK may not be signed"
+            else
+                print_success "Debug keystore generated"
+            fi
+        fi
+        
         # Clean previous builds
         print_info "Cleaning previous builds..."
         ./gradlew clean > "$DIST_DIR/logs/android-clean.log" 2>&1

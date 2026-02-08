@@ -17,19 +17,33 @@ class SettingsResponse(BaseModel):
     selected_model_id: Optional[str] = None
 
 
+class DebugEnrolmentInfo(BaseModel):
+    openrouter_oauth_callback_url: str
+    instance_url: str
+
+
 class AppConfigResponse(BaseModel):
     session_expiry_days: int
     max_images_per_session: int
     max_upload_size_mb: int
+    debug_enrolment: Optional[DebugEnrolmentInfo] = None
 
 
 @router.get("/app-config", response_model=AppConfigResponse)
 async def get_app_config():
     """Get application configuration."""
+    debug_info = None
+    if app_settings.DEBUG_ENROLMENT:
+        debug_info = DebugEnrolmentInfo(
+            openrouter_oauth_callback_url=app_settings.openrouter_oauth_callback_url,
+            instance_url=app_settings.INSTANCE_URL
+        )
+    
     return AppConfigResponse(
         session_expiry_days=app_settings.SESSION_EXPIRY_DAYS,
         max_images_per_session=app_settings.MAX_IMAGES_PER_SESSION,
-        max_upload_size_mb=app_settings.MAX_UPLOAD_SIZE_MB
+        max_upload_size_mb=app_settings.MAX_UPLOAD_SIZE_MB,
+        debug_enrolment=debug_info
     )
 
 

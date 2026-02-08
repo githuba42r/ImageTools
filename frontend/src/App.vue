@@ -162,7 +162,7 @@
           
           <div class="header-spacer"></div>
           
-          <UploadArea @upload-complete="handleUploadComplete" :compact="true" :inline="true" />
+          <UploadArea @upload-complete="handleUploadComplete" :compact="true" :inline="true" :maxImages="appConfig.max_images_per_session" />
         </div>
       </div>
     </header>
@@ -205,7 +205,7 @@
           </div>
 
           <div v-else>
-            <UploadArea @upload-complete="handleUploadComplete" :compact="false" :inline="false" />
+            <UploadArea @upload-complete="handleUploadComplete" :compact="false" :inline="false" :maxImages="appConfig.max_images_per_session" />
           </div>
         </div>
       </div>
@@ -321,6 +321,18 @@
               <p>
                 <strong>Credits Remaining:</strong> ${{ openRouterCredits.toFixed(4) }}
               </p>
+            </div>
+            
+            <!-- Debug Info for OAuth Callback -->
+            <div v-if="appConfig.debug_enrolment" class="info-box" style="margin-top: 15px; background-color: #fff3cd; border: 1px solid #ffc107;">
+              <p style="font-weight: 600; color: #856404; margin-bottom: 8px;">🔧 Debug Information (DEBUG_ENROLMENT=true)</p>
+              <div style="font-family: monospace; font-size: 0.85em; color: #856404;">
+                <p><strong>OAuth Callback URL:</strong></p>
+                <code style="background-color: #fff; padding: 4px 8px; display: block; margin-top: 4px; word-break: break-all;">{{ appConfig.debug_enrolment?.openrouter_oauth_callback_url }}</code>
+                <p style="margin-top: 8px; font-size: 0.9em; font-style: italic;">
+                  This URL must be registered with OpenRouter.ai for OAuth to work.
+                </p>
+              </div>
             </div>
           </div>
 
@@ -481,8 +493,7 @@
             <div class="app-info-large">
               <div class="app-logo">🖼️</div>
               <h3>Image Tools</h3>
-              <p class="version">Version 1.2.0</p>
-              <p class="stage">Stage 4: AI Features</p>
+              <p class="version">Version {{ appVersion.version }}</p>
             </div>
             
             <div class="info-box">
@@ -498,8 +509,8 @@
             
             <div class="info-box">
               <p><strong>Session Information:</strong></p>
-              <p v-if="username"><strong>User:</strong> <code>{{ username }}</code></p>
-              <p><strong>Session ID:</strong> <code>{{ sessionId ? sessionId.substring(0, 16) + '...' : 'None' }}</code></p>
+              <p v-if="username"><strong>Remote Username:</strong> <code>{{ username }}</code></p>
+              <p v-if="displayName"><strong>Remote Name:</strong> <code>{{ displayName }}</code></p>
               <p><strong>Images in Session:</strong> {{ imageCount }} / {{ appConfig.max_images_per_session }}</p>
             </div>
             
@@ -657,6 +668,16 @@
                   </p>
                 </div>
               </div>
+              
+              <!-- Debug Info for Development -->
+              <div v-if="appConfig.debug_enrolment && qrData" class="info-box" style="margin-top: 20px; background-color: #fff3cd; border: 1px solid #ffc107;">
+                <p style="font-weight: 600; color: #856404; margin-bottom: 10px;">🔧 Debug Information (DEBUG_ENROLMENT=true)</p>
+                <div style="font-family: monospace; font-size: 0.85em; color: #856404;">
+                  <p><strong>Service URL:</strong> <code style="background-color: #fff; padding: 2px 6px;">{{ qrData.instance_url }}</code></p>
+                  <p style="margin-top: 8px;"><strong>Auth Secret:</strong> <code style="background-color: #fff; padding: 2px 6px;">{{ qrData.shared_secret }}</code></p>
+                  <p style="margin-top: 8px;"><strong>Pairing ID:</strong> <code style="background-color: #fff; padding: 2px 6px;">{{ qrData.pairing_id }}</code></p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -732,10 +753,19 @@
               </ol>
               <p style="margin-top: 15px; font-size: 0.85em; color: #666;">
                 💡 Connection string expires in 2 minutes. 
-                <a href="#" @click.prevent="addonRegistrationUrl = null; addonCountdownSeconds = 0; addonUrlCopied = false; if (addonCountdownInterval) clearInterval(addonCountdownInterval);" style="color: #6366f1; text-decoration: underline;">
+                <a href="#" @click.prevent="addonRegistrationUrl = null; addonCountdownSeconds = 0; addonUrlCopied = false; addonDebugData = null; if (addonCountdownInterval) clearInterval(addonCountdownInterval);" style="color: #6366f1; text-decoration: underline;">
                   Generate new string
                 </a>
               </p>
+              
+              <!-- Debug Info for Development -->
+              <div v-if="appConfig.debug_enrolment && addonDebugData" style="margin-top: 15px; background-color: #fff3cd; padding: 12px; border-radius: 6px; border: 1px solid #ffc107;">
+                <p style="font-weight: 600; color: #856404; margin-bottom: 8px;">🔧 Debug Information (DEBUG_ENROLMENT=true)</p>
+                <div style="font-family: monospace; font-size: 0.85em; color: #856404;">
+                  <p><strong>Service URL:</strong> <code style="background-color: #fff; padding: 2px 6px;">{{ addonDebugData.instance }}</code></p>
+                  <p style="margin-top: 8px;"><strong>Auth Code:</strong> <code style="background-color: #fff; padding: 2px 6px;">{{ addonDebugData.code }}</code></p>
+                </div>
+              </div>
             </div>
             
             <!-- Connected Addons List -->
@@ -1250,6 +1280,7 @@ const showAddonModal = ref(false);
 
 // Addon authorization state
 const addonRegistrationUrl = ref(null);
+const addonDebugData = ref(null); // Store decoded connection data for debug display
 const isGeneratingAddonUrl = ref(false);
 const addonUrlCopied = ref(false);
 const connectedAddons = ref([]);
@@ -1264,7 +1295,15 @@ const imageCardSize = ref(localStorage.getItem('imageCardSize') || 'small');
 const appConfig = ref({
   session_expiry_days: 7,
   max_images_per_session: 5,
-  max_upload_size_mb: 20
+  max_upload_size_mb: 20,
+  debug_enrolment: null
+});
+
+// App version state
+const appVersion = ref({
+  version: '1.2.0',
+  buildDate: null,
+  versionCode: null
 });
 
 // OpenRouter OAuth state
@@ -1436,7 +1475,12 @@ const availableTags = computed(() => {
 
 // Get username from session
 const username = computed(() => {
-  // First check if sessionData has user_id
+  // First check if sessionData has username (Remote-User from Authelia)
+  if (sessionStore.sessionData && sessionStore.sessionData.username) {
+    return sessionStore.sessionData.username;
+  }
+  
+  // Fallback to user_id for legacy support
   if (sessionStore.sessionData && sessionStore.sessionData.user_id) {
     return sessionStore.sessionData.user_id;
   }
@@ -1457,6 +1501,14 @@ const username = computed(() => {
     }
   }
   
+  return null;
+});
+
+// Get display name from session (Remote-Name from Authelia)
+const displayName = computed(() => {
+  if (sessionStore.sessionData && sessionStore.sessionData.display_name) {
+    return sessionStore.sessionData.display_name;
+  }
   return null;
 });
 
@@ -1495,6 +1547,20 @@ const fetchAppConfig = async () => {
     }
   } catch (error) {
     console.error('Failed to fetch app config:', error);
+  }
+};
+
+// Fetch app version from backend
+const fetchAppVersion = async () => {
+  try {
+    const response = await fetch('/version');
+    if (response.ok) {
+      const data = await response.json();
+      appVersion.value = data;
+      console.log('App version loaded:', data);
+    }
+  } catch (error) {
+    console.error('Failed to fetch app version:', error);
   }
 };
 
@@ -1598,7 +1664,8 @@ const initializeApp = async () => {
     await Promise.all([
       imageStore.loadSessionImages(),
       imageStore.loadPresets(),
-      fetchAppConfig()
+      fetchAppConfig(),
+      fetchAppVersion()
     ]);
     
     // Set session ID in OpenRouter service
@@ -2025,6 +2092,11 @@ const generateAddonRegistrationUrl = async () => {
       code: code,
       instance: instance
     };
+    
+    // Store for debug display if DEBUG_ENROLMENT is enabled
+    addonDebugData.value = connectionData;
+    console.log('[Addon] Debug data stored:', connectionData);
+    console.log('[Addon] appConfig.debug_enrolment:', appConfig.value.debug_enrolment);
     
     // Base64 encode the connection string
     const jsonString = JSON.stringify(connectionData);
@@ -2542,8 +2614,8 @@ const handleKeyboardShortcuts = (event) => {
   // Handle Escape key for modals and menus (highest priority)
   if (event.key === 'Escape') {
     // Close modals in order of priority
-    if (showModelSelectorModal.value) {
-      showModelSelectorModal.value = false;
+    if (showModelSelector.value) {
+      showModelSelector.value = false;
       return;
     }
     if (showAISettingsModal.value) {

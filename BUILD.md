@@ -115,11 +115,43 @@ The Docker image includes the built frontend, so no separate deployment is neede
 
 ### 2. Publish Android APK
 
-The APK in `/dist` is an unsigned release build. To publish to Google Play:
+The APK in `/dist` is signed with the debug keystore for development/testing. For production release:
 
-1. Sign the APK with your release keystore
-2. Upload to Google Play Console
-3. Follow Google's release process
+1. Create a production keystore if you haven't already:
+   ```bash
+   keytool -genkey -v -keystore release.keystore -alias imagetools \
+     -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+2. Configure production signing in `android-app/app/build.gradle`:
+   ```gradle
+   signingConfigs {
+       release {
+           storeFile file("/path/to/release.keystore")
+           storePassword "your-password"
+           keyAlias "imagetools"
+           keyPassword "your-password"
+       }
+   }
+   ```
+
+3. Rebuild with production signing
+4. Upload to Google Play Console
+
+#### Verifying APK Signature
+
+Modern Android APKs use V2/V3 signing (APK Signature Scheme). Use `apksigner` to verify:
+
+```bash
+# Find apksigner in your Android SDK
+$ANDROID_HOME/build-tools/*/apksigner verify --verbose dist/imagetools-1.3.0-10300.apk
+
+# Expected output:
+# Verifies
+# Verified using v2 scheme (APK Signature Scheme v2): true
+```
+
+Note: `jarsigner` will report modern APKs as "unsigned" because it only checks V1 (JAR) signatures. Always use `apksigner` for verification.
 
 ### 3. Submit Browser Addons
 
@@ -205,6 +237,34 @@ rm -rf node_modules package-lock.json
 npm install
 cd ..
 ```
+
+### APK Installation Fails
+
+**Problem**: `INSTALL_PARSE_FAILED_NO_CERTIFICATES` when installing APK
+
+**Common causes**:
+1. Using `jarsigner -verify` which only checks V1 signatures (incorrect)
+2. APK not actually signed (check with apksigner)
+
+**Solution**:
+```bash
+# Verify signing with correct tool
+$ANDROID_HOME/build-tools/*/apksigner verify --verbose dist/*.apk
+
+# If truly unsigned, ensure debug keystore exists
+ls -la ~/.android/debug.keystore
+
+# Regenerate if needed
+keytool -genkey -v -keystore ~/.android/debug.keystore \
+  -storepass android -alias androiddebugkey \
+  -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=Android Debug,O=Android,C=US"
+
+# Rebuild APK
+cd android-app && ./gradlew clean assembleRelease
+```
+
+**Important**: Modern Android APKs use V2/V3 APK Signature Scheme, not V1 JAR signing. Always use `apksigner` (not `jarsigner`) to verify signatures.
 
 ## CI/CD Integration
 

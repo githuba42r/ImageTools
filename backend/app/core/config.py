@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     SERVER_HOST: str = "0.0.0.0"
     API_PREFIX: str = "/api/v1"
     DEBUG: bool = False
+    DEBUG_ENROLMENT: bool = False  # Show enrollment URLs and auth keys in About modal
     LOG_LEVEL: str = "INFO"
     
     # Mobile/External Access

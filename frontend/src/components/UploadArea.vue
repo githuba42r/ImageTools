@@ -23,7 +23,7 @@
           <div class="upload-icon">{{ inline ? '➕' : '📁' }}</div>
           <p class="upload-text">{{ inline ? 'Add Images' : (compact ? 'Add more' : 'Drop images here or click to browse') }}</p>
           <p v-if="!compact && !inline" class="upload-hint">Supports: JPG, PNG, GIF, BMP, WEBP, TIFF</p>
-          <p v-if="!compact && !inline" class="upload-limit">Max {{ maxImages }} images per session</p>
+          <p v-if="!compact && !inline" class="upload-limit">Max {{ props.maxImages }} images per session</p>
         </div>
         
         <div v-else class="uploading-state">
@@ -52,6 +52,10 @@ const props = defineProps({
   inline: {
     type: Boolean,
     default: false
+  },
+  maxImages: {
+    type: Number,
+    default: 5
   }
 });
 
@@ -61,7 +65,6 @@ const { isUploading } = storeToRefs(imageStore);
 const fileInput = ref(null);
 const isDragOver = ref(false);
 const error = ref(null);
-const maxImages = 5;
 const dragCounter = ref(0);
 
 const emit = defineEmits(['upload-complete']);
