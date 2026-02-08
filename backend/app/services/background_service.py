@@ -12,13 +12,30 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from PIL import Image as PILImage
-from rembg import remove, new_session
 import logging
 
 from app.models.models import Image, History
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Lazy import for rembg to avoid slow startup (31+ seconds)
+# Only imported when background removal is actually used
+_rembg_imported = False
+_rembg_remove = None
+_rembg_new_session = None
+
+def _import_rembg():
+    """Lazy import rembg modules to speed up application startup"""
+    global _rembg_imported, _rembg_remove, _rembg_new_session
+    if not _rembg_imported:
+        logger.info("Loading rembg library (this may take 30+ seconds)...")
+        from rembg import remove, new_session
+        _rembg_remove = remove
+        _rembg_new_session = new_session
+        _rembg_imported = True
+        logger.info("rembg library loaded successfully")
+    return _rembg_remove, _rembg_new_session
 
 
 class BackgroundRemovalService:
@@ -50,6 +67,7 @@ class BackgroundRemovalService:
         """Get or create rembg session with specified model"""
         if self._session is None:
             logger.info(f"Initializing rembg session with model: {self.model}")
+            _, new_session = _import_rembg()
             self._session = new_session(self.model)
         return self._session
     
@@ -94,6 +112,7 @@ class BackgroundRemovalService:
         
         # Remove background
         try:
+            remove, _ = _import_rembg()
             output_image = remove(
                 input_image,
                 session=self._get_session(),
