@@ -288,7 +288,7 @@ class OpenRouterOAuthService:
                     f"{self.OPENROUTER_API_URL}/auth/key",
                     headers={
                         "Authorization": f"Bearer {api_key}",
-                        "HTTP-Referer": settings.OPENROUTER_APP_URL,
+                        "HTTP-Referer": settings.INSTANCE_URL,  # Use INSTANCE_URL for consistency
                         "X-Title": settings.OPENROUTER_APP_NAME
                     }
                 )

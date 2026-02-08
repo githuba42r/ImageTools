@@ -69,10 +69,11 @@ class Settings(BaseSettings):
     
     # OpenRouter / AI Configuration
     OPENROUTER_APP_NAME: str = "ImageTools"
-    # In production, set OPENROUTER_APP_URL to match your deployment URL
-    # Example: https://yourdomain.com or http://your-ip:8082
-    # The OAuth callback URL will automatically be: {OPENROUTER_APP_URL}/oauth/callback
-    OPENROUTER_APP_URL: str = "http://localhost:5173"
+    # Note: OAuth callback URL is automatically derived from INSTANCE_URL
+    # Format: {INSTANCE_URL}/oauth/callback
+    # Example: If INSTANCE_URL=http://your-ip:8089, callback will be http://your-ip:8089/oauth/callback
+    # This URL must be registered with OpenRouter.ai for OAuth to work
+    OPENROUTER_APP_URL: str = "http://localhost:5173"  # Deprecated: Use INSTANCE_URL instead
     OPENROUTER_API_KEY: str = ""  # Optional fallback API key
     
     # Internal Authentication (Defense in Depth)
@@ -102,8 +103,8 @@ class Settings(BaseSettings):
     
     @property
     def openrouter_oauth_callback_url(self) -> str:
-        """Derive OAuth callback URL from app URL"""
-        return f"{self.OPENROUTER_APP_URL.rstrip('/')}/oauth/callback"
+        """Derive OAuth callback URL from instance URL (same as Android/addon enrollments)"""
+        return f"{self.INSTANCE_URL.rstrip('/')}/oauth/callback"
     
     class Config:
         env_file = ".env"
