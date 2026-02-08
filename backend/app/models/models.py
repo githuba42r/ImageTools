@@ -117,6 +117,13 @@ class MobileAppPairing(Base):
     session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
     device_name = Column(String, nullable=True)  # Optional device identifier
     
+    # Device metadata (populated during token exchange)
+    device_model = Column(String, nullable=True)  # e.g. "Samsung Galaxy S21"
+    device_manufacturer = Column(String, nullable=True)  # e.g. "Samsung"
+    device_owner = Column(String, nullable=True)  # e.g. "John Doe" or "john@example.com"
+    os_version = Column(String, nullable=True)  # e.g. "Android 13"
+    app_version = Column(String, nullable=True)  # ImageTools app version
+    
     # Initial pairing secret (short-lived, single-use)
     shared_secret = Column(String, nullable=False, unique=True, index=True)  # 2-minute timeout
     used = Column(Boolean, default=False)  # Track if initial secret has been used

@@ -280,6 +280,11 @@ class QRCodeDataResponse(BaseModel):
 class ValidateSecretRequest(BaseModel):
     """Request to validate a shared secret"""
     shared_secret: str = Field(..., description="Shared secret to validate")
+    device_model: Optional[str] = Field(None, description="Device model (e.g. Samsung Galaxy S21)")
+    device_manufacturer: Optional[str] = Field(None, description="Device manufacturer (e.g. Samsung)")
+    device_owner: Optional[str] = Field(None, description="Device owner name or email")
+    os_version: Optional[str] = Field(None, description="OS version (e.g. Android 13)")
+    app_version: Optional[str] = Field(None, description="ImageTools app version")
 
 
 class ValidateSecretResponse(BaseModel):
@@ -288,6 +293,11 @@ class ValidateSecretResponse(BaseModel):
     pairing_id: str = Field(..., description="Pairing ID")
     session_id: str = Field(..., description="Session ID")
     device_name: Optional[str] = Field(None, description="Device name")
+    device_model: Optional[str] = Field(None, description="Device model")
+    device_manufacturer: Optional[str] = Field(None, description="Device manufacturer")
+    device_owner: Optional[str] = Field(None, description="Device owner")
+    os_version: Optional[str] = Field(None, description="OS version")
+    app_version: Optional[str] = Field(None, description="App version")
     long_term_secret: str = Field(..., description="Long-term secret for uploads (90 days)")
     refresh_secret: str = Field(..., description="Refresh secret for renewal (180 days)")
     long_term_expires_at: datetime = Field(..., description="Long-term secret expiration")
@@ -338,6 +348,11 @@ class PairedDeviceInfo(BaseModel):
     """Information about a paired device"""
     id: str
     device_name: Optional[str]
+    device_model: Optional[str]
+    device_manufacturer: Optional[str]
+    device_owner: Optional[str]
+    os_version: Optional[str]
+    app_version: Optional[str]
     created_at: datetime
     last_used_at: Optional[datetime]
     long_term_expires_at: Optional[datetime]
@@ -433,6 +448,7 @@ class ConnectedAddonInfo(BaseModel):
     browser_name: Optional[str]
     browser_version: Optional[str]
     os_name: Optional[str]
+    user_agent: Optional[str]
     created_at: datetime
     last_used_at: Optional[datetime]
     access_expires_at: Optional[datetime]

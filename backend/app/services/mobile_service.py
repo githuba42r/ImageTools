@@ -70,7 +70,12 @@ class MobileService:
     @staticmethod
     async def validate_and_exchange_secrets(
         db: AsyncSession,
-        shared_secret: str
+        shared_secret: str,
+        device_model: Optional[str] = None,
+        device_manufacturer: Optional[str] = None,
+        device_owner: Optional[str] = None,
+        os_version: Optional[str] = None,
+        app_version: Optional[str] = None
     ) -> Optional[MobileAppPairing]:
         """
         Validate initial shared secret and exchange for long-term authorization
@@ -83,6 +88,11 @@ class MobileService:
         Args:
             db: Database session
             shared_secret: Initial shared secret from QR code
+            device_model: Device model (e.g. "Samsung Galaxy S21")
+            device_manufacturer: Device manufacturer (e.g. "Samsung")
+            device_owner: Device owner name or email
+            os_version: OS version (e.g. "Android 13")
+            app_version: ImageTools app version
         
         Returns:
             MobileAppPairing with long-term secrets, or None if invalid
@@ -110,6 +120,13 @@ class MobileService:
             pairing.is_active = False
             await db.commit()
             return None
+        
+        # Store device metadata
+        pairing.device_model = device_model
+        pairing.device_manufacturer = device_manufacturer
+        pairing.device_owner = device_owner
+        pairing.os_version = os_version
+        pairing.app_version = app_version
         
         # Generate long-term and refresh secrets
         pairing.long_term_secret = MobileService.generate_shared_secret()

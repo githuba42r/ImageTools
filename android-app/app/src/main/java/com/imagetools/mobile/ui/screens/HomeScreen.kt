@@ -1,15 +1,19 @@
 package com.imagetools.mobile.ui.screens
 
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.imagetools.mobile.R
 import com.imagetools.mobile.BuildConfig
 import com.imagetools.mobile.data.models.ValidateSecretRequest
 import com.imagetools.mobile.data.network.RetrofitClient
@@ -51,8 +55,15 @@ fun HomeScreen(
                 RetrofitClient.setBaseUrl(url)
                 
                 Log.d(TAG, "Validating secret with backend...")
-                // Validate secret
-                val validateRequest = ValidateSecretRequest(secret)
+                // Validate secret with device information
+                val validateRequest = ValidateSecretRequest(
+                    sharedSecret = secret,
+                    deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
+                    deviceManufacturer = Build.MANUFACTURER,
+                    deviceOwner = Build.USER.takeIf { it.isNotBlank() },
+                    osVersion = "Android ${Build.VERSION.RELEASE}",
+                    appVersion = BuildConfig.VERSION_NAME
+                )
                 val response = RetrofitClient.getApi().validateSecret(validateRequest)
                 
                 Log.d(TAG, "Validation response: ${response.code()}, success: ${response.isSuccessful}")
@@ -170,6 +181,14 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
+                Image(
+                    painter = painterResource(id = R.drawable.imagetools_logo),
+                    contentDescription = "ImageTools Logo",
+                    modifier = Modifier.size(120.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
                 Text(
                     text = "Image Tools Mobile",
                     style = MaterialTheme.typography.headlineMedium,

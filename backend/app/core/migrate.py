@@ -139,6 +139,20 @@ async def migrate_database():
                 logger.info("Adding 'used' column to mobile_app_pairings table...")
                 await conn.execute(text("ALTER TABLE mobile_app_pairings ADD COLUMN used BOOLEAN DEFAULT 0"))
                 migrations_applied.append("Added 'used' column to mobile_app_pairings")
+            
+            # Add device metadata columns
+            if 'device_model' not in mobile_columns:
+                logger.info("Adding device metadata columns to mobile_app_pairings table...")
+                await conn.execute(text("ALTER TABLE mobile_app_pairings ADD COLUMN device_model VARCHAR"))
+                await conn.execute(text("ALTER TABLE mobile_app_pairings ADD COLUMN device_manufacturer VARCHAR"))
+                await conn.execute(text("ALTER TABLE mobile_app_pairings ADD COLUMN device_owner VARCHAR"))
+                await conn.execute(text("ALTER TABLE mobile_app_pairings ADD COLUMN os_version VARCHAR"))
+                await conn.execute(text("ALTER TABLE mobile_app_pairings ADD COLUMN app_version VARCHAR"))
+                migrations_applied.append("Added device metadata columns to mobile_app_pairings")
+            elif 'device_owner' not in mobile_columns:
+                logger.info("Adding device_owner column to mobile_app_pairings table...")
+                await conn.execute(text("ALTER TABLE mobile_app_pairings ADD COLUMN device_owner VARCHAR"))
+                migrations_applied.append("Added device_owner column to mobile_app_pairings")
         
         if migrations_applied:
             logger.info(f"Applied {len(migrations_applied)} migrations:")

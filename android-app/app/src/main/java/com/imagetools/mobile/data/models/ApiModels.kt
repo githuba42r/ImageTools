@@ -7,7 +7,22 @@ import com.google.gson.annotations.SerializedName
  */
 data class ValidateSecretRequest(
     @SerializedName("shared_secret")
-    val sharedSecret: String
+    val sharedSecret: String,
+    
+    @SerializedName("device_model")
+    val deviceModel: String? = null,
+    
+    @SerializedName("device_manufacturer")
+    val deviceManufacturer: String? = null,
+    
+    @SerializedName("device_owner")
+    val deviceOwner: String? = null,
+    
+    @SerializedName("os_version")
+    val osVersion: String? = null,
+    
+    @SerializedName("app_version")
+    val appVersion: String? = null
 )
 
 /**
@@ -25,6 +40,21 @@ data class ValidateSecretResponse(
     
     @SerializedName("device_name")
     val deviceName: String?,
+    
+    @SerializedName("device_model")
+    val deviceModel: String?,
+    
+    @SerializedName("device_manufacturer")
+    val deviceManufacturer: String?,
+    
+    @SerializedName("device_owner")
+    val deviceOwner: String?,
+    
+    @SerializedName("os_version")
+    val osVersion: String?,
+    
+    @SerializedName("app_version")
+    val appVersion: String?,
     
     @SerializedName("long_term_secret")
     val longTermSecret: String?,

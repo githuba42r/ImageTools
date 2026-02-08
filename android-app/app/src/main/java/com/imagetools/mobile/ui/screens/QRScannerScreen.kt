@@ -1,6 +1,7 @@
 package com.imagetools.mobile.ui.screens
 
 import android.Manifest
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,6 +22,7 @@ import androidx.core.content.ContextCompat
 import com.google.gson.Gson
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.common.InputImage
+import com.imagetools.mobile.BuildConfig
 import com.imagetools.mobile.data.models.QRCodeData
 import com.imagetools.mobile.data.models.ValidateSecretRequest
 import com.imagetools.mobile.data.network.RetrofitClient
@@ -207,8 +209,15 @@ private suspend fun handleQRCode(
         RetrofitClient.setBaseUrl(qrCodeData.instanceUrl)
         
         Log.d(TAG, "Validating secret with backend...")
-        // Validate secret
-        val validateRequest = ValidateSecretRequest(qrCodeData.sharedSecret)
+        // Validate secret with device information
+        val validateRequest = ValidateSecretRequest(
+            sharedSecret = qrCodeData.sharedSecret,
+            deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
+            deviceManufacturer = Build.MANUFACTURER,
+            deviceOwner = Build.USER.takeIf { it.isNotBlank() },
+            osVersion = "Android ${Build.VERSION.RELEASE}",
+            appVersion = BuildConfig.VERSION_NAME
+        )
         val response = RetrofitClient.getApi().validateSecret(validateRequest)
         
         Log.d(TAG, "Validation response: ${response.code()}, success: ${response.isSuccessful}")

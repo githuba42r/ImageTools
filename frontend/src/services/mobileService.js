@@ -52,6 +52,16 @@ const mobileService = {
   },
 
   /**
+   * List all paired devices for a session (with device metadata)
+   * @param {string} sessionId - Session ID
+   * @returns {Promise} List of paired devices with metadata
+   */
+  async listPairedDevices(sessionId) {
+    const response = await api.get(`/mobile/pairings/session/${sessionId}/list`);
+    return response.data;
+  },
+
+  /**
    * Delete/deactivate a pairing
    * @param {string} pairingId - Pairing ID
    * @returns {Promise}

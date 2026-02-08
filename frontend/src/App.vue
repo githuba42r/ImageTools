@@ -553,9 +553,31 @@
           <div v-if="qrCodePaired" class="pairing-success-container">
             <div class="success-icon">✓</div>
             <h3 style="color: #10b981; margin: 20px 0 10px;">Device Paired Successfully!</h3>
-            <p style="color: #666; margin-bottom: 30px;">
+            <p style="color: #666; margin-bottom: 20px;">
               Your mobile device is now connected. You can share images from your gallery.
             </p>
+            
+            <!-- Device Details -->
+            <div v-if="newlyPairedDevice" class="info-box" style="margin-bottom: 20px; text-align: left;">
+              <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 1em; color: #374151;">
+                📱 Connected Device:
+              </h4>
+              <div style="font-size: 0.95em; color: #666; line-height: 1.8;">
+                <div><strong>Device Name:</strong> {{ newlyPairedDevice.device_name || 'Android Device' }}</div>
+                <div v-if="newlyPairedDevice.device_model">
+                  <strong>Model:</strong> {{ newlyPairedDevice.device_model }}
+                </div>
+                <div v-if="newlyPairedDevice.device_owner">
+                  <strong>Owner:</strong> {{ newlyPairedDevice.device_owner }}
+                </div>
+                <div v-if="newlyPairedDevice.os_version">
+                  <strong>OS:</strong> {{ newlyPairedDevice.os_version }}
+                </div>
+                <div v-if="newlyPairedDevice.app_version">
+                  <strong>App Version:</strong> {{ newlyPairedDevice.app_version }}
+                </div>
+              </div>
+            </div>
             
             <!-- Circular countdown -->
             <div class="circular-countdown">
@@ -677,6 +699,80 @@
                   <p style="margin-top: 8px;"><strong>Auth Secret:</strong> <code style="background-color: #fff; padding: 2px 6px;">{{ qrData.shared_secret }}</code></p>
                   <p style="margin-top: 8px;"><strong>Pairing ID:</strong> <code style="background-color: #fff; padding: 2px 6px;">{{ qrData.pairing_id }}</code></p>
                 </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Paired Devices List -->
+          <div v-if="!qrCodePaired" class="info-box" style="margin-top: 20px;">
+            <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.1em;">
+              📱 Connected Devices
+            </h3>
+            
+            <div v-if="isLoadingDevices" style="text-align: center; padding: 20px;">
+              <div class="loading-spinner" style="display: inline-block;"></div>
+              <p style="margin-top: 10px; color: #666;">Loading devices...</p>
+            </div>
+            
+            <div v-else-if="pairedDevices.length === 0" style="text-align: center; padding: 20px; color: #666;">
+              <p>No devices connected yet</p>
+              <p style="font-size: 0.9em; margin-top: 10px;">
+                Scan the QR code above to connect your first device
+              </p>
+            </div>
+            
+            <div v-else style="display: flex; flex-direction: column; gap: 12px;">
+              <div 
+                v-for="device in pairedDevices" 
+                :key="device.id"
+                style="
+                  border: 1px solid #dee2e6;
+                  border-radius: 8px;
+                  padding: 12px;
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: flex-start;
+                  background-color: #f8f9fa;
+                "
+              >
+                <div style="flex: 1;">
+                  <div style="font-weight: 600; margin-bottom: 6px;">
+                    {{ device.device_name || 'Android Device' }}
+                  </div>
+                  <div style="font-size: 0.9em; color: #666; line-height: 1.6;">
+                    <div v-if="device.device_model">
+                      <strong>Model:</strong> {{ device.device_model }}
+                    </div>
+                    <div v-if="device.device_owner">
+                      <strong>Owner:</strong> {{ device.device_owner }}
+                    </div>
+                    <div v-if="device.os_version">
+                      <strong>OS:</strong> {{ device.os_version }}
+                    </div>
+                    <div v-if="device.app_version">
+                      <strong>App Version:</strong> {{ device.app_version }}
+                    </div>
+                    <div style="margin-top: 4px;">
+                      <strong>Connected:</strong> {{ formatDate(device.created_at) }}
+                    </div>
+                    <div v-if="device.last_used_at">
+                      <strong>Last Used:</strong> {{ formatDate(device.last_used_at) }}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  @click="deletePairedDevice(device.id)"
+                  class="btn-modal btn-secondary"
+                  style="
+                    padding: 6px 12px;
+                    font-size: 0.85em;
+                    margin-left: 12px;
+                    white-space: nowrap;
+                  "
+                  title="Remove this device"
+                >
+                  Remove
+                </button>
               </div>
             </div>
           </div>
@@ -1368,6 +1464,9 @@ const qrCodeSecondsRemaining = ref(0);
 const qrCodePaired = ref(false);
 const qrCodeSuccessCountdown = ref(30);
 const pairingCodeCopied = ref(false);
+const pairedDevices = ref([]);
+const isLoadingDevices = ref(false);
+const newlyPairedDevice = ref(null);
 let qrCodeTimerInterval = null;
 let qrCodePollingInterval = null;
 let qrCodeSuccessInterval = null;
@@ -1846,6 +1945,8 @@ const openMobileQRModal = async () => {
   showMobileQRModal.value = true;
   // Generate QR code when opening Mobile QR modal
   await generateQRCode();
+  // Load paired devices list
+  await loadPairedDevices();
 };
 
 const closeMobileQRAndAbout = () => {
@@ -1883,6 +1984,7 @@ const checkPairingStatus = async () => {
     if (pairing.used) {
       console.log('[QR Pairing] ✅ Pairing has been used! Showing success countdown...');
       qrCodePaired.value = true;
+      newlyPairedDevice.value = pairing; // Store device info for success screen
       
       // Clear the expiry timer
       if (qrCodeTimerInterval) {
@@ -2049,12 +2151,44 @@ const getPairingIntentUrl = () => {
     url: qrData.value.instance_url,
     secret: qrData.value.shared_secret,
     pairing_id: qrData.value.pairing_id,
-    session_id: qrData.value.session_id
+    session_id: sessionId.value
   });
   
   const deepLink = `imagetools://pair/link?${params.toString()}`;
   console.log('Generated pairing deep link:', deepLink);
+  
   return deepLink;
+};
+
+// Load paired devices list
+const loadPairedDevices = async () => {
+  try {
+    isLoadingDevices.value = true;
+    const devices = await mobileService.listPairedDevices(sessionId.value);
+    pairedDevices.value = devices;
+    console.log('[Mobile] Loaded paired devices:', devices);
+  } catch (error) {
+    console.error('[Mobile] Failed to load paired devices:', error);
+  } finally {
+    isLoadingDevices.value = false;
+  }
+};
+
+// Delete a paired device
+const deletePairedDevice = async (deviceId) => {
+  if (!confirm('Are you sure you want to remove this device? It will need to be paired again to share images.')) {
+    return;
+  }
+  
+  try {
+    await mobileService.deletePairing(deviceId);
+    // Reload devices list
+    await loadPairedDevices();
+    console.log('[Mobile] Deleted paired device:', deviceId);
+  } catch (error) {
+    console.error('[Mobile] Failed to delete paired device:', error);
+    alert('Failed to remove device. Please try again.');
+  }
 };
 
 // Browser Addon Authorization Functions

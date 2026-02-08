@@ -225,7 +225,15 @@ async def validate_shared_secret(
     Called when mobile app scans QR code. Returns long-term and refresh secrets
     for ongoing authentication.
     """
-    pairing = await MobileService.validate_and_exchange_secrets(db, request.shared_secret)
+    pairing = await MobileService.validate_and_exchange_secrets(
+        db,
+        request.shared_secret,
+        device_model=request.device_model,
+        device_manufacturer=request.device_manufacturer,
+        device_owner=request.device_owner,
+        os_version=request.os_version,
+        app_version=request.app_version
+    )
     if not pairing:
         raise HTTPException(status_code=401, detail="Invalid or expired shared secret")
     
@@ -234,6 +242,11 @@ async def validate_shared_secret(
         pairing_id=pairing.id,
         session_id=pairing.session_id,
         device_name=pairing.device_name,
+        device_model=pairing.device_model,
+        device_manufacturer=pairing.device_manufacturer,
+        device_owner=pairing.device_owner,
+        os_version=pairing.os_version,
+        app_version=pairing.app_version,
         long_term_secret=pairing.long_term_secret,
         refresh_secret=pairing.refresh_secret,
         long_term_expires_at=pairing.long_term_expires_at,
@@ -321,6 +334,11 @@ async def list_paired_devices(
         PairedDeviceInfo(
             id=p.id,
             device_name=p.device_name,
+            device_model=p.device_model,
+            device_manufacturer=p.device_manufacturer,
+            device_owner=p.device_owner,
+            os_version=p.os_version,
+            app_version=p.app_version,
             created_at=p.created_at,
             last_used_at=p.last_used_at,
             long_term_expires_at=p.long_term_expires_at,
