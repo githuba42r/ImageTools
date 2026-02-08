@@ -29,14 +29,19 @@ services:
       # For domain: https://yourdomain.com
       - CORS_ORIGINS=http://localhost:8082,http://127.0.0.1:8082
       
-      # OpenRouter OAuth Configuration
-      # CRITICAL: Set this to your actual deployment URL for OAuth to work
-      # The callback URL will automatically be: {OPENROUTER_APP_URL}/oauth/callback
+      # Instance URL - Used for mobile/addon enrollments and OAuth callbacks
+      # CRITICAL: Set this to your actual deployment URL
+      # This is used for:
+      #   - Android mobile app QR code enrollment
+      #   - Browser addon connection URLs
+      #   - OpenRouter OAuth callback URL ({INSTANCE_URL}/oauth/callback)
       # Examples:
       #   Localhost: http://localhost:8082
       #   LAN: http://192.168.1.100:8082 (replace with your server IP)
       #   Domain: https://yourdomain.com
-      - OPENROUTER_APP_URL=${OPENROUTER_APP_URL:-http://localhost:8082}
+      - INSTANCE_URL=${INSTANCE_URL:-http://localhost:8082}
+      
+      # OpenRouter Configuration
       - OPENROUTER_APP_NAME=ImageTools
       
       # Optional: Fallback API key (leave empty to require user enrollment)

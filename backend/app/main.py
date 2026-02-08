@@ -4,15 +4,22 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from pathlib import Path
+import logging
+import os
+import asyncio
+import json
+
+# Custom logging filter to exclude health check requests
+class HealthCheckFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.getMessage().find('/health') == -1
+
+# Import settings after defining the filter
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.websocket_manager import manager as ws_manager
 from app.middleware import InternalAuthMiddleware
 from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon
-import logging
-import os
-import asyncio
-import json
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +27,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Apply health check filter to uvicorn access logs
+logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
 
 # Load version information from version.json
 def load_version_info():
