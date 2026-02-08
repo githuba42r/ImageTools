@@ -24,6 +24,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // File paths
 const ROOT_DIR = path.join(__dirname);
@@ -201,13 +202,76 @@ function updateAndroidGradle(newVersion, versionCode) {
 }
 
 /**
+ * Run git command and return output
+ */
+function runGitCommand(command, description) {
+  try {
+    const output = execSync(command, { encoding: 'utf8', stdio: 'pipe' });
+    return output.trim();
+  } catch (error) {
+    throw new Error(`${description} failed: ${error.message}`);
+  }
+}
+
+/**
+ * Check if git working directory is clean
+ */
+function checkGitStatus() {
+  try {
+    const status = execSync('git status --porcelain', { encoding: 'utf8' });
+    return status.trim();
+  } catch (error) {
+    throw new Error('Failed to check git status. Are you in a git repository?');
+  }
+}
+
+/**
+ * Commit version changes and create git tag
+ */
+function commitAndTag(newVersion) {
+  console.log('\n📦 Committing version changes...');
+  
+  // Add all version-related files
+  const filesToCommit = [
+    'version.json',
+    'frontend/package.json',
+    'backend/app/main.py',
+    'browser-addons/firefox/manifest.json',
+    'browser-addons/chrome/manifest.json',
+    'android-app/app/build.gradle'
+  ];
+  
+  try {
+    // Stage the files
+    filesToCommit.forEach(file => {
+      runGitCommand(`git add ${file}`, `Staging ${file}`);
+    });
+    
+    // Commit
+    const commitMessage = `chore: bump version to ${newVersion}`;
+    runGitCommand(`git commit -m "${commitMessage}"`, 'Creating commit');
+    console.log(`   ✓ Committed: ${commitMessage}`);
+    
+    // Create tag
+    const tagName = `v${newVersion}`;
+    const tagMessage = `Release version ${newVersion}`;
+    runGitCommand(`git tag -a ${tagName} -m "${tagMessage}"`, 'Creating tag');
+    console.log(`   ✓ Tagged: ${tagName}`);
+    
+    return tagName;
+  } catch (error) {
+    throw new Error(`Git operations failed: ${error.message}`);
+  }
+}
+
+/**
  * Display usage information
  */
 function showUsage() {
   console.log(`
 ImageTools Version Bump Tool
 
-Usage: node bump-version.js <bump-type> [preid]
+Usage: node bump-version.js <bump-type> [preid] [--no-commit]
 
 Bump Types:
   major       Increment major version (1.2.3 -> 2.0.0)
@@ -218,6 +282,7 @@ Bump Types:
 Options:
   preid       Prerelease identifier (default: alpha)
               Examples: alpha, beta, rc
+  --no-commit Skip automatic git commit and tag creation
 
 Examples:
   node bump-version.js patch
@@ -225,6 +290,7 @@ Examples:
   node bump-version.js major
   node bump-version.js prerelease
   node bump-version.js prerelease beta
+  node bump-version.js patch --no-commit
 `);
 }
 
@@ -239,10 +305,23 @@ function main() {
     process.exit(0);
   }
   
+  // Parse arguments
+  const noCommit = args.includes('--no-commit');
   const bumpType = args[0];
-  const preid = args[1] || 'alpha';
+  const preid = args[1] && !args[1].startsWith('--') ? args[1] : 'alpha';
   
   try {
+    // Check git status before proceeding (unless --no-commit is specified)
+    if (!noCommit) {
+      const gitStatus = checkGitStatus();
+      if (gitStatus) {
+        console.error('\n❌ Error: Working directory has uncommitted changes.');
+        console.error('   Please commit or stash your changes before bumping version.\n');
+        console.error('   Or use --no-commit flag to skip automatic commit.\n');
+        process.exit(1);
+      }
+    }
+    
     // Read current version
     const versionData = JSON.parse(fs.readFileSync(VERSION_FILE, 'utf8'));
     const currentVersion = versionData.version;
@@ -271,11 +350,23 @@ function main() {
     console.log('  • browser-addons/firefox/manifest.json');
     console.log('  • browser-addons/chrome/manifest.json');
     console.log('  • android-app/app/build.gradle');
-    console.log('\n💡 Next steps:');
-    console.log('  1. Review the changes with: git diff');
-    console.log('  2. Commit: git add . && git commit -m "chore: bump version to ' + newVersion + '"');
-    console.log('  3. Tag: git tag v' + newVersion);
-    console.log('  4. Push: git push && git push --tags\n');
+    
+    // Commit and tag
+    if (!noCommit) {
+      const tagName = commitAndTag(newVersion);
+      console.log('\n✅ Changes committed and tagged!\n');
+      console.log('💡 Next steps:');
+      console.log(`  1. Review the changes with: git show`);
+      console.log(`  2. Push changes: git push`);
+      console.log(`  3. Push tags: git push --tags`);
+      console.log(`  4. Or push both: git push && git push --tags\n`);
+    } else {
+      console.log('\n💡 Next steps:');
+      console.log('  1. Review the changes with: git diff');
+      console.log('  2. Commit: git add . && git commit -m "chore: bump version to ' + newVersion + '"');
+      console.log('  3. Tag: git tag v' + newVersion);
+      console.log('  4. Push: git push && git push --tags\n');
+    }
     
   } catch (error) {
     console.error(`\n❌ Error: ${error.message}\n`);

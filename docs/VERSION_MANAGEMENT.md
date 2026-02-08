@@ -33,7 +33,7 @@ The central version file is located at `/version.json`:
 Use the `bump-version.js` script to increment versions across all components:
 
 ```bash
-node bump-version.js <bump-type> [preid]
+node bump-version.js <bump-type> [preid] [--no-commit]
 ```
 
 ### Bump Types
@@ -80,14 +80,42 @@ The bump script automatically updates:
 5. **browser-addons/chrome/manifest.json** - Chrome extension version
 6. **android-app/app/build.gradle** - Android app versionName and versionCode
 
+### Automatic Git Commit and Tag
+
+By default, the bump script automatically:
+1. Stages all version-related files
+2. Creates a commit with message: `chore: bump version to X.Y.Z`
+3. Creates an annotated git tag: `vX.Y.Z`
+
+**Prerequisites:**
+- Your working directory must be clean (no uncommitted changes)
+- You must be in a git repository
+
 ### After Bumping
 
 After running the bump script:
 
-1. Review changes: `git diff`
-2. Commit: `git add . && git commit -m "chore: bump version to X.Y.Z"`
-3. Tag: `git tag vX.Y.Z`
-4. Push: `git push && git push --tags`
+1. Review the commit: `git show`
+2. Push changes: `git push`
+3. Push tags: `git push --tags`
+4. Or push both at once: `git push && git push --tags`
+
+### Skip Automatic Commit
+
+To update version files without committing:
+
+```bash
+node bump-version.js patch --no-commit
+```
+
+Then manually commit:
+```bash
+git diff                                    # Review changes
+git add .
+git commit -m "chore: bump version to X.Y.Z"
+git tag vX.Y.Z
+git push && git push --tags
+```
 
 ## Version Display
 
