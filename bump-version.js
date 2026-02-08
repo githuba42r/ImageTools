@@ -215,10 +215,12 @@ function runGitCommand(command, description) {
 
 /**
  * Check if git working directory is clean
+ * Only checks for modified or staged files, ignoring untracked files
  */
 function checkGitStatus() {
   try {
-    const status = execSync('git status --porcelain', { encoding: 'utf8' });
+    // Use -uno to ignore untracked files
+    const status = execSync('git status --porcelain -uno', { encoding: 'utf8' });
     return status.trim();
   } catch (error) {
     throw new Error('Failed to check git status. Are you in a git repository?');
