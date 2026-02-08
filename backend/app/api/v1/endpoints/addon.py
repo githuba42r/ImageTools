@@ -284,6 +284,7 @@ async def list_connected_addons(
             browser_name=a.browser_name,
             browser_version=a.browser_version,
             os_name=a.os_name,
+            user_agent=a.user_agent,
             created_at=a.created_at,
             last_used_at=a.last_used_at,
             access_expires_at=a.access_expires_at,
