@@ -7,12 +7,12 @@
 # - Docker image (tagged with version and latest)
 # - Android APK
 # - Browser addons (Firefox & Chrome)
-# - Frontend production build
 #
 # All artifacts are placed in /dist folder
 ###############################################################################
 
-set -e  # Exit on error
+# Note: We don't use 'set -e' so that failures in one component don't prevent others from building
+# Each build section handles its own error checking
 
 # Colors for output
 RED='\033[0;31m'
@@ -165,7 +165,8 @@ if [ "$BUILD_DOCKER" = true ]; then
         print_info "Image size: $(docker images --format "{{.Size}}" "$IMAGE_TAG_VERSIONED")"
     else
         print_error "Docker build failed! Check logs: $DIST_DIR/logs/docker-build.log"
-        exit 1
+        print_warning "Continuing with other builds..."
+        BUILD_DOCKER=false
     fi
 fi
 
@@ -181,41 +182,50 @@ if [ "$BUILD_ANDROID" = true ]; then
     # Check if gradlew exists
     if [ ! -f "gradlew" ]; then
         print_error "gradlew not found in android-app directory"
-        exit 1
-    fi
-    
-    # Make gradlew executable
-    chmod +x gradlew
-    
-    # Clean previous builds
-    print_info "Cleaning previous builds..."
-    ./gradlew clean > "$DIST_DIR/logs/android-clean.log" 2>&1
-    
-    # Build release APK
-    print_info "Building release APK..."
-    ./gradlew assembleRelease 2>&1 | tee "$DIST_DIR/logs/android-build.log"
-    
-    if [ ${PIPESTATUS[0]} -eq 0 ]; then
-        # Find the generated APK
-        APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-        
-        if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            # Copy APK to dist with versioned filename
-            APK_FILENAME="imagetools-${VERSION}-${VERSION_CODE}.apk"
-            cp "$APK_PATH" "$DIST_DIR/$APK_FILENAME"
-            
-            # Get APK size
-            APK_SIZE=$(du -h "$DIST_DIR/$APK_FILENAME" | cut -f1)
-            
-            print_success "Android APK built successfully"
-            print_info "Output: $APK_FILENAME ($APK_SIZE)"
-        else
-            print_error "APK file not found after build"
-            exit 1
-        fi
+        print_warning "Skipping Android build"
+        BUILD_ANDROID=false
     else
-        print_error "Android build failed! Check logs: $DIST_DIR/logs/android-build.log"
-        exit 1
+        # Make gradlew executable
+        chmod +x gradlew
+        
+        # Clean previous builds
+        print_info "Cleaning previous builds..."
+        ./gradlew clean > "$DIST_DIR/logs/android-clean.log" 2>&1
+        
+        if [ $? -ne 0 ]; then
+            print_error "Gradle clean failed! Check logs: $DIST_DIR/logs/android-clean.log"
+            print_warning "Skipping Android build - ensure ANDROID_HOME is set and Gradle is configured"
+            BUILD_ANDROID=false
+        else
+            # Build release APK
+            print_info "Building release APK..."
+            ./gradlew assembleRelease 2>&1 | tee "$DIST_DIR/logs/android-build.log"
+            
+            if [ ${PIPESTATUS[0]} -eq 0 ]; then
+                # Find the generated APK
+                APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+                
+                if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
+                    # Copy APK to dist with versioned filename
+                    APK_FILENAME="imagetools-${VERSION}-${VERSION_CODE}.apk"
+                    cp "$APK_PATH" "$DIST_DIR/$APK_FILENAME"
+                    
+                    # Get APK size
+                    APK_SIZE=$(du -h "$DIST_DIR/$APK_FILENAME" | cut -f1)
+                    
+                    print_success "Android APK built successfully"
+                    print_info "Output: $APK_FILENAME ($APK_SIZE)"
+                else
+                    print_error "APK file not found after build"
+                    print_warning "Android build completed but APK was not generated"
+                    BUILD_ANDROID=false
+                fi
+            else
+                print_error "Android build failed! Check logs: $DIST_DIR/logs/android-build.log"
+                print_warning "Continuing with other builds..."
+                BUILD_ANDROID=false
+            fi
+        fi
     fi
     
     cd "$SCRIPT_DIR"
@@ -396,7 +406,7 @@ echo ""
 echo "Built Artifacts:"
 
 if [ "$BUILD_DOCKER" = true ]; then
-    echo "  🐳 Docker: imagetools-${VERSION}-docker.tar.gz"
+    echo "  🐳 Docker: ghcr.io/githuba42r/imagetools:${VERSION} (in Docker daemon)"
 fi
 
 if [ "$BUILD_ANDROID" = true ]; then
