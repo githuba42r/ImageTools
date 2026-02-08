@@ -35,6 +35,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend application code
 COPY backend/ ./
 
+# Copy version.json for version endpoint
+COPY version.json /version.json
+
 # Copy built frontend from builder stage
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 
