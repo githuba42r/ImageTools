@@ -3,6 +3,7 @@ package com.imagetools.mobile
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.imagetools.mobile.data.models.ValidateAuthRequest
 import com.imagetools.mobile.data.network.RetrofitClient
 import com.imagetools.mobile.utils.PairingPreferences
 import kotlinx.coroutines.flow.first
@@ -24,6 +26,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+
+private const val TAG = "ShareActivity"
 
 class ShareActivity : ComponentActivity() {
     
@@ -144,6 +148,35 @@ class ShareActivity : ComponentActivity() {
         }
         
         RetrofitClient.setBaseUrl(instanceUrl)
+        
+        // Validate pairing is still active before uploading
+        try {
+            Log.d(TAG, "Validating pairing before upload...")
+            val validateResponse = RetrofitClient.getApi().validateAuth(
+                ValidateAuthRequest(longTermSecret = longTermSecret)
+            )
+            
+            if (validateResponse.isSuccessful) {
+                val validationResult = validateResponse.body()
+                if (validationResult?.valid == false) {
+                    // Pairing was revoked
+                    Log.w(TAG, "Pairing is no longer valid - clearing local data")
+                    pairingPrefs.clearPairing()
+                    throw Exception("This device was unpaired from the web interface. Please pair again.")
+                }
+            } else {
+                Log.w(TAG, "Failed to validate pairing: ${validateResponse.code()}")
+                throw Exception("Failed to validate pairing with server")
+            }
+        } catch (e: Exception) {
+            if (e.message?.contains("unpaired") == true) {
+                // Re-throw unpaired message
+                throw e
+            }
+            // For other errors, log but continue with upload attempt
+            Log.e(TAG, "Error validating pairing: ${e.message}")
+            throw Exception("Network error: Could not validate pairing. Check your connection.")
+        }
         
         // Copy URI content to a temporary file
         val inputStream = contentResolver.openInputStream(imageUri)

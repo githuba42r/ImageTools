@@ -4,6 +4,7 @@ import com.imagetools.mobile.data.models.ImageUploadRequest
 import com.imagetools.mobile.data.models.ImageUploadResponse
 import com.imagetools.mobile.data.models.UnpairResponse
 import com.imagetools.mobile.data.models.ValidateAuthRequest
+import com.imagetools.mobile.data.models.ValidateAuthResponse
 import com.imagetools.mobile.data.models.ValidateSecretRequest
 import com.imagetools.mobile.data.models.ValidateSecretResponse
 import okhttp3.MultipartBody
@@ -23,6 +24,11 @@ interface ImageToolsApi {
     suspend fun validateSecret(
         @Body request: ValidateSecretRequest
     ): Response<ValidateSecretResponse>
+    
+    @POST("api/v1/mobile/validate-auth")
+    suspend fun validateAuth(
+        @Body request: ValidateAuthRequest
+    ): Response<ValidateAuthResponse>
     
     @Multipart
     @POST("api/v1/mobile/upload")

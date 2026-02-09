@@ -114,6 +114,41 @@ fun HomeScreen(
         if (isPaired) {
             deviceName = pairingPrefs.deviceName.first()
             sessionId = pairingPrefs.sessionId.first()
+            
+            // Validate pairing is still active on the server
+            val longTermSecret = pairingPrefs.longTermSecret.first()
+            if (!longTermSecret.isNullOrEmpty()) {
+                try {
+                    Log.d(TAG, "Validating pairing status with server...")
+                    val response = RetrofitClient.getApi().validateAuth(
+                        ValidateAuthRequest(longTermSecret = longTermSecret)
+                    )
+                    
+                    if (response.isSuccessful) {
+                        val validationResult = response.body()
+                        if (validationResult?.valid == false) {
+                            // Pairing was revoked from web interface
+                            Log.w(TAG, "Pairing is no longer valid - device was unpaired from web")
+                            pairingPrefs.clearPairing()
+                            isPaired = false
+                            deviceName = null
+                            sessionId = null
+                            Toast.makeText(
+                                context, 
+                                "This device was unpaired from the web interface", 
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            Log.d(TAG, "Pairing is still valid")
+                        }
+                    } else {
+                        Log.w(TAG, "Failed to validate pairing: ${response.code()}")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error validating pairing: ${e.message}")
+                    // Don't clear pairing on network errors - could be temporary
+                }
+            }
         }
     }
     
