@@ -128,11 +128,31 @@ async def delete_pairing(
     db: Session = Depends(get_db)
 ):
     """
-    Deactivate a pairing
+    Deactivate a pairing (called from web UI)
+    
+    Broadcasts pairing_revoked event to notify the Android device
     """
+    # Get pairing info before deleting
+    pairing = await MobileService.get_pairing_by_id(db, pairing_id)
+    if not pairing:
+        raise HTTPException(status_code=404, detail="Pairing not found")
+    
+    session_id = pairing.session_id
+    
+    # Deactivate the pairing
     success = await MobileService.deactivate_pairing(db, pairing_id)
     if not success:
         raise HTTPException(status_code=404, detail="Pairing not found")
+    
+    # Broadcast to Android device that pairing was revoked
+    await ws_manager.broadcast_to_session(
+        session_id=session_id,
+        message={
+            "type": "pairing_revoked",
+            "pairing_id": pairing_id
+        }
+    )
+    
     return {"message": "Pairing deactivated successfully"}
 
 
@@ -304,6 +324,29 @@ async def validate_auth(
         expires_at=pairing.long_term_expires_at,
         needs_refresh=needs_refresh
     )
+
+
+@router.post("/unpair")
+async def unpair_device(
+    request: ValidateAuthRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Unpair a device (called from Android app)
+    
+    Validates the long-term secret and deactivates the pairing.
+    This allows the Android app to unpair itself.
+    """
+    pairing = await MobileService.validate_long_term_secret(db, request.long_term_secret)
+    if not pairing:
+        raise HTTPException(status_code=401, detail="Invalid or expired authentication")
+    
+    # Deactivate the pairing
+    success = await MobileService.deactivate_pairing(db, pairing.id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to unpair device")
+    
+    return {"message": "Device unpaired successfully"}
 
 
 @router.get("/pairings/session/{session_id}/list", response_model=List[PairedDeviceInfo])
