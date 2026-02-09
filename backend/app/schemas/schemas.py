@@ -258,6 +258,11 @@ class MobileAppPairingResponse(BaseModel):
     id: str
     session_id: str
     device_name: Optional[str]
+    device_model: Optional[str] = None
+    device_manufacturer: Optional[str] = None
+    device_owner: Optional[str] = None
+    os_version: Optional[str] = None
+    app_version: Optional[str] = None
     shared_secret: str
     is_active: bool
     used: bool
