@@ -10,9 +10,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.imagetools.mobile.R
 import com.imagetools.mobile.BuildConfig
 import com.imagetools.mobile.data.models.ValidateAuthRequest
@@ -31,6 +34,7 @@ fun HomeScreen(
     pendingPairingData: Map<String, String>? = null
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var isPaired by remember { mutableStateOf(false) }
     var deviceName by remember { mutableStateOf<String?>(null) }
     var sessionId by remember { mutableStateOf<String?>(null) }
@@ -38,6 +42,68 @@ fun HomeScreen(
     var showUnpairDialog by remember { mutableStateOf(false) }
     var isProcessingIntent by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    
+    // Validate pairing on every resume
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                scope.launch {
+                    Log.d(TAG, "App resumed - checking pairing status")
+                    isPaired = pairingPrefs.isPaired.first()
+                    if (isPaired) {
+                        deviceName = pairingPrefs.deviceName.first()
+                        sessionId = pairingPrefs.sessionId.first()
+                        
+                        // Validate pairing is still active on the server
+                        val longTermSecret = pairingPrefs.longTermSecret.first()
+                        val instanceUrl = pairingPrefs.instanceUrl.first()
+                        
+                        if (!longTermSecret.isNullOrEmpty() && !instanceUrl.isNullOrEmpty()) {
+                            try {
+                                // Set base URL before making API call
+                                RetrofitClient.setBaseUrl(instanceUrl)
+                                
+                                Log.d(TAG, "Validating pairing status with server...")
+                                val response = RetrofitClient.getApi().validateAuth(
+                                    ValidateAuthRequest(longTermSecret = longTermSecret)
+                                )
+                                
+                                if (response.isSuccessful) {
+                                    val validationResult = response.body()
+                                    if (validationResult?.valid == false) {
+                                        // Pairing was revoked from web interface
+                                        Log.w(TAG, "Pairing is no longer valid - device was unpaired from web")
+                                        pairingPrefs.clearPairing()
+                                        isPaired = false
+                                        deviceName = null
+                                        sessionId = null
+                                        Toast.makeText(
+                                            context, 
+                                            "This device was unpaired from the web interface", 
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    } else {
+                                        Log.d(TAG, "Pairing is still valid")
+                                    }
+                                } else {
+                                    Log.w(TAG, "Failed to validate pairing: ${response.code()}")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error validating pairing: ${e.message}")
+                                // Don't clear pairing on network errors - could be temporary
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        lifecycleOwner.lifecycle.addObserver(observer)
+        
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
     
     // Handle pending pairing data from intent
     LaunchedEffect(pendingPairingData) {
@@ -105,54 +171,6 @@ fun HomeScreen(
                 Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
             } finally {
                 isProcessingIntent = false
-            }
-        }
-    }
-    
-    LaunchedEffect(Unit) {
-        isPaired = pairingPrefs.isPaired.first()
-        if (isPaired) {
-            deviceName = pairingPrefs.deviceName.first()
-            sessionId = pairingPrefs.sessionId.first()
-            
-            // Validate pairing is still active on the server
-            val longTermSecret = pairingPrefs.longTermSecret.first()
-            val instanceUrl = pairingPrefs.instanceUrl.first()
-            
-            if (!longTermSecret.isNullOrEmpty() && !instanceUrl.isNullOrEmpty()) {
-                try {
-                    // Set base URL before making API call
-                    RetrofitClient.setBaseUrl(instanceUrl)
-                    
-                    Log.d(TAG, "Validating pairing status with server...")
-                    val response = RetrofitClient.getApi().validateAuth(
-                        ValidateAuthRequest(longTermSecret = longTermSecret)
-                    )
-                    
-                    if (response.isSuccessful) {
-                        val validationResult = response.body()
-                        if (validationResult?.valid == false) {
-                            // Pairing was revoked from web interface
-                            Log.w(TAG, "Pairing is no longer valid - device was unpaired from web")
-                            pairingPrefs.clearPairing()
-                            isPaired = false
-                            deviceName = null
-                            sessionId = null
-                            Toast.makeText(
-                                context, 
-                                "This device was unpaired from the web interface", 
-                                Toast.LENGTH_LONG
-                            ).show()
-                        } else {
-                            Log.d(TAG, "Pairing is still valid")
-                        }
-                    } else {
-                        Log.w(TAG, "Failed to validate pairing: ${response.code()}")
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error validating pairing: ${e.message}")
-                    // Don't clear pairing on network errors - could be temporary
-                }
             }
         }
     }
