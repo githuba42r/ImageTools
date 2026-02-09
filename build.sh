@@ -272,20 +272,20 @@ if [ "$BUILD_BROWSER" = true ]; then
     print_info "Packaging Firefox addon..."
     cd "$SCRIPT_DIR/browser-addons/firefox"
     
-    FIREFOX_ZIP="imagetools-firefox-${VERSION}.zip"
+    FIREFOX_XPI="imagetools-firefox-${VERSION}.xpi"
     
-    # Build file list (include icons only if they exist)
-    FIREFOX_FILES="manifest.json popup.html popup.js"
-    if [ -f "icon16.png" ]; then
-        FIREFOX_FILES="$FIREFOX_FILES icon16.png icon48.png icon128.png"
+    # Build file list (include all required files)
+    FIREFOX_FILES="manifest.json popup.html popup.js background.js content.js"
+    if [ -d "icons" ]; then
+        FIREFOX_FILES="$FIREFOX_FILES icons"
     else
         print_warning "Icon files not found, packaging without icons"
     fi
     
-    zip -r "$DIST_DIR/$FIREFOX_ZIP" $FIREFOX_FILES -q
+    zip -r "$DIST_DIR/$FIREFOX_XPI" $FIREFOX_FILES -q
     
-    FIREFOX_SIZE=$(du -h "$DIST_DIR/$FIREFOX_ZIP" | cut -f1)
-    print_success "Firefox addon packaged: $FIREFOX_ZIP ($FIREFOX_SIZE)"
+    FIREFOX_SIZE=$(du -h "$DIST_DIR/$FIREFOX_XPI" | cut -f1)
+    print_success "Firefox addon packaged: $FIREFOX_XPI ($FIREFOX_SIZE)"
     
     # Package Chrome addon
     print_info "Packaging Chrome addon..."
@@ -293,10 +293,10 @@ if [ "$BUILD_BROWSER" = true ]; then
     
     CHROME_ZIP="imagetools-chrome-${VERSION}.zip"
     
-    # Build file list (include icons only if they exist)
-    CHROME_FILES="manifest.json popup.html popup.js"
-    if [ -f "icon16.png" ]; then
-        CHROME_FILES="$CHROME_FILES icon16.png icon48.png icon128.png"
+    # Build file list (include all required files)
+    CHROME_FILES="manifest.json popup.html popup.js background.js content.js"
+    if [ -d "icons" ]; then
+        CHROME_FILES="$CHROME_FILES icons"
     else
         print_warning "Icon files not found, packaging without icons"
     fi
@@ -362,7 +362,7 @@ if [ "$BUILD_BROWSER" = true ]; then
     cat >> "$BUILD_REPORT" << EOF
 
 Browser Addons:
-  - Firefox: imagetools-firefox-${VERSION}.zip
+  - Firefox: imagetools-firefox-${VERSION}.xpi
   - Chrome:  imagetools-chrome-${VERSION}.zip
 EOF
 fi
@@ -435,7 +435,7 @@ if [ "$BUILD_ANDROID" = true ]; then
 fi
 
 if [ "$BUILD_BROWSER" = true ]; then
-    echo "  🦊 Firefox: imagetools-firefox-${VERSION}.zip"
+    echo "  🦊 Firefox: imagetools-firefox-${VERSION}.xpi"
     echo "  🌐 Chrome:  imagetools-chrome-${VERSION}.zip"
 fi
 
