@@ -1378,6 +1378,7 @@ import {
   setOfflineCallback as setWebSocketOfflineCallback,
   setOnlineCallback as setWebSocketOnlineCallback,
   setNewImageCallback,
+  setPairingRevokedCallback,
   resetReconnectAttempts
 } from './services/websocketService';
 import UploadArea from './components/UploadArea.vue';
@@ -2904,6 +2905,13 @@ onMounted(() => {
     console.log('[App] New image from mobile:', data.image_id);
     // Reload images to show the new upload
     imageStore.loadSessionImages();
+  });
+  
+  // Handle pairing revoked events from Android device unpairing
+  setPairingRevokedCallback((data) => {
+    console.log('[App] Pairing revoked from device:', data.pairing_id);
+    // Reload paired devices list to reflect the change
+    loadPairedDevices();
   });
   
   // 2. Axios interceptor (IMMEDIATE - for API errors during user actions)

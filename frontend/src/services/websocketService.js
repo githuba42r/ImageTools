@@ -18,6 +18,7 @@ let isIntentionallyClosed = false;
 let onOfflineCallback = null;
 let onOnlineCallback = null;
 let onNewImageCallback = null;
+let onPairingRevokedCallback = null;
 let pingTimeout = null;
 let currentSessionId = null;
 
@@ -130,6 +131,12 @@ export function connectWebSocket(sessionId) {
           console.log('[WebSocket] New image uploaded:', data.image_id);
           if (onNewImageCallback) {
             onNewImageCallback(data);
+          }
+        } else if (data.type === 'pairing_revoked') {
+          // Handle pairing revoked from Android device
+          console.log('[WebSocket] Pairing revoked:', data.pairing_id);
+          if (onPairingRevokedCallback) {
+            onPairingRevokedCallback(data);
           }
         }
         
@@ -250,6 +257,13 @@ export function setOnlineCallback(callback) {
  */
 export function setNewImageCallback(callback) {
   onNewImageCallback = callback;
+}
+
+/**
+ * Set callback for when a pairing is revoked
+ */
+export function setPairingRevokedCallback(callback) {
+  onPairingRevokedCallback = callback;
 }
 
 /**
