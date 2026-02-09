@@ -43,58 +43,71 @@ fun HomeScreen(
     var isProcessingIntent by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     
-    // Validate pairing on every resume
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                scope.launch {
-                    Log.d(TAG, "App resumed - checking pairing status")
-                    isPaired = pairingPrefs.isPaired.first()
-                    if (isPaired) {
-                        deviceName = pairingPrefs.deviceName.first()
-                        sessionId = pairingPrefs.sessionId.first()
+    // Function to validate pairing status
+    val validatePairingStatus = {
+        scope.launch {
+            Log.d(TAG, "Checking pairing status")
+            isPaired = pairingPrefs.isPaired.first()
+            if (isPaired) {
+                deviceName = pairingPrefs.deviceName.first()
+                sessionId = pairingPrefs.sessionId.first()
+                
+                // Validate pairing is still active on the server
+                val longTermSecret = pairingPrefs.longTermSecret.first()
+                val instanceUrl = pairingPrefs.instanceUrl.first()
+                
+                if (!longTermSecret.isNullOrEmpty() && !instanceUrl.isNullOrEmpty()) {
+                    try {
+                        // Set base URL before making API call
+                        RetrofitClient.setBaseUrl(instanceUrl)
                         
-                        // Validate pairing is still active on the server
-                        val longTermSecret = pairingPrefs.longTermSecret.first()
-                        val instanceUrl = pairingPrefs.instanceUrl.first()
+                        Log.d(TAG, "Validating pairing status with server...")
+                        val response = RetrofitClient.getApi().validateAuth(
+                            ValidateAuthRequest(longTermSecret = longTermSecret)
+                        )
                         
-                        if (!longTermSecret.isNullOrEmpty() && !instanceUrl.isNullOrEmpty()) {
-                            try {
-                                // Set base URL before making API call
-                                RetrofitClient.setBaseUrl(instanceUrl)
-                                
-                                Log.d(TAG, "Validating pairing status with server...")
-                                val response = RetrofitClient.getApi().validateAuth(
-                                    ValidateAuthRequest(longTermSecret = longTermSecret)
-                                )
-                                
-                                if (response.isSuccessful) {
-                                    val validationResult = response.body()
-                                    if (validationResult?.valid == false) {
-                                        // Pairing was revoked from web interface
-                                        Log.w(TAG, "Pairing is no longer valid - device was unpaired from web")
-                                        pairingPrefs.clearPairing()
-                                        isPaired = false
-                                        deviceName = null
-                                        sessionId = null
-                                        Toast.makeText(
-                                            context, 
-                                            "This device was unpaired from the web interface", 
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                    } else {
-                                        Log.d(TAG, "Pairing is still valid")
-                                    }
-                                } else {
-                                    Log.w(TAG, "Failed to validate pairing: ${response.code()}")
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Error validating pairing: ${e.message}")
-                                // Don't clear pairing on network errors - could be temporary
+                        if (response.isSuccessful) {
+                            val validationResult = response.body()
+                            if (validationResult?.valid == false) {
+                                // Pairing was revoked from web interface
+                                Log.w(TAG, "Pairing is no longer valid - device was unpaired from web")
+                                pairingPrefs.clearPairing()
+                                isPaired = false
+                                deviceName = null
+                                sessionId = null
+                                Toast.makeText(
+                                    context, 
+                                    "This device was unpaired from the web interface", 
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                Log.d(TAG, "Pairing is still valid")
                             }
+                        } else {
+                            Log.w(TAG, "Failed to validate pairing: ${response.code()}")
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error validating pairing: ${e.message}")
+                        // Don't clear pairing on network errors - could be temporary
                     }
                 }
+            }
+        }
+    }
+    
+    // Validate pairing when app comes to foreground (ON_START) or resumes (ON_RESUME)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> {
+                    Log.d(TAG, "App started (brought to foreground)")
+                    validatePairingStatus()
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    Log.d(TAG, "App resumed")
+                    validatePairingStatus()
+                }
+                else -> {}
             }
         }
         
