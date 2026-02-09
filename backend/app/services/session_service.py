@@ -47,6 +47,11 @@ class SessionService:
         db.add(session)
         await db.commit()
         await db.refresh(session)
+        
+        # Ensure system default compression profiles exist (one-time global creation)
+        from app.services import profile_service
+        await profile_service.create_system_default_profiles(db)
+        
         return session
     
     @staticmethod

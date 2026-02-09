@@ -62,10 +62,10 @@
             </button>
             
             <button class="settings-menu-item" @click="openPresetSettings">
-              <span class="menu-icon">⚙️</span>
+              <span class="menu-icon">📋</span>
               <div class="menu-text">
-                <span class="menu-title">Preset Settings</span>
-                <span class="menu-desc">Manage compression presets</span>
+                <span class="menu-title">Manage Profiles</span>
+                <span class="menu-desc">Create & edit compression profiles</span>
               </div>
             </button>
             
@@ -125,12 +125,12 @@
               <div v-if="showBulkPresetMenu" class="preset-menu" @click.stop>
                 <button 
                   v-for="preset in presets" 
-                  :key="preset.name"
-                  @click="selectBulkPreset(preset.name)"
+                  :key="preset.id || preset.name"
+                  @click="selectBulkPreset(preset.id || preset.name)"
                   class="preset-option"
-                  :class="{ 'active': bulkSelectedPreset === preset.name }"
+                  :class="{ 'active': bulkSelectedPreset === (preset.id || preset.name) }"
                 >
-                  <span class="preset-icon">{{ getPresetIcon(preset.name) }}</span>
+                  <span class="preset-icon">{{ getPresetIcon(preset) }}</span>
                   <div class="preset-info">
                     <span class="preset-label">{{ preset.label }}</span>
                     <span class="preset-desc">{{ preset.description }}</span>
@@ -438,46 +438,12 @@
       </div>
     </div>
 
-    <!-- Preset Settings Modal -->
-    <div v-if="showPresetSettingsModal" class="modal-overlay" @click="showPresetSettingsModal = false">
-      <div class="settings-modal" @click.stop>
-        <button class="modal-close-btn" @click="showPresetSettingsModal = false">✕</button>
-        
-        <div class="modal-header">
-          <h2>⚙️ Preset Settings</h2>
-        </div>
-        
-        <div class="settings-content">
-          <div class="settings-section">
-            <h3>📦 Compression Presets</h3>
-            <p class="section-description">
-              Manage your compression presets and their settings.
-            </p>
-            
-            <div class="info-box">
-              <p><strong>Coming Soon:</strong></p>
-              <p>Preset management features will allow you to create, edit, and delete custom compression presets.</p>
-            </div>
-            
-            <div class="presets-list">
-              <div v-for="preset in presets" :key="preset.name" class="preset-item">
-                <span class="preset-icon">{{ getPresetIcon(preset.name) }}</span>
-                <div class="preset-info">
-                  <span class="preset-name">{{ preset.display_name }}</span>
-                  <span class="preset-desc">Quality: {{ preset.quality }}%, Max: {{ preset.max_width }}x{{ preset.max_height }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="modal-footer">
-          <button class="btn-modal btn-primary" @click="showPresetSettingsModal = false">
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Profile Manager -->
+    <ProfileManager 
+      :isOpen="showPresetSettingsModal" 
+      @close="showPresetSettingsModal = false"
+      @updated="handleProfilesUpdated"
+    />
 
     <!-- About Modal -->
     <div v-if="showAboutModal" class="modal-overlay" @click="showAboutModal = false">
@@ -1445,6 +1411,7 @@ import ImageViewer from './components/ImageViewer.vue';
 import ImageEditor from './components/ImageEditor.vue';
 import OfflineModal from './components/OfflineModal.vue';
 import ToastNotification from './components/ToastNotification.vue';
+import ProfileManager from './components/ProfileManager.vue';
 
 const sessionStore = useSessionStore();
 const imageStore = useImageStore();
@@ -2039,6 +2006,11 @@ const openAISettings = () => {
 const openPresetSettings = () => {
   showSettingsMenu.value = false;
   showPresetSettingsModal.value = true;
+};
+
+const handleProfilesUpdated = async () => {
+  // Reload presets/profiles when a profile is created, updated, or deleted
+  await imageStore.loadPresets();
 };
 
 const openAbout = async () => {
@@ -2770,14 +2742,32 @@ const toggleDescription = (modelId) => {
   }
 };
 
-const getPresetIcon = (presetName) => {
-  const icons = {
-    email: '📧',
-    web: '🌐',
-    web_hq: '⭐',
-    custom: '⚙️'
-  };
-  return icons[presetName] || '⚡';
+const getPresetIcon = (preset) => {
+  if (!preset) return '⚡';
+  
+  // Handle string preset name (for legacy compatibility)
+  if (typeof preset === 'string') {
+    const icons = {
+      email: '📧',
+      web: '🌐',
+      web_hq: '⭐'
+    };
+    return icons[preset] || '📋';
+  }
+  
+  // Handle preset object
+  if (preset.type === 'builtin') {
+    const icons = {
+      email: '📧',
+      web: '🌐',
+      web_hq: '⭐'
+    };
+    return icons[preset.name] || '⚡';
+  } else if (preset.type === 'custom') {
+    return '📋';  // Custom profile icon
+  }
+  
+  return '⚡';
 };
 
 const toggleBulkPresetMenu = () => {

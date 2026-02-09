@@ -19,7 +19,7 @@ from app.core.config import settings
 from app.core.database import init_db
 from app.core.websocket_manager import manager as ws_manager
 from app.middleware import InternalAuthMiddleware
-from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon
+from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles
 
 # Configure logging
 logging.basicConfig(
@@ -89,6 +89,7 @@ if settings.CORS_ENABLED:
 app.include_router(sessions.router, prefix=settings.API_PREFIX)
 app.include_router(images.router, prefix=settings.API_PREFIX)
 app.include_router(compression.router, prefix=settings.API_PREFIX)
+app.include_router(profiles.router, prefix=settings.API_PREFIX)
 app.include_router(history.router, prefix=settings.API_PREFIX)
 app.include_router(background.router, prefix=f"{settings.API_PREFIX}/background", tags=["background"])
 app.include_router(openrouter_oauth.router, prefix=f"{settings.API_PREFIX}/openrouter")

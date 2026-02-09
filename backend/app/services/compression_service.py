@@ -2,11 +2,11 @@ import uuid
 import os
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from PIL import Image as PILImage
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models.models import Image, History
+from app.models.models import Image, History, CompressionProfile
 from app.core.config import settings
 from app.services.image_service import ImageService
 
@@ -41,20 +41,50 @@ class CompressionService:
         return presets.get(preset, presets["email"])
     
     @staticmethod
+    async def _get_profile_config(db: AsyncSession, profile_id: str, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get configuration from a custom user profile."""
+        result = await db.execute(
+            select(CompressionProfile)
+            .where(CompressionProfile.id == profile_id)
+            .where(CompressionProfile.session_id == session_id)
+        )
+        profile = result.scalars().first()
+        
+        if not profile:
+            return None
+        
+        return {
+            "max_width": profile.max_width,
+            "max_height": profile.max_height,
+            "quality": profile.quality,
+            "target_size_kb": profile.target_size_kb,
+            "format": profile.format,
+            "profile_name": profile.name
+        }
+    
+    @staticmethod
     async def compress_image(
         db: AsyncSession,
         image_id: str,
+        session_id: str,
         preset: str = "email",
-        custom_params: Dict[str, Any] = None
+        custom_params: Optional[Dict[str, Any]] = None
     ) -> tuple[str, int, int]:
-        """Compress image with given preset or custom parameters."""
+        """Compress image with given preset, custom profile, or custom parameters."""
         image = await ImageService.get_image(db, image_id)
         if not image:
             raise ValueError(f"Image {image_id} not found")
         
         # Get compression parameters
+        operation_type = f"compress_{preset}"
         if preset == "custom" and custom_params:
             params = custom_params
+        elif preset not in ["email", "web", "web_hq", "custom"]:
+            # Treat as profile ID
+            params = await CompressionService._get_profile_config(db, preset, session_id)
+            if not params:
+                raise ValueError(f"Profile {preset} not found")
+            operation_type = f"compress_profile_{params.get('profile_name', preset)}"
         else:
             params = CompressionService._get_preset_config(preset)
         
@@ -117,7 +147,7 @@ class CompressionService:
         history_entry = History(
             id=str(uuid.uuid4()),
             image_id=image_id,
-            operation_type=f"compress_{preset}",
+            operation_type=operation_type,
             operation_params=json.dumps(params),
             input_path=image.current_path,
             output_path=output_path,

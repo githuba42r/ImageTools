@@ -53,12 +53,12 @@
             <div v-if="showPresetMenu" class="preset-menu" @click.stop>
               <button 
                 v-for="preset in presets" 
-                :key="preset.name"
-                @click="selectPreset(preset.name)"
+                :key="preset.id || preset.name"
+                @click="selectPreset(preset.id || preset.name)"
                 class="preset-option"
-                :class="{ 'active': selectedPreset === preset.name }"
+                :class="{ 'active': selectedPreset === (preset.id || preset.name) }"
               >
-                <span class="preset-icon">{{ getPresetIcon(preset.name) }}</span>
+                <span class="preset-icon">{{ getPresetIcon(preset) }}</span>
                 <div class="preset-info">
                   <span class="preset-label">{{ preset.label }}</span>
                   <span class="preset-desc">{{ preset.description }}</span>
@@ -479,20 +479,37 @@ const formatSize = (bytes) => {
   return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 };
 
-const getPresetIcon = (presetName) => {
-  if (!presetName) return '⚡';
-  const icons = {
-    email: '📧',
-    web: '🌐',
-    web_hq: '⭐',
-    custom: '⚙️'
-  };
-  return icons[presetName] || '⚡';
+const getPresetIcon = (preset) => {
+  if (!preset) return '⚡';
+  
+  // Handle string preset name (for legacy compatibility)
+  if (typeof preset === 'string') {
+    const icons = {
+      email: '📧',
+      web: '🌐',
+      web_hq: '⭐'
+    };
+    return icons[preset] || '📋';
+  }
+  
+  // Handle preset object
+  if (preset.type === 'builtin') {
+    const icons = {
+      email: '📧',
+      web: '🌐',
+      web_hq: '⭐'
+    };
+    return icons[preset.name] || '⚡';
+  } else if (preset.type === 'custom') {
+    return '📋';  // Custom profile icon
+  }
+  
+  return '⚡';
 };
 
-const getPresetLabel = (presetName) => {
-  if (!presetName) return 'Select Preset';
-  const preset = props.presets.find(p => p.name === presetName);
+const getPresetLabel = (presetId) => {
+  if (!presetId) return 'Select Preset';
+  const preset = props.presets.find(p => (p.id || p.name) === presetId);
   return preset ? preset.label : 'Select Preset';
 };
 

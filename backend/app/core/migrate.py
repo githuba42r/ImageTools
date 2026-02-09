@@ -154,6 +154,129 @@ async def migrate_database():
                 await conn.execute(text("ALTER TABLE mobile_app_pairings ADD COLUMN device_owner VARCHAR"))
                 migrations_applied.append("Added device_owner column to mobile_app_pairings")
         
+        # Check if compression_profiles table exists
+        result = await conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='compression_profiles'"
+        ))
+        compression_profiles_exists = result.fetchone() is not None
+        
+        if not compression_profiles_exists:
+            logger.info("Creating compression_profiles table...")
+            await conn.execute(text("""
+                CREATE TABLE compression_profiles (
+                    id VARCHAR PRIMARY KEY,
+                    session_id VARCHAR,
+                    name VARCHAR NOT NULL,
+                    max_width INTEGER NOT NULL,
+                    max_height INTEGER NOT NULL,
+                    quality INTEGER NOT NULL,
+                    target_size_kb INTEGER NOT NULL,
+                    format VARCHAR NOT NULL,
+                    retain_aspect_ratio BOOLEAN DEFAULT 1,
+                    is_default BOOLEAN DEFAULT 0,
+                    system_default BOOLEAN DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                )
+            """))
+            
+            # Create index on session_id for fast lookups
+            await conn.execute(text(
+                "CREATE INDEX ix_compression_profiles_session_id ON compression_profiles(session_id)"
+            ))
+            
+            migrations_applied.append("Created compression_profiles table with indexes")
+            
+            # Create system default profiles (one-time, global)
+            logger.info("Creating system default profiles...")
+            from app.services.profile_service import create_system_default_profiles
+            from app.core.database import async_session
+            
+            async with async_session() as session:
+                await create_system_default_profiles(session)
+            
+            migrations_applied.append("Created system default profiles")
+        else:
+            # Check if system_default column exists
+            result = await conn.execute(text("PRAGMA table_info(compression_profiles)"))
+            profile_columns = {row[1]: row for row in result.fetchall()}
+            
+            if 'retain_aspect_ratio' not in profile_columns:
+                logger.info("Adding retain_aspect_ratio column to compression_profiles table...")
+                await conn.execute(text("ALTER TABLE compression_profiles ADD COLUMN retain_aspect_ratio BOOLEAN DEFAULT 1"))
+                migrations_applied.append("Added 'retain_aspect_ratio' column to compression_profiles")
+            
+            if 'system_default' not in profile_columns:
+                logger.info("Adding system_default column to compression_profiles table...")
+                await conn.execute(text("ALTER TABLE compression_profiles ADD COLUMN system_default BOOLEAN DEFAULT 0"))
+                migrations_applied.append("Added 'system_default' column to compression_profiles")
+                
+                # Check if session_id is NOT NULL and needs to be made nullable
+                # In SQLite, this requires recreating the table
+                session_id_info = profile_columns.get('session_id')
+                if session_id_info and session_id_info[3] == 1:  # notnull flag
+                    logger.info("Making session_id nullable in compression_profiles (for system defaults)...")
+                    
+                    # Create new table with nullable session_id
+                    await conn.execute(text("""
+                        CREATE TABLE compression_profiles_new (
+                            id VARCHAR PRIMARY KEY,
+                            session_id VARCHAR,
+                            name VARCHAR NOT NULL,
+                            max_width INTEGER NOT NULL,
+                            max_height INTEGER NOT NULL,
+                            quality INTEGER NOT NULL,
+                            target_size_kb INTEGER NOT NULL,
+                            format VARCHAR NOT NULL,
+                            retain_aspect_ratio BOOLEAN DEFAULT 1,
+                            is_default BOOLEAN DEFAULT 0,
+                            system_default BOOLEAN DEFAULT 0,
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            updated_at DATETIME,
+                            FOREIGN KEY(session_id) REFERENCES sessions(id)
+                        )
+                    """))
+                    
+                    # Copy data from old table
+                    await conn.execute(text("""
+                        INSERT INTO compression_profiles_new 
+                        SELECT id, session_id, name, max_width, max_height, quality, 
+                               target_size_kb, format, 1, is_default, system_default, 
+                               created_at, updated_at
+                        FROM compression_profiles
+                    """))
+                    
+                    # Drop old table
+                    await conn.execute(text("DROP TABLE compression_profiles"))
+                    
+                    # Rename new table
+                    await conn.execute(text("ALTER TABLE compression_profiles_new RENAME TO compression_profiles"))
+                    
+                    # Recreate index
+                    await conn.execute(text(
+                        "CREATE INDEX ix_compression_profiles_session_id ON compression_profiles(session_id)"
+                    ))
+                    
+                    migrations_applied.append("Made session_id nullable in compression_profiles")
+                
+                # Delete all existing per-session default profiles (clean slate for system defaults)
+                logger.info("Removing old per-session default profiles...")
+                result = await conn.execute(text("DELETE FROM compression_profiles"))
+                deleted_count = result.rowcount
+                if deleted_count > 0:
+                    migrations_applied.append(f"Deleted {deleted_count} old per-session profiles")
+                
+                # Create system default profiles (one-time, global)
+                logger.info("Creating system default profiles...")
+                from app.services.profile_service import create_system_default_profiles
+                from app.core.database import async_session
+                
+                async with async_session() as session:
+                    await create_system_default_profiles(session)
+                
+                migrations_applied.append("Created system default profiles")
+        
         if migrations_applied:
             logger.info(f"Applied {len(migrations_applied)} migrations:")
             for migration in migrations_applied:

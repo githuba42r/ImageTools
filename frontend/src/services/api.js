@@ -19,6 +19,28 @@ export const setOfflineCallback = (callback) => {
   offlineCallback = callback;
 };
 
+// Request interceptor to add session ID header
+api.interceptors.request.use(
+  config => {
+    // Get session ID from localStorage
+    const sessionId = localStorage.getItem('imagetools_session_id');
+    
+    // Check if using session override from environment
+    const sessionOverride = import.meta?.env?.VITE_SESSION_OVERRIDE;
+    const activeSessionId = (sessionOverride && sessionOverride.trim() !== '') ? sessionOverride : sessionId;
+    
+    // Add X-Session-ID header if session exists
+    if (activeSessionId) {
+      config.headers['X-Session-ID'] = activeSessionId;
+    }
+    
+    return config;
+  },
+  error => {
+    return Promise.reject(error);
+  }
+);
+
 // Response interceptor to detect offline
 api.interceptors.response.use(
   response => response,
@@ -152,6 +174,33 @@ export const compressionService = {
   async getPresets() {
     const response = await api.get('/compression/presets');
     return response.data;
+  },
+};
+
+// Profile API
+export const profileService = {
+  async createProfile(profileData) {
+    const response = await api.post('/profiles', profileData);
+    return response.data;
+  },
+
+  async getProfiles() {
+    const response = await api.get('/profiles');
+    return response.data;
+  },
+
+  async getProfile(profileId) {
+    const response = await api.get(`/profiles/${profileId}`);
+    return response.data;
+  },
+
+  async updateProfile(profileId, profileData) {
+    const response = await api.put(`/profiles/${profileId}`, profileData);
+    return response.data;
+  },
+
+  async deleteProfile(profileId) {
+    await api.delete(`/profiles/${profileId}`);
   },
 };
 

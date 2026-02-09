@@ -142,6 +142,29 @@ class MobileAppPairing(Base):
     expires_at = Column(DateTime(timezone=True), nullable=True)  # Initial pairing expiry (2 min)
 
 
+class CompressionProfile(Base):
+    """
+    Store custom compression profiles per session
+    Users can create, modify, and delete their own compression profiles
+    System default profiles are read-only templates (session_id = 'system')
+    """
+    __tablename__ = "compression_profiles"
+    
+    id = Column(String, primary_key=True, index=True)  # UUID
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=True, index=True)  # NULL or 'system' for system defaults
+    name = Column(String, nullable=False)  # User-defined profile name
+    max_width = Column(Integer, nullable=False)  # Maximum width in pixels
+    max_height = Column(Integer, nullable=False)  # Maximum height in pixels
+    quality = Column(Integer, nullable=False)  # JPEG/WEBP quality (1-100)
+    target_size_kb = Column(Integer, nullable=False)  # Target file size in KB
+    format = Column(String, nullable=False)  # Output format: JPEG, PNG, WEBP
+    retain_aspect_ratio = Column(Boolean, default=True)  # Whether to maintain image aspect ratio
+    is_default = Column(Boolean, default=False)  # Whether this is the user's default profile
+    system_default = Column(Boolean, default=False)  # Whether this is a read-only system default
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class BrowserAddonAuthorization(Base):
     """
     Store browser addon authorizations for screenshot uploads

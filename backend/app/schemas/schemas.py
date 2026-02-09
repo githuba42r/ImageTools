@@ -45,8 +45,49 @@ class ImageResponse(BaseModel):
         from_attributes = True
 
 
+class CompressionProfileCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Profile name")
+    max_width: int = Field(..., ge=100, le=10000, description="Maximum width in pixels")
+    max_height: int = Field(..., ge=100, le=10000, description="Maximum height in pixels")
+    quality: int = Field(..., ge=1, le=100, description="JPEG/WEBP quality (1-100)")
+    target_size_kb: int = Field(..., ge=10, le=50000, description="Target file size in KB")
+    format: str = Field(..., pattern="^(JPEG|PNG|WEBP)$", description="Output format")
+    retain_aspect_ratio: bool = Field(default=True, description="Retain image aspect ratio")
+    is_default: bool = Field(default=False, description="Set as default profile")
+
+
+class CompressionProfileUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="Profile name")
+    max_width: Optional[int] = Field(None, ge=100, le=10000, description="Maximum width in pixels")
+    max_height: Optional[int] = Field(None, ge=100, le=10000, description="Maximum height in pixels")
+    quality: Optional[int] = Field(None, ge=1, le=100, description="JPEG/WEBP quality (1-100)")
+    target_size_kb: Optional[int] = Field(None, ge=10, le=50000, description="Target file size in KB")
+    format: Optional[str] = Field(None, pattern="^(JPEG|PNG|WEBP)$", description="Output format")
+    retain_aspect_ratio: Optional[bool] = Field(None, description="Retain image aspect ratio")
+    is_default: Optional[bool] = Field(None, description="Set as default profile")
+
+
+class CompressionProfileResponse(BaseModel):
+    id: str
+    session_id: Optional[str]
+    name: str
+    max_width: int
+    max_height: int
+    quality: int
+    target_size_kb: int
+    format: str
+    retain_aspect_ratio: bool
+    is_default: bool
+    system_default: bool
+    created_at: datetime
+    updated_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+
 class CompressionRequest(BaseModel):
-    preset: str = Field(..., description="Preset name: email, web, web_hq, or custom")
+    preset: str = Field(..., description="Preset name: email, web, web_hq, or profile ID for custom profile")
     quality: Optional[int] = Field(None, ge=1, le=100)
     max_width: Optional[int] = Field(None, ge=100)
     max_height: Optional[int] = Field(None, ge=100)
