@@ -2,6 +2,8 @@ package com.imagetools.mobile.data.network
 
 import com.imagetools.mobile.data.models.ImageUploadRequest
 import com.imagetools.mobile.data.models.ImageUploadResponse
+import com.imagetools.mobile.data.models.UnpairResponse
+import com.imagetools.mobile.data.models.ValidateAuthRequest
 import com.imagetools.mobile.data.models.ValidateSecretRequest
 import com.imagetools.mobile.data.models.ValidateSecretResponse
 import okhttp3.MultipartBody
@@ -28,4 +30,9 @@ interface ImageToolsApi {
         @Part("long_term_secret") longTermSecret: RequestBody,
         @Part file: MultipartBody.Part
     ): Response<ImageUploadResponse>
+    
+    @POST("api/v1/mobile/unpair")
+    suspend fun unpairDevice(
+        @Body request: ValidateAuthRequest
+    ): Response<UnpairResponse>
 }

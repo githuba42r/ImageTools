@@ -155,3 +155,11 @@ data class ValidateAuthResponse(
     @SerializedName("needs_refresh")
     val needsRefresh: Boolean
 )
+
+/**
+ * Response model for unpair operation
+ */
+data class UnpairResponse(
+    @SerializedName("message")
+    val message: String
+)

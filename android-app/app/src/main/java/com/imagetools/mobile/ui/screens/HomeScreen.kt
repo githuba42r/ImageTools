@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.imagetools.mobile.R
 import com.imagetools.mobile.BuildConfig
+import com.imagetools.mobile.data.models.ValidateAuthRequest
 import com.imagetools.mobile.data.models.ValidateSecretRequest
 import com.imagetools.mobile.data.network.RetrofitClient
 import com.imagetools.mobile.utils.PairingPreferences
@@ -131,6 +132,30 @@ fun HomeScreen(
                 TextButton(
                     onClick = {
                         scope.launch {
+                            // Call unpair endpoint before clearing local data
+                            try {
+                                val longTermSecret = pairingPrefs.longTermSecret.first()
+                                if (!longTermSecret.isNullOrEmpty()) {
+                                    Log.d(TAG, "Calling unpair endpoint...")
+                                    val response = RetrofitClient.getApi().unpairDevice(
+                                        ValidateAuthRequest(longTermSecret = longTermSecret)
+                                    )
+                                    if (response.isSuccessful) {
+                                        Log.d(TAG, "Unpaired from server successfully")
+                                        Toast.makeText(context, "Device unpaired successfully", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Log.w(TAG, "Failed to unpair from server: ${response.code()}")
+                                        // Continue with local unpair even if server call fails
+                                    }
+                                } else {
+                                    Log.w(TAG, "No long-term secret found, skipping server unpair")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to unpair from server: ${e.message}")
+                                // Continue with local unpair even if server call fails
+                            }
+                            
+                            // Clear local pairing data
                             pairingPrefs.clearPairing()
                             isPaired = false
                             deviceName = null
