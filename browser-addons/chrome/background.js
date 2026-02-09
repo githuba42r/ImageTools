@@ -5,7 +5,8 @@
 const API_ENDPOINTS = {
   token: '/api/v1/addon/token',
   refresh: '/api/v1/addon/refresh',
-  upload: '/api/v1/addon/upload'
+  upload: '/api/v1/addon/upload',
+  unpair: '/api/v1/addon/unpair'
 };
 
 // Auth state is stored in chrome.storage.local
@@ -441,17 +442,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(error => sendResponse({ canCapture: false, error: error.message }));
     return true;
   } else if (message.action === 'logout') {
-    const emptyAuthState = {
-      instanceUrl: null,
-      accessToken: null,
-      refreshToken: null,
-      accessExpiresAt: null,
-      refreshExpiresAt: null
-    };
-    saveAuthState(emptyAuthState)
-      .then(() => sendResponse({ success: true }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
+    // Handle logout asynchronously
+    (async () => {
+      try {
+        // Notify web app before clearing local state
+        const authState = await getAuthState();
+        
+        if (authState.accessToken && authState.instanceUrl) {
+          try {
+            // Call unpair endpoint to notify web app
+            await fetch(`${authState.instanceUrl}${API_ENDPOINTS.unpair}`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${authState.accessToken}`
+              }
+            });
+            console.log('[ImageTools] Successfully notified web app of unpair');
+          } catch (error) {
+            console.error('[ImageTools] Failed to notify web app of unpair:', error);
+            // Continue with logout even if notification fails
+          }
+        }
+        
+        // Clear local auth state
+        const emptyAuthState = {
+          instanceUrl: null,
+          accessToken: null,
+          refreshToken: null,
+          accessExpiresAt: null,
+          refreshExpiresAt: null
+        };
+        await saveAuthState(emptyAuthState);
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('[ImageTools] Logout error:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep message channel open for async response
   } else if (message.action === 'uploadSelection') {
     dataUrlToBlob(message.dataUrl)
       .then(blob => uploadScreenshot(blob, `screenshot-selection-${Date.now()}.png`))

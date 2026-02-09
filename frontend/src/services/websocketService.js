@@ -19,6 +19,8 @@ let onOfflineCallback = null;
 let onOnlineCallback = null;
 let onNewImageCallback = null;
 let onPairingRevokedCallback = null;
+let onAddonConnectedCallback = null;
+let onAddonAuthorizationRevokedCallback = null;
 let pingTimeout = null;
 let currentSessionId = null;
 
@@ -137,6 +139,18 @@ export function connectWebSocket(sessionId) {
           console.log('[WebSocket] Pairing revoked:', data.pairing_id);
           if (onPairingRevokedCallback) {
             onPairingRevokedCallback(data);
+          }
+        } else if (data.type === 'addon_connected') {
+          // Handle addon connection from browser extension
+          console.log('[WebSocket] Addon connected:', data.auth_id);
+          if (onAddonConnectedCallback) {
+            onAddonConnectedCallback(data);
+          }
+        } else if (data.type === 'addon_authorization_revoked') {
+          // Handle addon authorization revoked from web app
+          console.log('[WebSocket] Addon authorization revoked:', data.auth_id);
+          if (onAddonAuthorizationRevokedCallback) {
+            onAddonAuthorizationRevokedCallback(data);
           }
         }
         
@@ -264,6 +278,20 @@ export function setNewImageCallback(callback) {
  */
 export function setPairingRevokedCallback(callback) {
   onPairingRevokedCallback = callback;
+}
+
+/**
+ * Set callback for when an addon connects
+ */
+export function setAddonConnectedCallback(callback) {
+  onAddonConnectedCallback = callback;
+}
+
+/**
+ * Set callback for when an addon authorization is revoked
+ */
+export function setAddonAuthorizationRevokedCallback(callback) {
+  onAddonAuthorizationRevokedCallback = callback;
 }
 
 /**

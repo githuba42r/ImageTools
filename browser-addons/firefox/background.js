@@ -4,7 +4,8 @@
 const API_ENDPOINTS = {
   token: '/api/v1/addon/token',
   refresh: '/api/v1/addon/refresh',
-  upload: '/api/v1/addon/upload'
+  upload: '/api/v1/addon/upload',
+  unpair: '/api/v1/addon/unpair'
 };
 
 // Auth state
@@ -443,6 +444,24 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
       return Promise.resolve({ canCapture: false, error: error.message });
     }
   } else if (message.action === 'logout') {
+    // Notify web app before clearing local state
+    if (authState.accessToken && authState.instanceUrl) {
+      try {
+        // Call unpair endpoint to notify web app
+        await fetch(`${authState.instanceUrl}${API_ENDPOINTS.unpair}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authState.accessToken}`
+          }
+        });
+        console.log('[ImageTools] Successfully notified web app of unpair');
+      } catch (error) {
+        console.error('[ImageTools] Failed to notify web app of unpair:', error);
+        // Continue with logout even if notification fails
+      }
+    }
+    
+    // Clear local auth state
     authState = {
       instanceUrl: null,
       accessToken: null,

@@ -114,55 +114,108 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   
   async function updateUI() {
-    const response = await browser.runtime.sendMessage({ action: 'getAuthState' });
-    const { authState } = response;
-    
-    if (authState && authState.accessToken && authState.instanceUrl) {
-      // Connected - show capture buttons
-      initialSection.style.display = 'none';
-      connectSection.style.display = 'none';
-      captureSection.style.display = 'block';
+    try {
+      const response = await browser.runtime.sendMessage({ action: 'getAuthState' });
+      const { authState } = response;
       
-      // Check if current tab can be captured
-      const tabCheck = await browser.runtime.sendMessage({ action: 'checkCurrentTab' });
-      
-      if (!tabCheck.canCapture) {
-        // Disable capture buttons and show message
-        captureVisibleBtn.disabled = true;
-        captureFullBtn.disabled = true;
-        captureSelectionBtn.disabled = true;
-        
-        // Add warning message if not already present
-        let warningMsg = document.getElementById('captureWarning');
-        if (!warningMsg) {
-          warningMsg = document.createElement('div');
-          warningMsg.id = 'captureWarning';
-          warningMsg.style.cssText = 'background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #92400e; line-height: 1.5;';
+      if (authState && authState.accessToken && authState.instanceUrl) {
+        // Validate token with backend to check if still authorized
+        // Use a timeout to prevent hanging
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
           
-          if (tabCheck.isImageTools) {
-            warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on ImageTools pages for security.';
-          } else if (tabCheck.isRestricted) {
-            warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on browser internal pages.';
-          } else {
-            warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>This page cannot be captured.';
+          const validateResponse = await fetch(`${authState.instanceUrl}/api/v1/addon/validate`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              access_token: authState.accessToken
+            }),
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (validateResponse.ok) {
+            const validationData = await validateResponse.json();
+            
+            if (!validationData.valid) {
+              // Token is no longer valid - clear auth state and show connect screen
+              console.log('[Popup] Token no longer valid, clearing auth state');
+              await browser.runtime.sendMessage({ action: 'logout' });
+              initialSection.style.display = 'block';
+              connectSection.style.display = 'none';
+              captureSection.style.display = 'none';
+              return;
+            }
+          } else if (validateResponse.status === 401) {
+            // Unauthorized - token revoked, clear auth state
+            console.log('[Popup] Token revoked (401), clearing auth state');
+            await browser.runtime.sendMessage({ action: 'logout' });
+            initialSection.style.display = 'block';
+            connectSection.style.display = 'none';
+            captureSection.style.display = 'none';
+            return;
           }
+        } catch (error) {
+          console.warn('[Popup] Failed to validate token:', error);
+          // Continue showing UI even if validation fails (network issue or timeout)
+        }
+        
+        // Connected - show capture buttons
+        initialSection.style.display = 'none';
+        connectSection.style.display = 'none';
+        captureSection.style.display = 'block';
+        
+        // Check if current tab can be captured
+        const tabCheck = await browser.runtime.sendMessage({ action: 'checkCurrentTab' });
+        
+        if (!tabCheck.canCapture) {
+          // Disable capture buttons and show message
+          captureVisibleBtn.disabled = true;
+          captureFullBtn.disabled = true;
+          captureSelectionBtn.disabled = true;
           
-          captureSection.insertBefore(warningMsg, captureSection.firstChild);
+          // Add warning message if not already present
+          let warningMsg = document.getElementById('captureWarning');
+          if (!warningMsg) {
+            warningMsg = document.createElement('div');
+            warningMsg.id = 'captureWarning';
+            warningMsg.style.cssText = 'background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #92400e; line-height: 1.5;';
+            
+            if (tabCheck.isImageTools) {
+              warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on ImageTools pages for security.';
+            } else if (tabCheck.isRestricted) {
+              warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on browser internal pages.';
+            } else {
+              warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>This page cannot be captured.';
+            }
+            
+            captureSection.insertBefore(warningMsg, captureSection.firstChild);
+          }
+        } else {
+          // Enable capture buttons
+          captureVisibleBtn.disabled = false;
+          captureFullBtn.disabled = false;
+          captureSelectionBtn.disabled = false;
+          
+          // Remove warning message if present
+          const warningMsg = document.getElementById('captureWarning');
+          if (warningMsg) {
+            warningMsg.remove();
+          }
         }
       } else {
-        // Enable capture buttons
-        captureVisibleBtn.disabled = false;
-        captureFullBtn.disabled = false;
-        captureSelectionBtn.disabled = false;
-        
-        // Remove warning message if present
-        const warningMsg = document.getElementById('captureWarning');
-        if (warningMsg) {
-          warningMsg.remove();
-        }
+        // Not connected - show initial screen
+        initialSection.style.display = 'block';
+        connectSection.style.display = 'none';
+        captureSection.style.display = 'none';
       }
-    } else {
-      // Not connected - show initial screen
+    } catch (error) {
+      console.error('[Popup] Error updating UI:', error);
+      // On error, show initial connect screen
       initialSection.style.display = 'block';
       connectSection.style.display = 'none';
       captureSection.style.display = 'none';

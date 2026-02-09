@@ -94,6 +94,18 @@ async def exchange_token(
     # Get instance URL from request headers or fallback to config
     instance_url = get_instance_url(request)
     
+    # Broadcast addon_connected event to all WebSocket clients in this session
+    await ws_manager.broadcast_to_session(
+        session_id=authorization.session_id,
+        message={
+            "type": "addon_connected",
+            "auth_id": authorization.id,
+            "browser_name": authorization.browser_name,
+            "browser_version": authorization.browser_version,
+            "os_name": authorization.os_name
+        }
+    )
+    
     return AddonTokenExchangeResponse(
         access_token=authorization.access_token,
         refresh_token=authorization.refresh_token,
@@ -236,9 +248,26 @@ async def revoke_authorization(
     """
     Revoke an addon authorization
     """
+    # Get authorization details before revoking for WebSocket broadcast
+    auth = await AddonService.get_authorization_by_id(db, auth_id)
+    if not auth:
+        raise HTTPException(status_code=404, detail="Authorization not found")
+    
+    session_id = auth.session_id
+    
     success = await AddonService.revoke_authorization(db, auth_id)
     if not success:
         raise HTTPException(status_code=404, detail="Authorization not found")
+    
+    # Broadcast addon_authorization_revoked event to all WebSocket clients in this session
+    await ws_manager.broadcast_to_session(
+        session_id=session_id,
+        message={
+            "type": "addon_authorization_revoked",
+            "auth_id": auth_id
+        }
+    )
+    
     return {"message": "Authorization revoked successfully"}
 
 
@@ -252,6 +281,51 @@ async def revoke_all_authorizations(
     """
     count = await AddonService.revoke_all_session_authorizations(db, session_id)
     return {"message": f"Revoked {count} authorization(s)"}
+
+
+@router.post("/unpair")
+async def unpair_addon(
+    request: Request,
+    authorization: str = Header(..., description="Bearer token"),
+    db: Session = Depends(get_db)
+):
+    """
+    Unpair addon from web app (called when addon locally disconnects)
+    
+    This endpoint is called when the user clicks "Disconnect" in the addon.
+    It revokes the authorization and broadcasts the event to the web app.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Extract token from "Bearer <token>" format
+    access_token = authorization
+    if authorization.startswith("Bearer "):
+        access_token = authorization[7:]
+    
+    # Validate access token and get authorization
+    auth = await AddonService.validate_access_token(db, access_token)
+    if not auth:
+        logger.error("[ADDON UNPAIR] Invalid or expired access token")
+        raise HTTPException(status_code=401, detail="Invalid or expired access token")
+    
+    logger.info(f"[ADDON UNPAIR] Unpair requested for auth_id: {auth.id}")
+    
+    # Revoke the authorization
+    success = await AddonService.revoke_authorization(db, auth.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Authorization not found")
+    
+    # Broadcast addon_authorization_revoked event to web app
+    await ws_manager.broadcast_to_session(
+        session_id=auth.session_id,
+        message={
+            "type": "addon_authorization_revoked",
+            "auth_id": auth.id
+        }
+    )
+    
+    return {"message": "Addon unpaired successfully"}
 
 
 @router.get("/authorizations/session/{session_id}/list", response_model=List[ConnectedAddonInfo])

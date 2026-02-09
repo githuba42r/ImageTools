@@ -847,7 +847,7 @@
             </div>
             
             <!-- Generate Connection String Button -->
-            <div v-if="!addonRegistrationUrl" style="margin-top: 20px;">
+            <div v-if="!addonRegistrationUrl && !addonConnectionSuccess" style="margin-top: 20px;">
               <button 
                 class="btn-modal btn-primary" 
                 @click="generateAddonRegistrationUrl"
@@ -858,22 +858,78 @@
               </button>
             </div>
             
-            <!-- Connection Instructions (after string is generated and copied) -->
-            <div v-if="addonRegistrationUrl" class="info-box info-box-success" style="margin-top: 20px;">
-              <p style="margin-bottom: 15px;">
-                <strong v-if="addonUrlCopied">✓ Connection string copied to clipboard!</strong>
-                <strong v-else style="color: #f59e0b;">⚠️ Connection string generated</strong>
+            <!-- Connection Success Message -->
+            <div v-if="addonConnectionSuccess" class="pairing-success-container">
+              <div class="success-icon">✓</div>
+              <h3 style="color: #10b981; margin: 20px 0 10px;">Browser Connected Successfully!</h3>
+              <p style="color: #666; margin-bottom: 20px;">
+                Your browser is now connected to ImageTools. You can now capture screenshots using the browser extension!
               </p>
               
-              <div v-if="!addonUrlCopied" style="margin-bottom: 15px;">
-                <button 
-                  class="btn-modal btn-primary" 
-                  @click="copyAddonUrl"
-                  style="width: 100%;"
-                >
-                  📋 Copy Connection String to Clipboard
-                </button>
+              <!-- Browser Details -->
+              <div v-if="addonConnectedDetails" class="info-box" style="margin-bottom: 20px; text-align: left;">
+                <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 1em; color: #374151;">
+                  🧩 Connected Browser:
+                </h4>
+                <div style="font-size: 0.95em; color: #666; line-height: 1.8;">
+                  <div>
+                    <strong>Browser:</strong> {{ addonConnectedDetails.browser_name || 'Browser' }}
+                    {{ addonConnectedDetails.browser_version ? `v${addonConnectedDetails.browser_version}` : '' }}
+                  </div>
+                  <div v-if="addonConnectedDetails.os_name">
+                    <strong>Operating System:</strong> {{ addonConnectedDetails.os_name }}
+                  </div>
+                </div>
               </div>
+              
+              <!-- Circular countdown -->
+              <div class="circular-countdown">
+                <svg class="countdown-svg" width="120" height="120">
+                  <circle
+                    class="countdown-circle-bg"
+                    cx="60"
+                    cy="60"
+                    r="54"
+                    fill="none"
+                    stroke="#e5e7eb"
+                    stroke-width="8"
+                  />
+                  <circle
+                    class="countdown-circle"
+                    cx="60"
+                    cy="60"
+                    r="54"
+                    fill="none"
+                    stroke="#10b981"
+                    stroke-width="8"
+                    stroke-linecap="round"
+                    :stroke-dasharray="339.292"
+                    :stroke-dashoffset="339.292 * (1 - addonSuccessCountdown / 30)"
+                    transform="rotate(-90 60 60)"
+                  />
+                  <text
+                    x="60"
+                    y="60"
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    font-size="28"
+                    font-weight="bold"
+                    fill="#10b981"
+                  >
+                    {{ addonSuccessCountdown }}
+                  </text>
+                </svg>
+                <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+                  Closing in {{ addonSuccessCountdown }} seconds...
+                </p>
+              </div>
+            </div>
+            
+            <!-- Connection Instructions (after string is generated and copied) -->
+            <div v-if="addonRegistrationUrl && !addonConnectionSuccess" class="info-box info-box-success" style="margin-top: 20px;">
+              <p style="margin-bottom: 15px;">
+                <strong style="color: #059669;">✓ Connection string copied to clipboard!</strong>
+              </p>
               
               <div style="background: #fff3cd; padding: 12px; border-radius: 6px; margin-bottom: 15px; border: 2px solid #ffc107; text-align: center;">
                 <p style="margin: 0; font-size: 1.2em; font-weight: bold; color: #856404;">
@@ -1379,6 +1435,8 @@ import {
   setOnlineCallback as setWebSocketOnlineCallback,
   setNewImageCallback,
   setPairingRevokedCallback,
+  setAddonConnectedCallback,
+  setAddonAuthorizationRevokedCallback,
   resetReconnectAttempts
 } from './services/websocketService';
 import UploadArea from './components/UploadArea.vue';
@@ -1424,7 +1482,11 @@ const addonUrlCopied = ref(false);
 const connectedAddons = ref([]);
 const addonCountdownSeconds = ref(0);
 const addonPendingRevoke = ref(null); // Track which addon is pending revoke confirmation
+const addonConnectionSuccess = ref(false); // Track if addon just connected
+const addonSuccessCountdown = ref(30); // Auto-close countdown after successful connection
+const addonConnectedDetails = ref(null); // Details of the newly connected addon
 let addonCountdownInterval = null;
+let addonSuccessCountdownInterval = null;
 
 // Image card settings
 const imageCardSize = ref(localStorage.getItem('imageCardSize') || 'small');
@@ -2484,11 +2546,20 @@ watch(showAddonModal, (isOpen) => {
     addonUrlCopied.value = false;
     addonCountdownSeconds.value = 0;
     addonPendingRevoke.value = null;
+    addonConnectionSuccess.value = false;
+    addonSuccessCountdown.value = 30;
+    addonConnectedDetails.value = null;
     
     // Clear countdown interval
     if (addonCountdownInterval) {
       clearInterval(addonCountdownInterval);
       addonCountdownInterval = null;
+    }
+    
+    // Clear success countdown interval
+    if (addonSuccessCountdownInterval) {
+      clearInterval(addonSuccessCountdownInterval);
+      addonSuccessCountdownInterval = null;
     }
   }
 });
@@ -2912,6 +2983,66 @@ onMounted(() => {
     console.log('[App] Pairing revoked from device:', data.pairing_id);
     // Reload paired devices list to reflect the change
     loadPairedDevices();
+  });
+  
+  // Handle addon connected events from browser extension
+  setAddonConnectedCallback(async (data) => {
+    console.log('[App] Addon connected:', data.auth_id, data);
+    
+    // Reload connected addons list to reflect the new connection
+    await loadConnectedAddons();
+    
+    // If modal is open and we're showing connection instructions, show success message
+    if (showAddonModal.value) {
+      // Clear the connection string to hide instructions
+      addonRegistrationUrl.value = null;
+      addonUrlCopied.value = false;
+      addonCountdownSeconds.value = 0;
+      addonDebugData.value = null;
+      
+      // Clear countdown interval
+      if (addonCountdownInterval) {
+        clearInterval(addonCountdownInterval);
+        addonCountdownInterval = null;
+      }
+      
+      // Show success message with connected addon details
+      addonConnectionSuccess.value = true;
+      addonConnectedDetails.value = {
+        browser_name: data.browser_name,
+        browser_version: data.browser_version,
+        os_name: data.os_name
+      };
+      
+      // Start auto-close countdown (30 seconds)
+      addonSuccessCountdown.value = 30;
+      
+      // Clear any existing success countdown
+      if (addonSuccessCountdownInterval) {
+        clearInterval(addonSuccessCountdownInterval);
+      }
+      
+      // Start success countdown interval
+      addonSuccessCountdownInterval = setInterval(() => {
+        if (addonSuccessCountdown.value > 0) {
+          addonSuccessCountdown.value--;
+        } else {
+          // Auto-close modal
+          clearInterval(addonSuccessCountdownInterval);
+          addonSuccessCountdownInterval = null;
+          showAddonModal.value = false;
+        }
+      }, 1000);
+    }
+  });
+  
+  // Handle addon authorization revoked events from web app
+  setAddonAuthorizationRevokedCallback((data) => {
+    console.log('[App] Addon authorization revoked:', data.auth_id);
+    // Reload connected addons list to reflect the change
+    if (showAddonModal.value) {
+      loadConnectedAddons();
+    }
   });
   
   // 2. Axios interceptor (IMMEDIATE - for API errors during user actions)
