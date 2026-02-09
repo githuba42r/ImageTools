@@ -729,50 +729,85 @@
                   border: 1px solid #dee2e6;
                   border-radius: 8px;
                   padding: 12px;
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: flex-start;
                   background-color: #f8f9fa;
                 "
               >
-                <div style="flex: 1;">
-                  <div style="font-weight: 600; margin-bottom: 6px;">
-                    {{ device.device_name || 'Android Device' }}
+                <!-- Device Info -->
+                <div v-if="deviceToDelete !== device.id" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                  <div style="flex: 1;">
+                    <div style="font-weight: 600; margin-bottom: 6px;">
+                      {{ device.device_name || 'Android Device' }}
+                    </div>
+                    <div style="font-size: 0.9em; color: #666; line-height: 1.6;">
+                      <div v-if="device.device_model">
+                        <strong>Model:</strong> {{ device.device_model }}
+                      </div>
+                      <div v-if="device.device_owner">
+                        <strong>Owner:</strong> {{ device.device_owner }}
+                      </div>
+                      <div v-if="device.os_version">
+                        <strong>OS:</strong> {{ device.os_version }}
+                      </div>
+                      <div v-if="device.app_version">
+                        <strong>App Version:</strong> {{ device.app_version }}
+                      </div>
+                      <div style="margin-top: 4px;">
+                        <strong>Connected:</strong> {{ formatDate(device.created_at) }}
+                      </div>
+                      <div v-if="device.last_used_at">
+                        <strong>Last Used:</strong> {{ formatDate(device.last_used_at) }}
+                      </div>
+                    </div>
                   </div>
-                  <div style="font-size: 0.9em; color: #666; line-height: 1.6;">
-                    <div v-if="device.device_model">
-                      <strong>Model:</strong> {{ device.device_model }}
-                    </div>
-                    <div v-if="device.device_owner">
-                      <strong>Owner:</strong> {{ device.device_owner }}
-                    </div>
-                    <div v-if="device.os_version">
-                      <strong>OS:</strong> {{ device.os_version }}
-                    </div>
-                    <div v-if="device.app_version">
-                      <strong>App Version:</strong> {{ device.app_version }}
-                    </div>
-                    <div style="margin-top: 4px;">
-                      <strong>Connected:</strong> {{ formatDate(device.created_at) }}
-                    </div>
-                    <div v-if="device.last_used_at">
-                      <strong>Last Used:</strong> {{ formatDate(device.last_used_at) }}
-                    </div>
+                  <button
+                    @click="showDeleteConfirmation(device.id)"
+                    class="btn-modal"
+                    style="
+                      padding: 6px 12px;
+                      font-size: 0.85em;
+                      margin-left: 12px;
+                      white-space: nowrap;
+                      background-color: #dc3545;
+                      color: white;
+                      border: 1px solid #dc3545;
+                    "
+                    title="Remove this device"
+                  >
+                    Remove
+                  </button>
+                </div>
+                
+                <!-- Delete Confirmation -->
+                <div v-else style="background-color: #fff3cd; padding: 12px; border-radius: 6px; border: 1px solid #ffc107;">
+                  <p style="margin: 0 0 12px 0; color: #856404; font-weight: 600;">
+                    ⚠️ Remove this device?
+                  </p>
+                  <p style="margin: 0 0 12px 0; font-size: 0.9em; color: #856404;">
+                    <strong>{{ device.device_name || 'Android Device' }}</strong> will need to be paired again to share images.
+                  </p>
+                  <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button
+                      @click="cancelDelete"
+                      class="btn-modal btn-secondary"
+                      style="padding: 6px 12px; font-size: 0.85em;"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      @click="deletePairedDevice(device.id)"
+                      class="btn-modal"
+                      style="
+                        padding: 6px 12px;
+                        font-size: 0.85em;
+                        background-color: #dc3545;
+                        color: white;
+                        border: 1px solid #dc3545;
+                      "
+                    >
+                      Yes, Remove
+                    </button>
                   </div>
                 </div>
-                <button
-                  @click="deletePairedDevice(device.id)"
-                  class="btn-modal btn-secondary"
-                  style="
-                    padding: 6px 12px;
-                    font-size: 0.85em;
-                    margin-left: 12px;
-                    white-space: nowrap;
-                  "
-                  title="Remove this device"
-                >
-                  Remove
-                </button>
               </div>
             </div>
           </div>
@@ -1467,6 +1502,7 @@ const pairingCodeCopied = ref(false);
 const pairedDevices = ref([]);
 const isLoadingDevices = ref(false);
 const newlyPairedDevice = ref(null);
+const deviceToDelete = ref(null); // Track which device is showing delete confirmation
 let qrCodeTimerInterval = null;
 let qrCodePollingInterval = null;
 let qrCodeSuccessInterval = null;
@@ -2174,14 +2210,22 @@ const loadPairedDevices = async () => {
   }
 };
 
+// Show delete confirmation for a device
+const showDeleteConfirmation = (deviceId) => {
+  deviceToDelete.value = deviceId;
+};
+
+// Cancel delete confirmation
+const cancelDelete = () => {
+  deviceToDelete.value = null;
+};
+
 // Delete a paired device
 const deletePairedDevice = async (deviceId) => {
-  if (!confirm('Are you sure you want to remove this device? It will need to be paired again to share images.')) {
-    return;
-  }
-  
   try {
     await mobileService.deletePairing(deviceId);
+    // Clear confirmation state
+    deviceToDelete.value = null;
     // Reload devices list
     await loadPairedDevices();
     console.log('[Mobile] Deleted paired device:', deviceId);
