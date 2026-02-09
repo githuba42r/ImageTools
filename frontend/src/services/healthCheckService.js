@@ -33,8 +33,9 @@ function getBackoffInterval() {
 
 /**
  * Perform a health check by pinging the /health endpoint
+ * @param {boolean} throwOnError - If true, throw error instead of just calling callbacks
  */
-async function performHealthCheck() {
+async function performHealthCheck(throwOnError = false) {
   try {
     const response = await fetch('/health', {
       method: 'GET',
@@ -62,13 +63,21 @@ async function performHealthCheck() {
         pollInterval = 30000;
         restartPolling();
       }
+      
+      return true;
     } else {
       handleOffline();
+      if (throwOnError) {
+        throw new Error(`Health check failed with status ${response.status}`);
+      }
     }
   } catch (error) {
     // Network error, timeout, or other fetch failure
     console.warn('[HealthCheck] Health check failed:', error.message);
     handleOffline();
+    if (throwOnError) {
+      throw error;
+    }
   }
 }
 
@@ -156,10 +165,11 @@ export function setOnlineCallback(callback) {
 
 /**
  * Manually trigger a health check (useful for retry button)
+ * This version throws errors on failure so the caller can handle reconnection logic
  */
 export function checkHealthNow() {
   console.log('[HealthCheck] Manual health check triggered');
-  return performHealthCheck();
+  return performHealthCheck(true);
 }
 
 /**

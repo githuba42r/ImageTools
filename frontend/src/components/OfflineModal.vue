@@ -5,31 +5,39 @@
       <h2 class="offline-title">Service Offline</h2>
       <p class="offline-message">Unable to connect to the backend service</p>
       
-      <!-- Circular countdown timer -->
-      <div class="countdown-container">
-        <svg class="countdown-svg" viewBox="0 0 100 100">
-          <circle
-            class="countdown-circle-bg"
-            cx="50"
-            cy="50"
-            r="45"
-          />
-          <circle
-            class="countdown-circle"
-            cx="50"
-            cy="50"
-            r="45"
-            :style="circleStyle"
-          />
-        </svg>
-        <div class="countdown-text">{{ remainingSeconds }}</div>
+      <!-- Show reconnecting message or countdown -->
+      <div v-if="isReconnecting" class="reconnecting-container">
+        <div class="spinner"></div>
+        <p class="reconnecting-message">Reconnecting...</p>
       </div>
       
-      <p class="retry-message">Retrying connection in {{ remainingSeconds }} seconds...</p>
-      
-      <button @click="retryNow" class="btn-retry">
-        Retry Now
-      </button>
+      <div v-else>
+        <!-- Circular countdown timer -->
+        <div class="countdown-container">
+          <svg class="countdown-svg" viewBox="0 0 100 100">
+            <circle
+              class="countdown-circle-bg"
+              cx="50"
+              cy="50"
+              r="45"
+            />
+            <circle
+              class="countdown-circle"
+              cx="50"
+              cy="50"
+              r="45"
+              :style="circleStyle"
+            />
+          </svg>
+          <div class="countdown-text">{{ remainingSeconds }}</div>
+        </div>
+        
+        <p class="retry-message">Retrying connection in {{ remainingSeconds }} seconds...</p>
+        
+        <button @click="retryNow" class="btn-retry">
+          Retry Now
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -41,6 +49,7 @@ const emit = defineEmits(['retry']);
 
 const totalSeconds = 15;
 const remainingSeconds = ref(totalSeconds);
+const isReconnecting = ref(false);
 let countdownInterval = null;
 
 // Calculate circle dash offset for animation
@@ -62,8 +71,9 @@ const startCountdown = () => {
     clearInterval(countdownInterval);
   }
   
-  // Reset to full countdown
+  // Reset to full countdown and clear reconnecting state
   remainingSeconds.value = totalSeconds;
+  isReconnecting.value = false;
   
   console.log('[OfflineModal] Starting countdown from 15 seconds');
   
@@ -74,6 +84,7 @@ const startCountdown = () => {
       clearInterval(countdownInterval);
       countdownInterval = null;
       console.log('[OfflineModal] Countdown finished, emitting retry event');
+      isReconnecting.value = true;
       emit('retry');
     }
   }, 1000);
@@ -85,6 +96,7 @@ const retryNow = () => {
     clearInterval(countdownInterval);
     countdownInterval = null;
   }
+  isReconnecting.value = true;
   emit('retry');
 };
 
@@ -196,6 +208,39 @@ onBeforeUnmount(() => {
   color: #aaa;
   font-size: 0.95rem;
   margin-bottom: 1.5rem;
+}
+
+.reconnecting-container {
+  margin: 2rem auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: 5px solid #333;
+  border-top: 5px solid #ff6b6b;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.reconnecting-message {
+  color: #ff6b6b;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .btn-retry {
