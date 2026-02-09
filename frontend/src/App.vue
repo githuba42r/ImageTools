@@ -567,6 +567,9 @@
                 <div v-if="newlyPairedDevice.device_model">
                   <strong>Model:</strong> {{ newlyPairedDevice.device_model }}
                 </div>
+                <div v-if="newlyPairedDevice.device_manufacturer">
+                  <strong>Manufacturer:</strong> {{ newlyPairedDevice.device_manufacturer }}
+                </div>
                 <div v-if="newlyPairedDevice.device_owner">
                   <strong>Owner:</strong> {{ newlyPairedDevice.device_owner }}
                 </div>
@@ -575,6 +578,9 @@
                 </div>
                 <div v-if="newlyPairedDevice.app_version">
                   <strong>App Version:</strong> {{ newlyPairedDevice.app_version }}
+                </div>
+                <div v-if="newlyPairedDevice.created_at" style="margin-top: 4px;">
+                  <strong>Connected:</strong> {{ formatDate(newlyPairedDevice.created_at) }}
                 </div>
               </div>
             </div>
@@ -2015,12 +2021,14 @@ const checkPairingStatus = async () => {
       used: pairing.used, 
       isActive: pairing.is_active 
     });
+    console.log('[QR Pairing] Full pairing data:', pairing);
     
     // Check if pairing has been used
     if (pairing.used) {
       console.log('[QR Pairing] ✅ Pairing has been used! Showing success countdown...');
       qrCodePaired.value = true;
       newlyPairedDevice.value = pairing; // Store device info for success screen
+      console.log('[QR Pairing] Stored newlyPairedDevice:', newlyPairedDevice.value);
       
       // Clear the expiry timer
       if (qrCodeTimerInterval) {
