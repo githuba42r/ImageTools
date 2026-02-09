@@ -117,8 +117,13 @@ fun HomeScreen(
             
             // Validate pairing is still active on the server
             val longTermSecret = pairingPrefs.longTermSecret.first()
-            if (!longTermSecret.isNullOrEmpty()) {
+            val instanceUrl = pairingPrefs.instanceUrl.first()
+            
+            if (!longTermSecret.isNullOrEmpty() && !instanceUrl.isNullOrEmpty()) {
                 try {
+                    // Set base URL before making API call
+                    RetrofitClient.setBaseUrl(instanceUrl)
+                    
                     Log.d(TAG, "Validating pairing status with server...")
                     val response = RetrofitClient.getApi().validateAuth(
                         ValidateAuthRequest(longTermSecret = longTermSecret)
