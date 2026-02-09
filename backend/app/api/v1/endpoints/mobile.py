@@ -336,15 +336,28 @@ async def unpair_device(
     
     Validates the long-term secret and deactivates the pairing.
     This allows the Android app to unpair itself.
+    Broadcasts pairing_revoked event to notify the web app.
     """
     pairing = await MobileService.validate_long_term_secret(db, request.long_term_secret)
     if not pairing:
         raise HTTPException(status_code=401, detail="Invalid or expired authentication")
     
+    pairing_id = pairing.id
+    session_id = pairing.session_id
+    
     # Deactivate the pairing
-    success = await MobileService.deactivate_pairing(db, pairing.id)
+    success = await MobileService.deactivate_pairing(db, pairing_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to unpair device")
+    
+    # Broadcast to web app that pairing was revoked
+    await ws_manager.broadcast_to_session(
+        session_id=session_id,
+        message={
+            "type": "pairing_revoked",
+            "pairing_id": pairing_id
+        }
+    )
     
     return {"message": "Device unpaired successfully"}
 
