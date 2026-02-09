@@ -27,6 +27,7 @@ import com.imagetools.mobile.data.models.QRCodeData
 import com.imagetools.mobile.data.models.ValidateSecretRequest
 import com.imagetools.mobile.data.network.RetrofitClient
 import com.imagetools.mobile.utils.PairingPreferences
+import com.imagetools.mobile.utils.DeviceInfo
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
@@ -214,7 +215,7 @@ private suspend fun handleQRCode(
             sharedSecret = qrCodeData.sharedSecret,
             deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
             deviceManufacturer = Build.MANUFACTURER,
-            deviceOwner = Build.USER.takeIf { it.isNotBlank() },
+            deviceOwner = DeviceInfo.getDeviceOwner(context),
             osVersion = "Android ${Build.VERSION.RELEASE}",
             appVersion = BuildConfig.VERSION_NAME
         )

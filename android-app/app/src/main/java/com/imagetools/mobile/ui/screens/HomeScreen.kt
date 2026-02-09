@@ -18,6 +18,7 @@ import com.imagetools.mobile.BuildConfig
 import com.imagetools.mobile.data.models.ValidateSecretRequest
 import com.imagetools.mobile.data.network.RetrofitClient
 import com.imagetools.mobile.utils.PairingPreferences
+import com.imagetools.mobile.utils.DeviceInfo
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -60,7 +61,7 @@ fun HomeScreen(
                     sharedSecret = secret,
                     deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
                     deviceManufacturer = Build.MANUFACTURER,
-                    deviceOwner = Build.USER.takeIf { it.isNotBlank() },
+                    deviceOwner = DeviceInfo.getDeviceOwner(context),
                     osVersion = "Android ${Build.VERSION.RELEASE}",
                     appVersion = BuildConfig.VERSION_NAME
                 )
