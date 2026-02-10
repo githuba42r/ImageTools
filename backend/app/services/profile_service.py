@@ -33,7 +33,7 @@ def get_default_profiles_data() -> List[dict]:
             "target_size_kb": settings.WEB_TARGET_SIZE_KB,
             "format": settings.WEB_FORMAT,
             "retain_aspect_ratio": True,
-            "is_default": True,
+            "is_default": False,
             "system_default": True
         },
         {
@@ -59,7 +59,21 @@ async def create_system_default_profiles(db: AsyncSession) -> List[CompressionPr
     existing = result.scalars().all()
     
     if existing:
-        return list(existing)
+        # Fix any system defaults that have is_default=True (from old code)
+        # Use update query to avoid SQLAlchemy type issues
+        await db.execute(
+            update(CompressionProfile)
+            .where(CompressionProfile.system_default == True)
+            .where(CompressionProfile.is_default == True)
+            .values(is_default=False)
+        )
+        await db.commit()
+        
+        # Re-fetch the profiles after update
+        result = await db.execute(
+            select(CompressionProfile).where(CompressionProfile.system_default == True)
+        )
+        return list(result.scalars().all())
     
     # Create system default profiles
     default_profiles_data = get_default_profiles_data()
@@ -186,11 +200,30 @@ async def get_profile(db: AsyncSession, profile_id: str, session_id: str) -> Opt
             )
         )
     )
-    return result.scalars().first()
+    profile = result.scalars().first()
+    
+    if profile:
+        # Check if this custom profile overrides a system default
+        if not profile.system_default:
+            system_result = await db.execute(
+                select(CompressionProfile)
+                .where(CompressionProfile.system_default == True)
+                .where(CompressionProfile.name == profile.name)
+            )
+            system_profile = system_result.scalars().first()
+            profile.overrides_system_default = system_profile is not None
+        else:
+            profile.overrides_system_default = False
+    
+    return profile
 
 
 async def get_profiles(db: AsyncSession, session_id: str) -> List[CompressionProfile]:
-    """Get all profiles for a session (includes system defaults and user profiles)"""
+    """
+    Get all profiles for a session (includes system defaults and user profiles).
+    If a user has a custom profile with the same name as a system default,
+    the system default is hidden/excluded from results.
+    """
     result = await db.execute(
         select(CompressionProfile)
         .where(
@@ -201,7 +234,39 @@ async def get_profiles(db: AsyncSession, session_id: str) -> List[CompressionPro
         )
         .order_by(CompressionProfile.system_default.desc(), CompressionProfile.is_default.desc(), CompressionProfile.name)
     )
-    return list(result.scalars().all())
+    all_profiles = list(result.scalars().all())
+    
+    # Get names of system default profiles for override detection
+    system_profile_names = {
+        profile.name 
+        for profile in all_profiles 
+        if profile.system_default
+    }
+    
+    # Get names of all custom user profiles
+    custom_profile_names = {
+        profile.name 
+        for profile in all_profiles 
+        if not profile.system_default and profile.session_id == session_id
+    }
+    
+    # Filter out system defaults that have been overridden by custom profiles with same name
+    filtered_profiles = []
+    for profile in all_profiles:
+        if profile.system_default and profile.name in custom_profile_names:
+            # Skip system defaults that have been overridden
+            continue
+        
+        # Mark custom profiles that override system defaults
+        if not profile.system_default and profile.name in system_profile_names:
+            # Add a transient attribute to mark this profile as overriding a system default
+            profile.overrides_system_default = True
+        else:
+            profile.overrides_system_default = False
+        
+        filtered_profiles.append(profile)
+    
+    return filtered_profiles
 
 
 async def get_default_profile(db: AsyncSession, session_id: str) -> Optional[CompressionProfile]:

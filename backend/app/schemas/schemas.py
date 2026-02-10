@@ -79,6 +79,7 @@ class CompressionProfileResponse(BaseModel):
     retain_aspect_ratio: bool
     is_default: bool
     system_default: bool
+    overrides_system_default: bool = False
     created_at: datetime
     updated_at: Optional[datetime]
     

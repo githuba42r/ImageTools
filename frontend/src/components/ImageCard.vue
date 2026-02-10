@@ -482,26 +482,21 @@ const formatSize = (bytes) => {
 const getPresetIcon = (preset) => {
   if (!preset) return '⚡';
   
-  // Handle string preset name (for legacy compatibility)
+  // Handle string preset name (for legacy compatibility - should not happen anymore)
   if (typeof preset === 'string') {
-    const icons = {
-      email: '📧',
-      web: '🌐',
-      web_hq: '⭐'
-    };
-    return icons[preset] || '📋';
+    return '📋';
   }
   
   // Handle preset object
-  if (preset.type === 'builtin') {
-    const icons = {
-      email: '📧',
-      web: '🌐',
-      web_hq: '⭐'
-    };
-    return icons[preset.name] || '⚡';
+  if (preset.type === 'system') {
+    // System default profile
+    return '🔧';
   } else if (preset.type === 'custom') {
-    return '📋';  // Custom profile icon
+    // Check if it overrides a system default
+    if (preset.overrides_system_default) {
+      return '🎨';  // Custom profile overriding system default
+    }
+    return '📋';  // Regular custom profile
   }
   
   return '⚡';

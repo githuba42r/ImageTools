@@ -42,11 +42,14 @@ class CompressionService:
     
     @staticmethod
     async def _get_profile_config(db: AsyncSession, profile_id: str, session_id: str) -> Optional[Dict[str, Any]]:
-        """Get configuration from a custom user profile."""
+        """Get configuration from a custom user profile or system default profile."""
         result = await db.execute(
             select(CompressionProfile)
             .where(CompressionProfile.id == profile_id)
-            .where(CompressionProfile.session_id == session_id)
+            .where(
+                (CompressionProfile.session_id == session_id) |
+                (CompressionProfile.system_default == True)
+            )
         )
         profile = result.scalars().first()
         
@@ -59,6 +62,7 @@ class CompressionService:
             "quality": profile.quality,
             "target_size_kb": profile.target_size_kb,
             "format": profile.format,
+            "retain_aspect_ratio": profile.retain_aspect_ratio,
             "profile_name": profile.name
         }
     
@@ -109,8 +113,15 @@ class CompressionService:
             # Resize if needed
             max_width = params.get("max_width")
             max_height = params.get("max_height")
+            retain_aspect_ratio = params.get("retain_aspect_ratio", True)
+            
             if max_width and max_height:
-                img.thumbnail((max_width, max_height), PILImage.Resampling.LANCZOS)
+                if retain_aspect_ratio:
+                    # Maintain aspect ratio - fit within max dimensions
+                    img.thumbnail((max_width, max_height), PILImage.Resampling.LANCZOS)
+                else:
+                    # Force exact dimensions - stretch/squash image
+                    img = img.resize((max_width, max_height), PILImage.Resampling.LANCZOS)
             
             # Initial save with quality
             quality = params.get("quality", 85)
@@ -133,7 +144,12 @@ class CompressionService:
                         img = rgb_img
                     
                     if max_width and max_height:
-                        img.thumbnail((max_width, max_height), PILImage.Resampling.LANCZOS)
+                        if retain_aspect_ratio:
+                            # Maintain aspect ratio - fit within max dimensions
+                            img.thumbnail((max_width, max_height), PILImage.Resampling.LANCZOS)
+                        else:
+                            # Force exact dimensions - stretch/squash image
+                            img = img.resize((max_width, max_height), PILImage.Resampling.LANCZOS)
                     
                     img.save(output_path, format=params.get("format", "JPEG"), quality=quality, optimize=True)
                 
@@ -159,6 +175,11 @@ class CompressionService:
         # Update image current path and size
         image.current_path = output_path
         image.current_size = compressed_size
+        
+        # Update image dimensions after resize
+        with PILImage.open(output_path) as resized_img:
+            image.width = resized_img.width
+            image.height = resized_img.height
         
         await db.commit()
         

@@ -79,47 +79,9 @@ async def get_presets(
     # Ensure system default profiles exist
     await profile_service.create_system_default_profiles(db)
     
-    # Get built-in presets (deprecated - keeping for backward compatibility)
-    presets = [
-        {
-            "id": "email",
-            "name": "email",
-            "label": "Email",
-            "description": "Optimized for email attachments (~500KB)",
-            "max_width": settings.EMAIL_MAX_WIDTH,
-            "max_height": settings.EMAIL_MAX_HEIGHT,
-            "quality": settings.EMAIL_QUALITY,
-            "target_size_kb": settings.EMAIL_TARGET_SIZE_KB,
-            "format": settings.EMAIL_FORMAT,
-            "type": "builtin"
-        },
-        {
-            "id": "web",
-            "name": "web",
-            "label": "Web",
-            "description": "Balanced quality for web (~500KB)",
-            "max_width": settings.WEB_MAX_WIDTH,
-            "max_height": settings.WEB_MAX_HEIGHT,
-            "quality": settings.WEB_QUALITY,
-            "target_size_kb": settings.WEB_TARGET_SIZE_KB,
-            "format": settings.WEB_FORMAT,
-            "type": "builtin"
-        },
-        {
-            "id": "web_hq",
-            "name": "web_hq",
-            "label": "Web HQ",
-            "description": "High quality for web (~1MB)",
-            "max_width": settings.WEB_HQ_MAX_WIDTH,
-            "max_height": settings.WEB_HQ_MAX_HEIGHT,
-            "quality": settings.WEB_HQ_QUALITY,
-            "target_size_kb": settings.WEB_HQ_TARGET_SIZE_KB,
-            "format": settings.WEB_HQ_FORMAT,
-            "type": "builtin"
-        }
-    ]
-    
     # Get system default profiles and user custom profiles
+    # This returns the same list as the Manage Profiles modal
+    presets = []
     all_profiles = await profile_service.get_profiles(db, x_session_id)
     for profile in all_profiles:
         presets.append({
@@ -134,6 +96,7 @@ async def get_presets(
             "format": profile.format,
             "is_default": profile.is_default,
             "system_default": profile.system_default,
+            "overrides_system_default": getattr(profile, 'overrides_system_default', False),
             "type": "system" if profile.system_default else "custom"
         })
     

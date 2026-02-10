@@ -25,39 +25,46 @@
               v-for="profile in profiles"
               :key="profile.id"
               class="profile-item"
-              :class="{ 'is-default': profile.is_default }"
             >
               <div class="profile-info">
                 <h4>
-                  <span v-if="profile.system_default" class="system-icon" title="System profile">⚙️</span>
+                  <span v-if="profile.system_default" class="profile-icon" title="System default profile">🔧</span>
+                  <span v-else-if="profile.overrides_system_default" class="profile-icon" title="Custom profile (overrides system default)">🎨</span>
                   {{ profile.name }}
-                  <span v-if="profile.is_default" class="default-badge">Default</span>
                 </h4>
                 <p class="profile-specs">
                   {{ profile.format }} • {{ profile.max_width }}×{{ profile.max_height }} •
                   Quality {{ profile.quality }} • ~{{ profile.target_size_kb }}KB
                 </p>
               </div>
-              <div class="profile-actions">
+
+              <!-- Inline confirmation for delete/revert -->
+              <div v-if="deletingProfileId === profile.id" class="inline-confirmation">
+                <p class="confirmation-text">
+                  {{ profile.overrides_system_default ? 'Revert to system default?' : 'Delete this profile?' }}
+                </p>
+                <div class="confirmation-actions">
+                  <button @click="confirmDelete(profile)" class="btn-confirm" title="Confirm">
+                    ✓
+                  </button>
+                  <button @click="cancelDelete" class="btn-cancel" title="Cancel">
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <!-- Normal action buttons -->
+              <div v-else class="profile-actions">
                 <button @click="editProfile(profile)" class="btn-edit" title="Edit">
                   ✏️
                 </button>
                 <button 
-                  v-if="profile.system_default"
-                  @click="resetProfile(profile)" 
-                  class="btn-reset" 
-                  title="Reset to default"
-                  disabled
-                >
-                  ↺
-                </button>
-                <button 
-                  v-else
-                  @click="deleteProfile(profile)" 
+                  v-if="!profile.system_default"
+                  @click="initiateDelete(profile)" 
                   class="btn-delete" 
-                  title="Delete"
+                  :title="profile.overrides_system_default ? 'Revert to system default' : 'Delete'"
                 >
-                  🗑️
+                  {{ profile.overrides_system_default ? '↺' : '🗑️' }}
                 </button>
               </div>
             </div>
@@ -154,13 +161,6 @@
               </label>
             </div>
 
-            <div class="form-group checkbox-group">
-              <label>
-                <input type="checkbox" v-model="formData.is_default" />
-                Set as default profile
-              </label>
-            </div>
-
             <div class="form-actions">
               <button type="button" @click="cancelForm" class="btn-secondary">
                 Cancel
@@ -194,6 +194,7 @@ export default {
     const showForm = ref(false)
     const editingProfile = ref(null)
     const saving = ref(false)
+    const deletingProfileId = ref(null)
 
     const formData = ref({
       name: '',
@@ -202,8 +203,7 @@ export default {
       quality: 85,
       target_size_kb: 500,
       format: 'JPEG',
-      retain_aspect_ratio: true,
-      is_default: false
+      retain_aspect_ratio: true
     })
 
     const loadProfiles = async () => {
@@ -225,8 +225,7 @@ export default {
         quality: 85,
         target_size_kb: 500,
         format: 'JPEG',
-        retain_aspect_ratio: true,
-        is_default: false
+        retain_aspect_ratio: true
       }
       showForm.value = true
     }
@@ -240,8 +239,7 @@ export default {
         quality: profile.quality,
         target_size_kb: profile.target_size_kb,
         format: profile.format,
-        retain_aspect_ratio: profile.retain_aspect_ratio,
-        is_default: false
+        retain_aspect_ratio: profile.retain_aspect_ratio
       }
       showForm.value = true
     }
@@ -255,8 +253,7 @@ export default {
         quality: profile.quality,
         target_size_kb: profile.target_size_kb,
         format: profile.format,
-        retain_aspect_ratio: profile.retain_aspect_ratio,
-        is_default: profile.is_default
+        retain_aspect_ratio: profile.retain_aspect_ratio
       }
       showForm.value = true
     }
@@ -280,31 +277,30 @@ export default {
       }
     }
 
-    const resetProfile = async (profile) => {
-      // TODO: Implement reset functionality
-      // This would delete any user override and revert to system default
-      alert('Reset functionality coming soon!')
+    const initiateDelete = (profile) => {
+      deletingProfileId.value = profile.id
     }
 
-    const deleteProfile = async (profile) => {
-      // System defaults cannot be deleted
-      if (profile.system_default) {
-        alert('System profiles cannot be deleted.')
-        return
-      }
+    const cancelDelete = () => {
+      deletingProfileId.value = null
+    }
 
-      if (!confirm(`Are you sure you want to delete "${profile.name}"?`)) {
-        return
-      }
-
+    const confirmDelete = async (profile) => {
       try {
         await profileService.deleteProfile(profile.id)
         await loadProfiles()
+        deletingProfileId.value = null
         emit('updated')
       } catch (error) {
         console.error('Error deleting profile:', error)
         alert('Failed to delete profile. Please try again.')
       }
+    }
+
+    const resetProfile = async (profile) => {
+      // TODO: Implement reset functionality
+      // This would delete any user override and revert to system default
+      alert('Reset functionality coming soon!')
     }
 
     const cancelForm = () => {
@@ -337,12 +333,15 @@ export default {
       editingProfile,
       formData,
       saving,
+      deletingProfileId,
       showCreateForm,
       copyProfile,
       editProfile,
       saveProfile,
+      initiateDelete,
+      cancelDelete,
+      confirmDelete,
       resetProfile,
-      deleteProfile,
       cancelForm,
       closeModal
     }
@@ -462,15 +461,9 @@ export default {
   border-color: #d1d5db;
 }
 
-.profile-item.is-default {
-  border-color: #3b82f6;
-  background: #eff6ff;
-}
-
-.system-icon {
-  font-size: 14px;
-  margin-right: 4px;
-  opacity: 0.7;
+.profile-icon {
+  font-size: 16px;
+  margin-right: 6px;
 }
 
 .profile-info {
@@ -487,15 +480,6 @@ export default {
   gap: 8px;
 }
 
-.default-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  background: #3b82f6;
-  color: white;
-  border-radius: 4px;
-}
-
 .profile-specs {
   margin: 0;
   font-size: 12px;
@@ -507,9 +491,59 @@ export default {
   gap: 8px;
 }
 
+.inline-confirmation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #fef3c7;
+  border-radius: 6px;
+  border: 1px solid #fbbf24;
+}
+
+.confirmation-text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #92400e;
+  white-space: nowrap;
+}
+
+.confirmation-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-confirm,
+.btn-cancel {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+  line-height: 1;
+}
+
+.btn-confirm {
+  color: #059669;
+}
+
+.btn-confirm:hover {
+  background: #d1fae5;
+}
+
+.btn-cancel {
+  color: #dc2626;
+}
+
+.btn-cancel:hover {
+  background: #fee2e2;
+}
+
 .btn-edit,
-.btn-delete,
-.btn-reset {
+.btn-delete {
   background: none;
   border: none;
   font-size: 18px;
@@ -525,15 +559,6 @@ export default {
 
 .btn-delete:hover {
   background: #fee2e2;
-}
-
-.btn-reset:hover:not(:disabled) {
-  background: #dbeafe;
-}
-
-.btn-reset:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
 }
 
 .form-section {
