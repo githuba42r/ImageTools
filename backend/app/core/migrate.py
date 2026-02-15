@@ -292,3 +292,11 @@ async def migrate_database():
             logger.info("Adding exif_data column to images table for GPS preservation...")
             await conn.execute(text("ALTER TABLE images ADD COLUMN exif_data TEXT"))
             migrations_applied.append("Added 'exif_data' column to images for GPS preservation")
+        
+        # Add GPS coordinate columns for mobile uploads (when Android strips EXIF GPS data)
+        if 'gps_latitude' not in images_columns:
+            logger.info("Adding GPS coordinate columns to images table...")
+            await conn.execute(text("ALTER TABLE images ADD COLUMN gps_latitude REAL"))
+            await conn.execute(text("ALTER TABLE images ADD COLUMN gps_longitude REAL"))
+            await conn.execute(text("ALTER TABLE images ADD COLUMN gps_altitude REAL"))
+            migrations_applied.append("Added GPS coordinate columns to images for mobile uploads")

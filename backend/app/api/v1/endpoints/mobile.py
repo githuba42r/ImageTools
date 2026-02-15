@@ -2,7 +2,7 @@
 Mobile app pairing endpoints
 """
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 
@@ -173,6 +173,9 @@ async def upload_image_from_mobile(
     request: Request,
     long_term_secret: str = Form(...),
     file: UploadFile = File(...),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
+    altitude: Optional[float] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -180,10 +183,14 @@ async def upload_image_from_mobile(
     
     This endpoint is used by the Android app to upload images shared to it.
     Authentication is done via the long_term_secret obtained after QR code pairing.
+    
+    Optional GPS coordinates can be provided if the image EXIF data was stripped by Android.
     """
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"[MOBILE UPLOAD] Received upload request, filename: {file.filename}")
+    if latitude is not None and longitude is not None:
+        logger.info(f"[MOBILE UPLOAD] GPS coordinates provided: lat={latitude}, lon={longitude}, alt={altitude}")
     
     # Validate long-term secret and get pairing
     pairing = await MobileService.validate_long_term_secret(db, long_term_secret)
@@ -195,12 +202,15 @@ async def upload_image_from_mobile(
     
     # Upload image using the session from the pairing
     try:
-        # Save uploaded image using ImageService
+        # Save uploaded image using ImageService with GPS coordinates if provided
         image = await ImageService.save_uploaded_image(
             db=db,
             session_id=pairing.session_id,
             filename=file.filename or "image.jpg",
-            file=file.file
+            file=file.file,
+            gps_latitude=latitude,
+            gps_longitude=longitude,
+            gps_altitude=altitude
         )
         
         # Broadcast new_image event to all WebSocket clients in this session

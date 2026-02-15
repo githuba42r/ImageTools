@@ -1,18 +1,25 @@
 package com.imagetools.mobile
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.lifecycleScope
 import com.imagetools.mobile.data.models.ValidateAuthRequest
 import com.imagetools.mobile.data.network.RetrofitClient
@@ -26,6 +33,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 
 private const val TAG = "ShareActivity"
 
@@ -36,6 +44,29 @@ class ShareActivity : ComponentActivity() {
     private var isError by mutableStateOf(false)
     private var uploadedCount by mutableStateOf(0)
     private var totalCount by mutableStateOf(0)
+    
+    // Pending URIs to upload after permission is granted
+    private var pendingImageUris: List<Uri>? = null
+    
+    // Permission launcher for ACCESS_MEDIA_LOCATION
+    private val mediaLocationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Log.d(TAG, "ACCESS_MEDIA_LOCATION permission granted")
+        } else {
+            Log.w(TAG, "ACCESS_MEDIA_LOCATION permission denied - GPS data may not be available")
+        }
+        // Proceed with upload regardless of permission result
+        pendingImageUris?.let { uris ->
+            if (uris.size == 1) {
+                uploadImage(uris[0])
+            } else {
+                uploadMultipleImages(uris)
+            }
+        }
+        pendingImageUris = null
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,7 +117,7 @@ class ShareActivity : ComponentActivity() {
                 val imageUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
                 if (imageUri != null) {
                     totalCount = 1
-                    uploadImage(imageUri)
+                    checkPermissionAndUpload(listOf(imageUri))
                 } else {
                     showError("No image found")
                 }
@@ -97,13 +128,50 @@ class ShareActivity : ComponentActivity() {
                 if (imageUris != null && imageUris.isNotEmpty()) {
                     totalCount = imageUris.size
                     statusText = "Uploading ${totalCount} images..."
-                    uploadMultipleImages(imageUris)
+                    checkPermissionAndUpload(imageUris)
                 } else {
                     showError("No images found")
                 }
             }
             else -> {
                 showError("Invalid share intent")
+            }
+        }
+    }
+    
+    /**
+     * Check ACCESS_MEDIA_LOCATION permission and request if needed.
+     * This is required on Android 10+ to access GPS data in images.
+     */
+    private fun checkPermissionAndUpload(imageUris: List<Uri>) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10+ requires ACCESS_MEDIA_LOCATION for GPS data
+            when {
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_MEDIA_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // Permission already granted, proceed with upload
+                    Log.d(TAG, "ACCESS_MEDIA_LOCATION already granted")
+                    if (imageUris.size == 1) {
+                        uploadImage(imageUris[0])
+                    } else {
+                        uploadMultipleImages(imageUris)
+                    }
+                }
+                else -> {
+                    // Request permission
+                    Log.d(TAG, "Requesting ACCESS_MEDIA_LOCATION permission")
+                    pendingImageUris = imageUris
+                    mediaLocationPermissionLauncher.launch(Manifest.permission.ACCESS_MEDIA_LOCATION)
+                }
+            }
+        } else {
+            // Below Android 10, no special permission needed
+            if (imageUris.size == 1) {
+                uploadImage(imageUris[0])
+            } else {
+                uploadMultipleImages(imageUris)
             }
         }
     }
@@ -136,6 +204,76 @@ class ShareActivity : ComponentActivity() {
             } catch (e: Exception) {
                 showError("Error: ${e.message}")
             }
+        }
+    }
+    
+    /**
+     * Extract GPS metadata from an image URI using ExifInterface.
+     * Returns a map with latitude, longitude, and altitude if available.
+     */
+    private fun extractGpsMetadata(imageUri: Uri): Map<String, String>? {
+        return try {
+            // Use setRequireOriginal on Android 10+ to get original file with GPS data
+            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.setRequireOriginal(imageUri)
+            } else {
+                imageUri
+            }
+            
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                val exif = ExifInterface(inputStream)
+                
+                // Get GPS coordinates
+                val latLong = FloatArray(2)
+                if (exif.getLatLong(latLong)) {
+                    val result = mutableMapOf<String, String>()
+                    result["latitude"] = latLong[0].toString()
+                    result["longitude"] = latLong[1].toString()
+                    
+                    // Get altitude if available
+                    val altitude = exif.getAltitude(Double.NaN)
+                    if (!altitude.isNaN()) {
+                        result["altitude"] = altitude.toString()
+                    }
+                    
+                    // Get GPS timestamp if available
+                    val gpsDateTime = exif.getAttribute(ExifInterface.TAG_GPS_DATESTAMP)
+                    if (gpsDateTime != null) {
+                        result["gps_datestamp"] = gpsDateTime
+                    }
+                    
+                    Log.d(TAG, "Extracted GPS: lat=${latLong[0]}, lon=${latLong[1]}, alt=$altitude")
+                    result
+                } else {
+                    Log.d(TAG, "No GPS coordinates found in image")
+                    null
+                }
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "SecurityException reading GPS data - permission may be denied: ${e.message}")
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract GPS metadata: ${e.message}")
+            null
+        }
+    }
+    
+    /**
+     * Open an input stream for the image, using setRequireOriginal on Android 10+
+     * to preserve GPS data in the file.
+     */
+    private fun openImageInputStream(imageUri: Uri): InputStream? {
+        return try {
+            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.setRequireOriginal(imageUri)
+            } else {
+                imageUri
+            }
+            contentResolver.openInputStream(uri)
+        } catch (e: SecurityException) {
+            // Fall back to regular URI if setRequireOriginal fails
+            Log.w(TAG, "setRequireOriginal failed, falling back to regular URI: ${e.message}")
+            contentResolver.openInputStream(imageUri)
         }
     }
     
@@ -178,8 +316,11 @@ class ShareActivity : ComponentActivity() {
             throw Exception("Network error: Could not validate pairing. Check your connection.")
         }
         
-        // Copy URI content to a temporary file
-        val inputStream = contentResolver.openInputStream(imageUri)
+        // Extract GPS metadata BEFORE copying the file (need to use setRequireOriginal)
+        val gpsMetadata = extractGpsMetadata(imageUri)
+        
+        // Copy URI content to a temporary file using setRequireOriginal to preserve EXIF/GPS
+        val inputStream = openImageInputStream(imageUri)
             ?: throw IOException("Failed to read image")
         
         val tempFile = File(cacheDir, "temp_upload_${System.currentTimeMillis()}.jpg")
@@ -191,13 +332,24 @@ class ShareActivity : ComponentActivity() {
         // Get filename
         val filename = getFileName(imageUri) ?: "shared_image.jpg"
         
-        // Create multipart request with long-term secret
+        // Create multipart request with long-term secret and GPS metadata
         val requestFile = tempFile.asRequestBody("image/*".toMediaTypeOrNull())
         val filePart = MultipartBody.Part.createFormData("file", filename, requestFile)
         val secretPart = longTermSecret.toRequestBody("text/plain".toMediaTypeOrNull())
         
-        // Upload
-        val response = RetrofitClient.getApi().uploadImage(secretPart, filePart)
+        // Add GPS metadata as form fields if available
+        val latitudePart = gpsMetadata?.get("latitude")?.toRequestBody("text/plain".toMediaTypeOrNull())
+        val longitudePart = gpsMetadata?.get("longitude")?.toRequestBody("text/plain".toMediaTypeOrNull())
+        val altitudePart = gpsMetadata?.get("altitude")?.toRequestBody("text/plain".toMediaTypeOrNull())
+        
+        // Upload with GPS metadata
+        val response = RetrofitClient.getApi().uploadImage(
+            longTermSecret = secretPart,
+            file = filePart,
+            latitude = latitudePart,
+            longitude = longitudePart,
+            altitude = altitudePart
+        )
         
         // Clean up temp file
         tempFile.delete()

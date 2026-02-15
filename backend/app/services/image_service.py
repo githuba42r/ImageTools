@@ -63,9 +63,22 @@ class ImageService:
         db: AsyncSession,
         session_id: str,
         filename: str,
-        file: BinaryIO
+        file: BinaryIO,
+        gps_latitude: Optional[float] = None,
+        gps_longitude: Optional[float] = None,
+        gps_altitude: Optional[float] = None
     ) -> Image:
-        """Save uploaded image and create database record."""
+        """Save uploaded image and create database record.
+        
+        Args:
+            db: Database session
+            session_id: Session ID to associate image with
+            filename: Original filename
+            file: File-like object with image data
+            gps_latitude: Optional GPS latitude from mobile device (used when EXIF is stripped)
+            gps_longitude: Optional GPS longitude from mobile device
+            gps_altitude: Optional GPS altitude from mobile device
+        """
         ImageService._ensure_storage_dirs()
         
         image_id = str(uuid.uuid4())
@@ -158,7 +171,10 @@ class ImageService:
             width=width,
             height=height,
             format=img_format,
-            exif_data=exif_data_b64  # Store EXIF data for GPS preservation
+            exif_data=exif_data_b64,  # Store EXIF data for GPS preservation
+            gps_latitude=gps_latitude,  # GPS from mobile device (fallback if EXIF stripped)
+            gps_longitude=gps_longitude,
+            gps_altitude=gps_altitude
         )
         
         db.add(image)

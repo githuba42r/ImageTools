@@ -34,7 +34,10 @@ interface ImageToolsApi {
     @POST("api/v1/mobile/upload")
     suspend fun uploadImage(
         @Part("long_term_secret") longTermSecret: RequestBody,
-        @Part file: MultipartBody.Part
+        @Part file: MultipartBody.Part,
+        @Part("latitude") latitude: RequestBody? = null,
+        @Part("longitude") longitude: RequestBody? = null,
+        @Part("altitude") altitude: RequestBody? = null
     ): Response<ImageUploadResponse>
     
     @POST("api/v1/mobile/unpair")

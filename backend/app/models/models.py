@@ -30,6 +30,10 @@ class Image(Base):
     format = Column(String, nullable=False)
     # Store original EXIF data (including GPS) as JSON to preserve across image operations
     exif_data = Column(Text, nullable=True)
+    # GPS coordinates from mobile device (used when EXIF GPS is stripped by Android)
+    gps_latitude = Column(Float, nullable=True)
+    gps_longitude = Column(Float, nullable=True)
+    gps_altitude = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

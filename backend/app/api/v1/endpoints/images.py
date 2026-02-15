@@ -322,6 +322,20 @@ async def get_image_exif(
     
     try:
         exif_data = ImageService.extract_exif(image.current_path)
+        
+        # If no GPS data in EXIF but we have stored GPS coordinates from mobile upload,
+        # add them to the response
+        if 'GPS' not in exif_data or not exif_data.get('GPS'):
+            if image.gps_latitude is not None and image.gps_longitude is not None:
+                exif_data['GPS'] = {
+                    'latitude': image.gps_latitude,
+                    'longitude': image.gps_longitude,
+                    'latitude_ref': 'N' if image.gps_latitude >= 0 else 'S',
+                    'longitude_ref': 'E' if image.gps_longitude >= 0 else 'W',
+                }
+                if image.gps_altitude is not None:
+                    exif_data['GPS']['altitude'] = image.gps_altitude
+        
         return {"image_id": image_id, "exif": exif_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to extract EXIF: {str(e)}")
