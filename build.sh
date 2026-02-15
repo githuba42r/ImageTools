@@ -54,6 +54,7 @@ cd "$SCRIPT_DIR"
 BUILD_DOCKER=true
 BUILD_ANDROID=true
 BUILD_BROWSER=true
+PUSH_DOCKER=false
 DOCKER_REGISTRY="ghcr.io/githuba42r"
 
 while [[ $# -gt 0 ]]; do
@@ -70,6 +71,10 @@ while [[ $# -gt 0 ]]; do
             BUILD_BROWSER=false
             shift
             ;;
+        --push)
+            PUSH_DOCKER=true
+            shift
+            ;;
         --registry)
             DOCKER_REGISTRY="$2"
             shift 2
@@ -81,6 +86,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --skip-docker      Skip Docker image build (includes frontend)"
             echo "  --skip-android     Skip Android APK build"
             echo "  --skip-browser     Skip browser addon packaging"
+            echo "  --push             Push Docker images to registry after build"
             echo "  --registry <url>   Docker registry (default: ghcr.io/githuba42r)"
             echo "  --help             Show this help message"
             exit 0
@@ -167,6 +173,33 @@ if [ "$BUILD_DOCKER" = true ]; then
         print_error "Docker build failed! Check logs: $DIST_DIR/logs/docker-build.log"
         print_warning "Continuing with other builds..."
         BUILD_DOCKER=false
+    fi
+    
+    # Push Docker images if --push flag was provided and build succeeded
+    if [ "$PUSH_DOCKER" = true ] && [ "$BUILD_DOCKER" = true ]; then
+        print_header "🚀 Pushing Docker Images to Registry"
+        
+        print_info "Pushing: $IMAGE_TAG_VERSIONED"
+        docker push "$IMAGE_TAG_VERSIONED" 2>&1 | tee "$DIST_DIR/logs/docker-push.log"
+        
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            print_info "Pushing: $IMAGE_TAG_LATEST"
+            docker push "$IMAGE_TAG_LATEST" 2>&1 | tee -a "$DIST_DIR/logs/docker-push.log"
+            
+            if [ ${PIPESTATUS[0]} -eq 0 ]; then
+                print_success "Docker images pushed successfully"
+                DOCKER_PUSHED=true
+            else
+                print_error "Failed to push latest tag! Check logs: $DIST_DIR/logs/docker-push.log"
+                DOCKER_PUSHED=false
+            fi
+        else
+            print_error "Failed to push versioned tag! Check logs: $DIST_DIR/logs/docker-push.log"
+            DOCKER_PUSHED=false
+        fi
+    elif [ "$PUSH_DOCKER" = true ] && [ "$BUILD_DOCKER" = false ]; then
+        print_warning "Skipping Docker push - build failed"
+        DOCKER_PUSHED=false
     fi
 fi
 
@@ -424,7 +457,11 @@ echo ""
 echo "Built Artifacts:"
 
 if [ "$BUILD_DOCKER" = true ]; then
-    echo "  🐳 Docker: ghcr.io/githuba42r/imagetools:${VERSION} (in Docker daemon)"
+    if [ "$DOCKER_PUSHED" = true ]; then
+        echo "  🐳 Docker: ghcr.io/githuba42r/imagetools:${VERSION} (pushed to registry)"
+    else
+        echo "  🐳 Docker: ghcr.io/githuba42r/imagetools:${VERSION} (in Docker daemon)"
+    fi
 fi
 
 if [ "$BUILD_ANDROID" = true ]; then
@@ -444,7 +481,7 @@ echo "📄 Full build report: $DIST_DIR/BUILD-REPORT.txt"
 echo "📋 Build logs: $DIST_DIR/logs/"
 echo ""
 
-if [ "$BUILD_DOCKER" = true ]; then
+if [ "$BUILD_DOCKER" = true ] && [ "$DOCKER_PUSHED" != true ]; then
     print_info "To push Docker images:"
     echo "  docker push ${DOCKER_REGISTRY}/imagetools:${VERSION}"
     echo "  docker push ${DOCKER_REGISTRY}/imagetools:latest"
