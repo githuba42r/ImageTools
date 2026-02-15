@@ -212,30 +212,43 @@ class ShareActivity : ComponentActivity() {
      * 
      * On Android 10+, GPS data is stripped from shared content:// URIs for privacy.
      * We try multiple methods in order:
-     * 1. Query MediaStore directly for latitude/longitude columns (may be deprecated)
-     * 2. Get real file path from MediaStore and read EXIF directly from file
-     * 3. Use setRequireOriginal() with ExifInterface
-     * 4. Try regular ExifInterface as fallback
+     * 1. Look up the image in device's MediaStore by display name and query GPS there
+     * 2. Query the shared URI directly for MediaStore GPS columns
+     * 3. Get real file path from MediaStore and read EXIF directly from file
+     * 4. Use setRequireOriginal() with ExifInterface
+     * 5. Try regular ExifInterface as fallback
      * 
      * Returns a map with latitude, longitude, and altitude if available.
      */
     private fun extractGpsMetadata(imageUri: Uri): Map<String, String>? {
         Log.d(TAG, "Attempting to extract GPS from URI: $imageUri")
         
-        // Method 1: Query MediaStore for GPS data
+        // Method 1: Look up the image in our device's MediaStore by filename/size
+        // This works because we have ACCESS_MEDIA_LOCATION permission for our own MediaStore
+        try {
+            val gpsFromOurMediaStore = lookupImageInMediaStoreAndExtractGps(imageUri)
+            if (gpsFromOurMediaStore != null) {
+                Log.d(TAG, "GPS extracted from device MediaStore lookup")
+                return gpsFromOurMediaStore
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "MediaStore lookup failed: ${e.message}")
+        }
+        
+        // Method 2: Query the shared URI directly for GPS data
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 val gpsFromMediaStore = extractGpsFromMediaStore(imageUri)
                 if (gpsFromMediaStore != null) {
-                    Log.d(TAG, "GPS extracted from MediaStore query")
+                    Log.d(TAG, "GPS extracted from shared URI MediaStore query")
                     return gpsFromMediaStore
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "MediaStore GPS query failed: ${e.message}")
+                Log.w(TAG, "Shared URI MediaStore GPS query failed: ${e.message}")
             }
         }
         
-        // Method 2: Get real file path and read EXIF directly
+        // Method 3: Get real file path and read EXIF directly
         try {
             val gpsFromFilePath = extractGpsFromFilePath(imageUri)
             if (gpsFromFilePath != null) {
@@ -246,7 +259,7 @@ class ShareActivity : ComponentActivity() {
             Log.w(TAG, "File path GPS extraction failed: ${e.message}")
         }
         
-        // Method 3: Try setRequireOriginal with ExifInterface
+        // Method 4: Try setRequireOriginal with ExifInterface
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 val originalUri = MediaStore.setRequireOriginal(imageUri)
@@ -262,7 +275,7 @@ class ShareActivity : ComponentActivity() {
             }
         }
         
-        // Method 4: Try regular ExifInterface as fallback
+        // Method 5: Try regular ExifInterface as fallback
         try {
             val gpsFromExif = extractGpsFromExif(imageUri)
             if (gpsFromExif != null) {
@@ -278,7 +291,160 @@ class ShareActivity : ComponentActivity() {
     }
     
     /**
-     * Query MediaStore directly for GPS coordinates.
+     * Look up the shared image in our device's MediaStore and extract GPS from there.
+     * 
+     * This works by:
+     * 1. Getting the display name and size of the shared image
+     * 2. Querying our device's MediaStore for images with matching name/size
+     * 3. Using setRequireOriginal on the MediaStore URI to read GPS with our ACCESS_MEDIA_LOCATION permission
+     */
+    private fun lookupImageInMediaStoreAndExtractGps(sharedUri: Uri): Map<String, String>? {
+        // Get display name and size from the shared URI
+        var displayName: String? = null
+        var fileSize: Long = -1
+        
+        try {
+            contentResolver.query(
+                sharedUri,
+                arrayOf(
+                    android.provider.OpenableColumns.DISPLAY_NAME,
+                    android.provider.OpenableColumns.SIZE
+                ),
+                null, null, null
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (nameIndex >= 0) displayName = cursor.getString(nameIndex)
+                    if (sizeIndex >= 0) fileSize = cursor.getLong(sizeIndex)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to get shared file info: ${e.message}")
+            return null
+        }
+        
+        if (displayName == null) {
+            Log.d(TAG, "Could not get display name from shared URI")
+            return null
+        }
+        
+        Log.d(TAG, "Looking up image in MediaStore: name=$displayName, size=$fileSize")
+        
+        // Query our device's MediaStore for images with this name
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        }
+        
+        val projection = arrayOf(
+            MediaStore.Images.Media._ID,
+            MediaStore.Images.Media.DISPLAY_NAME,
+            MediaStore.Images.Media.SIZE,
+            MediaStore.Images.Media.DATA
+        )
+        
+        // Search by display name
+        val selection = "${MediaStore.Images.Media.DISPLAY_NAME} = ?"
+        val selectionArgs = arrayOf(displayName)
+        
+        try {
+            contentResolver.query(
+                collection,
+                projection,
+                selection,
+                selectionArgs,
+                "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
+            )?.use { cursor ->
+                Log.d(TAG, "Found ${cursor.count} images with name $displayName")
+                
+                while (cursor.moveToNext()) {
+                    val idIndex = cursor.getColumnIndex(MediaStore.Images.Media._ID)
+                    val sizeIndex = cursor.getColumnIndex(MediaStore.Images.Media.SIZE)
+                    val dataIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
+                    
+                    val imageId = if (idIndex >= 0) cursor.getLong(idIndex) else continue
+                    val imageSize = if (sizeIndex >= 0) cursor.getLong(sizeIndex) else -1
+                    val imagePath = if (dataIndex >= 0) cursor.getString(dataIndex) else null
+                    
+                    // If we have file size, verify it matches
+                    if (fileSize > 0 && imageSize > 0 && fileSize != imageSize) {
+                        Log.d(TAG, "Size mismatch: shared=$fileSize, found=$imageSize, skipping")
+                        continue
+                    }
+                    
+                    Log.d(TAG, "Found matching image: id=$imageId, path=$imagePath")
+                    
+                    // Build a MediaStore URI for this image
+                    val mediaStoreUri = android.content.ContentUris.withAppendedId(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        imageId
+                    )
+                    
+                    // Try to extract GPS using setRequireOriginal on OUR MediaStore URI
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        try {
+                            val originalUri = MediaStore.setRequireOriginal(mediaStoreUri)
+                            Log.d(TAG, "Trying setRequireOriginal on MediaStore URI: $originalUri")
+                            
+                            contentResolver.openInputStream(originalUri)?.use { inputStream ->
+                                val exif = ExifInterface(inputStream)
+                                val latLong = FloatArray(2)
+                                if (exif.getLatLong(latLong)) {
+                                    val result = mutableMapOf<String, String>()
+                                    result["latitude"] = latLong[0].toString()
+                                    result["longitude"] = latLong[1].toString()
+                                    
+                                    val altitude = exif.getAltitude(Double.NaN)
+                                    if (!altitude.isNaN()) {
+                                        result["altitude"] = altitude.toString()
+                                    }
+                                    
+                                    Log.d(TAG, "SUCCESS! GPS from MediaStore lookup: lat=${latLong[0]}, lon=${latLong[1]}")
+                                    return result
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "setRequireOriginal on MediaStore URI failed: ${e.message}")
+                        }
+                    }
+                    
+                    // Fallback: try reading from file path directly
+                    if (imagePath != null && File(imagePath).exists()) {
+                        try {
+                            val exif = ExifInterface(imagePath)
+                            val latLong = FloatArray(2)
+                            if (exif.getLatLong(latLong)) {
+                                val result = mutableMapOf<String, String>()
+                                result["latitude"] = latLong[0].toString()
+                                result["longitude"] = latLong[1].toString()
+                                
+                                val altitude = exif.getAltitude(Double.NaN)
+                                if (!altitude.isNaN()) {
+                                    result["altitude"] = altitude.toString()
+                                }
+                                
+                                Log.d(TAG, "SUCCESS! GPS from file path: lat=${latLong[0]}, lon=${latLong[1]}")
+                                return result
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "File path EXIF read failed: ${e.message}")
+                        }
+                    }
+                }
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Security exception querying MediaStore: ${e.message}")
+        } catch (e: Exception) {
+            Log.w(TAG, "MediaStore query failed: ${e.message}")
+        }
+        
+        return null
+    }
+    
+    /**
+     * Query MediaStore directly for GPS coordinates from the shared URI.
      * Note: LATITUDE and LONGITUDE columns are deprecated in Android Q but may still work.
      */
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
