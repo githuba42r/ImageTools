@@ -81,18 +81,40 @@ class ImageService:
             # Get EXIF data before any processing
             exif_data = img.getexif()
             
-            # Serialize EXIF data for database storage (to preserve GPS across operations)
-            exif_data_b64 = ImageService._extract_and_serialize_exif(img)
+            # Get format before any modifications (exif_transpose creates new image without format)
+            img_format = img.format or 'JPEG'
             
             # Apply EXIF orientation correction
+            was_transposed = False
             try:
-                img = ImageOps.exif_transpose(img)
+                transposed_img = ImageOps.exif_transpose(img)
+                if transposed_img is not img:
+                    img = transposed_img
+                    was_transposed = True
             except (AttributeError, KeyError, ZeroDivisionError, ValueError):
                 # Image has no EXIF data or malformed EXIF, use as-is
                 pass
             
-            # Get format and dimensions before any modifications
-            img_format = img.format or 'JPEG'  # Default to JPEG if format is None
+            # If we rotated the image, clear the orientation tag from EXIF
+            # to prevent double-rotation by image viewers
+            if was_transposed and exif_data:
+                # EXIF Orientation tag ID is 274
+                ORIENTATION_TAG = 274
+                if ORIENTATION_TAG in exif_data:
+                    exif_data[ORIENTATION_TAG] = 1  # 1 = Normal (no rotation needed)
+            
+            # Serialize EXIF data for database storage (to preserve GPS across operations)
+            # This is done AFTER clearing orientation to avoid double-rotation on subsequent operations
+            exif_data_b64 = ImageService._extract_and_serialize_exif(img) if not exif_data else None
+            if exif_data:
+                try:
+                    exif_bytes = exif_data.tobytes()
+                    if exif_bytes:
+                        exif_data_b64 = base64.b64encode(exif_bytes).decode('utf-8')
+                except Exception:
+                    pass
+            
+            # Get dimensions after orientation correction
             width, height = img.size
             
             # Convert RGBA to RGB for JPEG format (JPEG doesn't support transparency)
