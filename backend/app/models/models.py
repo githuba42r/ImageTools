@@ -28,6 +28,8 @@ class Image(Base):
     width = Column(Integer, nullable=False)
     height = Column(Integer, nullable=False)
     format = Column(String, nullable=False)
+    # Store original EXIF data (including GPS) as JSON to preserve across image operations
+    exif_data = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

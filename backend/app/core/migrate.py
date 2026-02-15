@@ -283,3 +283,12 @@ async def migrate_database():
                 logger.info(f"  - {migration}")
         else:
             logger.info("Database schema is up to date")
+        
+        # Check images table for exif_data column (for GPS preservation)
+        result = await conn.execute(text("PRAGMA table_info(images)"))
+        images_columns = {row[1]: row for row in result.fetchall()}
+        
+        if 'exif_data' not in images_columns:
+            logger.info("Adding exif_data column to images table for GPS preservation...")
+            await conn.execute(text("ALTER TABLE images ADD COLUMN exif_data TEXT"))
+            migrations_applied.append("Added 'exif_data' column to images for GPS preservation")

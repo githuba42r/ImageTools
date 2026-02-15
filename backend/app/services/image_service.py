@@ -2,9 +2,11 @@ import uuid
 import os
 import shutil
 import json
+import base64
 from pathlib import Path
 from typing import BinaryIO, Optional
 from PIL import Image as PILImage, ImageOps
+from PIL.ExifTags import TAGS, GPSTAGS
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.models import Image, History
@@ -17,6 +19,44 @@ class ImageService:
         """Ensure storage directories exist."""
         Path(settings.STORAGE_PATH).mkdir(parents=True, exist_ok=True)
         Path(settings.TEMP_STORAGE_PATH).mkdir(parents=True, exist_ok=True)
+    
+    @staticmethod
+    def _extract_and_serialize_exif(img: PILImage.Image) -> Optional[str]:
+        """
+        Extract EXIF data from an image and serialize it for database storage.
+        Returns base64-encoded EXIF bytes, or None if no EXIF data.
+        """
+        try:
+            exif_data = img.getexif()
+            if exif_data:
+                exif_bytes = exif_data.tobytes()
+                if exif_bytes:
+                    return base64.b64encode(exif_bytes).decode('utf-8')
+        except Exception:
+            pass
+        return None
+    
+    @staticmethod
+    def _restore_exif_to_image(img: PILImage.Image, exif_data_b64: Optional[str], output_path: str, img_format: str, save_kwargs: dict):
+        """
+        Restore EXIF data to an image and save it.
+        
+        Args:
+            img: PIL Image to save
+            exif_data_b64: Base64-encoded EXIF data from database, or None
+            output_path: Path to save the image
+            img_format: Image format (JPEG, PNG, etc.)
+            save_kwargs: Additional save keyword arguments
+        """
+        # Only JPEG supports EXIF data preservation
+        if img_format in ['JPEG', 'JPG'] and exif_data_b64:
+            try:
+                exif_bytes = base64.b64decode(exif_data_b64)
+                save_kwargs["exif"] = exif_bytes
+            except Exception:
+                pass  # If EXIF restoration fails, save without it
+        
+        img.save(output_path, format=img_format, **save_kwargs)
     
     @staticmethod
     async def save_uploaded_image(
@@ -38,6 +78,12 @@ class ImageService:
         
         # Auto-correct orientation based on EXIF data
         with PILImage.open(original_path) as img:
+            # Get EXIF data before any processing
+            exif_data = img.getexif()
+            
+            # Serialize EXIF data for database storage (to preserve GPS across operations)
+            exif_data_b64 = ImageService._extract_and_serialize_exif(img)
+            
             # Apply EXIF orientation correction
             try:
                 img = ImageOps.exif_transpose(img)
@@ -58,12 +104,16 @@ class ImageService:
                 # Convert any other non-RGB mode to RGB for JPEG
                 img = img.convert('RGB')
             
-            # Save corrected image
+            # Save corrected image with EXIF data preserved
             save_kwargs = {"quality": 95, "optimize": True}
             if img_format == "PNG":
                 save_kwargs = {"optimize": True}
             elif img_format == "WEBP":
                 save_kwargs = {"quality": 95}
+            
+            # Preserve EXIF data (including GPS) when saving JPEG
+            if img_format in ['JPEG', 'JPG'] and exif_data:
+                save_kwargs["exif"] = exif_data.tobytes()
             
             img.save(original_path, format=img_format, **save_kwargs)
         
@@ -85,7 +135,8 @@ class ImageService:
             current_size=file_size,
             width=width,
             height=height,
-            format=img_format
+            format=img_format,
+            exif_data=exif_data_b64  # Store EXIF data for GPS preservation
         )
         
         db.add(image)
@@ -216,14 +267,18 @@ class ImageService:
             # Rotate the image
             rotated = img.rotate(-degrees, expand=True)
             
-            # Save rotated image
+            # Determine format for saving
+            img_format = img.format or 'JPEG'
+            
+            # Save rotated image with EXIF data restored
             save_kwargs = {"quality": 95, "optimize": True}
-            if img.format == "PNG":
+            if img_format == "PNG":
                 save_kwargs = {"optimize": True}
-            elif img.format == "WEBP":
+            elif img_format == "WEBP":
                 save_kwargs = {"quality": 95}
-                
-            rotated.save(output_path, **save_kwargs)
+            
+            # Restore EXIF data (including GPS) from database
+            ImageService._restore_exif_to_image(rotated, image.exif_data, output_path, img_format, save_kwargs)
             
             new_width, new_height = rotated.size
         
@@ -305,14 +360,18 @@ class ImageService:
             else:  # vertical
                 flipped = img.transpose(PILImage.FLIP_TOP_BOTTOM)
             
-            # Save flipped image
+            # Determine format for saving
+            img_format = img.format or 'JPEG'
+            
+            # Save flipped image with EXIF data restored
             save_kwargs = {"quality": 95, "optimize": True}
-            if img.format == "PNG":
+            if img_format == "PNG":
                 save_kwargs = {"optimize": True}
-            elif img.format == "WEBP":
+            elif img_format == "WEBP":
                 save_kwargs = {"quality": 95}
-                
-            flipped.save(output_path, **save_kwargs)
+            
+            # Restore EXIF data (including GPS) from database
+            ImageService._restore_exif_to_image(flipped, image.exif_data, output_path, img_format, save_kwargs)
             
             new_width, new_height = flipped.size
         
@@ -397,14 +456,18 @@ class ImageService:
             # Resize using high-quality resampling
             resized = img.resize((width, height), PILImage.Resampling.LANCZOS)
             
-            # Save resized image
+            # Determine format for saving
+            img_format = img.format or 'JPEG'
+            
+            # Save resized image with EXIF data restored
             save_kwargs = {"quality": 95, "optimize": True}
-            if img.format == "PNG":
+            if img_format == "PNG":
                 save_kwargs = {"optimize": True}
-            elif img.format == "WEBP":
+            elif img_format == "WEBP":
                 save_kwargs = {"quality": 95}
-                
-            resized.save(output_path, **save_kwargs)
+            
+            # Restore EXIF data (including GPS) from database
+            ImageService._restore_exif_to_image(resized, image.exif_data, output_path, img_format, save_kwargs)
             
             new_width, new_height = resized.size
         
@@ -521,7 +584,8 @@ class ImageService:
                 save_kwargs = {"quality": 95}
             
             save_start = time.time()
-            img.save(output_path, format=img_format, **save_kwargs)
+            # Restore EXIF data (including GPS) from database
+            ImageService._restore_exif_to_image(img, image.exif_data, output_path, img_format, save_kwargs)
             print(f"[EDIT TIMING] Saved main image: {time.time() - save_start:.2f}s")
             
             new_width, new_height = img.size
