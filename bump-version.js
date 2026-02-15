@@ -5,11 +5,14 @@
  * 
  * Similar to npm version, but updates all project components:
  * - version.json (central version file)
- * - frontend/package.json
  * - backend/app/main.py
  * - browser-addons/firefox/manifest.json
  * - browser-addons/chrome/manifest.json
  * - android-app/app/build.gradle
+ * 
+ * Note: frontend/package.json is NOT updated - it uses a fixed placeholder
+ * version (0.0.0-docker) to avoid invalidating Docker build cache on version bumps.
+ * The actual version is served at runtime via the /version API endpoint.
  * 
  * Usage:
  *   node bump-version.js <major|minor|patch|prerelease> [preid]
@@ -29,7 +32,6 @@ const { execSync } = require('child_process');
 // File paths
 const ROOT_DIR = path.join(__dirname);
 const VERSION_FILE = path.join(ROOT_DIR, 'version.json');
-const FRONTEND_PACKAGE = path.join(ROOT_DIR, 'frontend', 'package.json');
 const BACKEND_MAIN = path.join(ROOT_DIR, 'backend', 'app', 'main.py');
 const FIREFOX_MANIFEST = path.join(ROOT_DIR, 'browser-addons', 'firefox', 'manifest.json');
 const CHROME_MANIFEST = path.join(ROOT_DIR, 'browser-addons', 'chrome', 'manifest.json');
@@ -135,17 +137,6 @@ function updateVersionJson(newVersion, versionCode) {
 }
 
 /**
- * Update frontend package.json
- */
-function updateFrontendPackage(newVersion) {
-  console.log('📝 Updating frontend/package.json...');
-  const pkg = JSON.parse(fs.readFileSync(FRONTEND_PACKAGE, 'utf8'));
-  pkg.version = newVersion;
-  fs.writeFileSync(FRONTEND_PACKAGE, JSON.stringify(pkg, null, 2) + '\n');
-  console.log(`   ✓ Updated to ${newVersion}`);
-}
-
-/**
  * Update backend main.py
  */
 function updateBackendMain(newVersion) {
@@ -236,7 +227,6 @@ function commitAndTag(newVersion) {
   // Add all version-related files
   const filesToCommit = [
     'version.json',
-    'frontend/package.json',
     'backend/app/main.py',
     'browser-addons/firefox/manifest.json',
     'browser-addons/chrome/manifest.json',
@@ -338,7 +328,6 @@ function main() {
     
     // Update all files
     updateVersionJson(newVersion, versionCode);
-    updateFrontendPackage(newVersion);
     updateBackendMain(newVersion);
     updateManifest(FIREFOX_MANIFEST, 'Firefox', newVersion);
     updateManifest(CHROME_MANIFEST, 'Chrome', newVersion);
@@ -347,11 +336,11 @@ function main() {
     console.log('\n✅ Version bump complete!\n');
     console.log('Updated files:');
     console.log('  • version.json');
-    console.log('  • frontend/package.json');
     console.log('  • backend/app/main.py');
     console.log('  • browser-addons/firefox/manifest.json');
     console.log('  • browser-addons/chrome/manifest.json');
     console.log('  • android-app/app/build.gradle');
+    console.log('\nNote: frontend/package.json is NOT updated (uses fixed version for Docker caching).');
     
     // Commit and tag
     if (!noCommit) {

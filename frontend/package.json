@@ -1,6 +1,6 @@
 {
   "name": "imagetools",
-  "version": "1.5.4",
+  "version": "0.0.0-docker",
   "private": true,
   "type": "module",
   "scripts": {

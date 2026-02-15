@@ -74,11 +74,14 @@ node bump-version.js prerelease beta
 The bump script automatically updates:
 
 1. **version.json** - Central version file
-2. **frontend/package.json** - Frontend version
-3. **backend/app/main.py** - Backend API version
-4. **browser-addons/firefox/manifest.json** - Firefox extension version
-5. **browser-addons/chrome/manifest.json** - Chrome extension version
-6. **android-app/app/build.gradle** - Android app versionName and versionCode
+2. **backend/app/main.py** - Backend API version
+3. **browser-addons/firefox/manifest.json** - Firefox extension version
+4. **browser-addons/chrome/manifest.json** - Chrome extension version
+5. **android-app/app/build.gradle** - Android app versionName and versionCode
+
+**Note:** `frontend/package.json` is NOT updated - it uses a fixed placeholder version
+(`0.0.0-docker`) to optimize Docker build caching. The actual version is served at
+runtime via the `/version` API endpoint.
 
 ### Automatic Git Commit and Tag
 
@@ -274,7 +277,7 @@ docker-compose restart imagetools
 
 - `/version.json` - Central version file
 - `/bump-version.js` - Version bump script
-- `/frontend/package.json` - Frontend version
+- `/frontend/package.json` - Uses fixed version for Docker caching (actual version from /version endpoint)
 - `/backend/app/main.py` - Backend version loader
 - `/browser-addons/firefox/manifest.json` - Firefox version
 - `/browser-addons/chrome/manifest.json` - Chrome version

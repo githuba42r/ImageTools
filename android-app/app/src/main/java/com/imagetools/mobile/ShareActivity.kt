@@ -208,18 +208,178 @@ class ShareActivity : ComponentActivity() {
     }
     
     /**
-     * Extract GPS metadata from an image URI using ExifInterface.
+     * Extract GPS metadata from an image URI.
+     * 
+     * On Android 10+, GPS data is stripped from shared content:// URIs for privacy.
+     * We try multiple methods in order:
+     * 1. Query MediaStore directly for latitude/longitude columns (may be deprecated)
+     * 2. Get real file path from MediaStore and read EXIF directly from file
+     * 3. Use setRequireOriginal() with ExifInterface
+     * 4. Try regular ExifInterface as fallback
+     * 
      * Returns a map with latitude, longitude, and altitude if available.
      */
     private fun extractGpsMetadata(imageUri: Uri): Map<String, String>? {
-        return try {
-            // Use setRequireOriginal on Android 10+ to get original file with GPS data
-            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                MediaStore.setRequireOriginal(imageUri)
-            } else {
-                imageUri
+        Log.d(TAG, "Attempting to extract GPS from URI: $imageUri")
+        
+        // Method 1: Query MediaStore for GPS data
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val gpsFromMediaStore = extractGpsFromMediaStore(imageUri)
+                if (gpsFromMediaStore != null) {
+                    Log.d(TAG, "GPS extracted from MediaStore query")
+                    return gpsFromMediaStore
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "MediaStore GPS query failed: ${e.message}")
             }
-            
+        }
+        
+        // Method 2: Get real file path and read EXIF directly
+        try {
+            val gpsFromFilePath = extractGpsFromFilePath(imageUri)
+            if (gpsFromFilePath != null) {
+                Log.d(TAG, "GPS extracted from file path")
+                return gpsFromFilePath
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "File path GPS extraction failed: ${e.message}")
+        }
+        
+        // Method 3: Try setRequireOriginal with ExifInterface
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val originalUri = MediaStore.setRequireOriginal(imageUri)
+                val gpsFromOriginal = extractGpsFromExif(originalUri)
+                if (gpsFromOriginal != null) {
+                    Log.d(TAG, "GPS extracted using setRequireOriginal")
+                    return gpsFromOriginal
+                }
+            } catch (e: SecurityException) {
+                Log.w(TAG, "setRequireOriginal failed (permission denied): ${e.message}")
+            } catch (e: Exception) {
+                Log.w(TAG, "setRequireOriginal failed: ${e.message}")
+            }
+        }
+        
+        // Method 4: Try regular ExifInterface as fallback
+        try {
+            val gpsFromExif = extractGpsFromExif(imageUri)
+            if (gpsFromExif != null) {
+                Log.d(TAG, "GPS extracted from regular EXIF read")
+                return gpsFromExif
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Regular EXIF read failed: ${e.message}")
+        }
+        
+        Log.d(TAG, "No GPS coordinates found using any method")
+        return null
+    }
+    
+    /**
+     * Query MediaStore directly for GPS coordinates.
+     * Note: LATITUDE and LONGITUDE columns are deprecated in Android Q but may still work.
+     */
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
+    private fun extractGpsFromMediaStore(imageUri: Uri): Map<String, String>? {
+        // Only works for content:// URIs from MediaStore
+        if (imageUri.scheme != "content") {
+            return null
+        }
+        
+        val projection = arrayOf(
+            MediaStore.Images.Media.LATITUDE,
+            MediaStore.Images.Media.LONGITUDE
+        )
+        
+        return try {
+            contentResolver.query(imageUri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val latIndex = cursor.getColumnIndex(MediaStore.Images.Media.LATITUDE)
+                    val lonIndex = cursor.getColumnIndex(MediaStore.Images.Media.LONGITUDE)
+                    
+                    if (latIndex >= 0 && lonIndex >= 0) {
+                        // Check if columns exist and have values
+                        if (!cursor.isNull(latIndex) && !cursor.isNull(lonIndex)) {
+                            val latitude = cursor.getDouble(latIndex)
+                            val longitude = cursor.getDouble(lonIndex)
+                            
+                            // Validate coordinates (0,0 is unlikely to be a real location)
+                            if (latitude != 0.0 || longitude != 0.0) {
+                                val result = mutableMapOf<String, String>()
+                                result["latitude"] = latitude.toString()
+                                result["longitude"] = longitude.toString()
+                                Log.d(TAG, "MediaStore GPS: lat=$latitude, lon=$longitude")
+                                return@use result
+                            }
+                        }
+                    }
+                }
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "MediaStore query exception: ${e.message}")
+            null
+        }
+    }
+    
+    /**
+     * Try to get the real file path from MediaStore and read EXIF directly.
+     * This may work on some devices where direct file access is allowed.
+     */
+    @Suppress("DEPRECATION")
+    private fun extractGpsFromFilePath(imageUri: Uri): Map<String, String>? {
+        if (imageUri.scheme != "content") {
+            return null
+        }
+        
+        // Try to get the _data column which contains the file path
+        val projection = arrayOf(MediaStore.Images.Media.DATA)
+        
+        return try {
+            contentResolver.query(imageUri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val dataIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
+                    if (dataIndex >= 0) {
+                        val filePath = cursor.getString(dataIndex)
+                        if (filePath != null && File(filePath).exists()) {
+                            Log.d(TAG, "Got real file path: $filePath")
+                            // Read EXIF directly from file
+                            val exif = ExifInterface(filePath)
+                            val latLong = FloatArray(2)
+                            if (exif.getLatLong(latLong)) {
+                                val result = mutableMapOf<String, String>()
+                                result["latitude"] = latLong[0].toString()
+                                result["longitude"] = latLong[1].toString()
+                                
+                                val altitude = exif.getAltitude(Double.NaN)
+                                if (!altitude.isNaN()) {
+                                    result["altitude"] = altitude.toString()
+                                }
+                                
+                                Log.d(TAG, "File path EXIF GPS: lat=${latLong[0]}, lon=${latLong[1]}")
+                                return@use result
+                            }
+                        }
+                    }
+                }
+                null
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Security exception accessing file path: ${e.message}")
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "File path extraction exception: ${e.message}")
+            null
+        }
+    }
+    
+    /**
+     * Extract GPS metadata from a URI using ExifInterface.
+     */
+    private fun extractGpsFromExif(uri: Uri): Map<String, String>? {
+        return try {
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 val exif = ExifInterface(inputStream)
                 
@@ -236,24 +396,17 @@ class ShareActivity : ComponentActivity() {
                         result["altitude"] = altitude.toString()
                     }
                     
-                    // Get GPS timestamp if available
-                    val gpsDateTime = exif.getAttribute(ExifInterface.TAG_GPS_DATESTAMP)
-                    if (gpsDateTime != null) {
-                        result["gps_datestamp"] = gpsDateTime
-                    }
-                    
-                    Log.d(TAG, "Extracted GPS: lat=${latLong[0]}, lon=${latLong[1]}, alt=$altitude")
+                    Log.d(TAG, "EXIF GPS: lat=${latLong[0]}, lon=${latLong[1]}, alt=$altitude")
                     result
                 } else {
-                    Log.d(TAG, "No GPS coordinates found in image")
                     null
                 }
             }
         } catch (e: SecurityException) {
-            Log.w(TAG, "SecurityException reading GPS data - permission may be denied: ${e.message}")
+            Log.w(TAG, "SecurityException reading EXIF: ${e.message}")
             null
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to extract GPS metadata: ${e.message}")
+            Log.w(TAG, "EXIF read exception: ${e.message}")
             null
         }
     }
