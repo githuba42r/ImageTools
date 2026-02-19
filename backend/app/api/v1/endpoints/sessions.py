@@ -57,3 +57,24 @@ async def validate_session(
     """Validate if session is active."""
     is_valid = await SessionService.validate_session(db, session_id)
     return {"valid": is_valid}
+
+
+@router.post("/cleanup")
+async def cleanup_expired_sessions(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Manually trigger cleanup of expired sessions.
+    
+    This endpoint removes all expired sessions and their associated data:
+    - Database records (sessions, images, conversations, messages, etc.)
+    - Image files and thumbnails from disk
+    - History files
+    
+    Returns the number of sessions cleaned up.
+    """
+    deleted_count = await SessionService.cleanup_expired_sessions(db)
+    return {
+        "deleted_sessions": deleted_count,
+        "message": f"Cleaned up {deleted_count} expired session(s)"
+    }

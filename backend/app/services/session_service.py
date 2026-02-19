@@ -74,9 +74,73 @@ class SessionService:
     
     @staticmethod
     async def cleanup_expired_sessions(db: AsyncSession) -> int:
-        """Remove expired sessions and associated data."""
+        """Remove expired sessions and associated data, including files on disk."""
+        import os
+        from pathlib import Path
+        from app.models.models import Image
+        from app.core.config import settings
+        
+        # Get all expired sessions first to fetch their images
         result = await db.execute(
-            delete(Session).where(Session.expires_at < datetime.utcnow())
+            select(Session).where(Session.expires_at < datetime.utcnow())
+        )
+        expired_sessions = result.scalars().all()
+        
+        if not expired_sessions:
+            return 0
+        
+        session_ids = [s.id for s in expired_sessions]
+        deleted_count = len(session_ids)
+        
+        # Get all images associated with expired sessions to delete their files
+        image_result = await db.execute(
+            select(Image).where(Image.session_id.in_(session_ids))
+        )
+        images_to_delete = image_result.scalars().all()
+        
+        # Delete image files and thumbnails from disk
+        storage_dir = Path(settings.STORAGE_DIR)
+        for image in images_to_delete:
+            try:
+                # Delete main image file
+                if image.current_path and os.path.exists(image.current_path):
+                    os.remove(image.current_path)
+                    
+                # Delete thumbnail file
+                if image.thumbnail_path and os.path.exists(image.thumbnail_path):
+                    os.remove(image.thumbnail_path)
+                    
+                # Clean up history files (if they exist in a subdirectory)
+                # History files are typically stored in storage/<image_id>/history/
+                image_history_dir = storage_dir / image.id / "history"
+                if image_history_dir.exists() and image_history_dir.is_dir():
+                    for history_file in image_history_dir.glob("*"):
+                        if history_file.is_file():
+                            os.remove(history_file)
+                    # Remove history directory if empty
+                    try:
+                        image_history_dir.rmdir()
+                    except OSError:
+                        pass  # Directory not empty, that's okay
+                
+                # Remove image directory if it exists and is empty
+                image_dir = storage_dir / image.id
+                if image_dir.exists() and image_dir.is_dir():
+                    try:
+                        image_dir.rmdir()
+                    except OSError:
+                        pass  # Directory not empty, that's okay
+                        
+            except Exception as e:
+                # Log error but continue cleanup
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error deleting files for image {image.id}: {e}")
+        
+        # Delete sessions from database (CASCADE will handle related records)
+        await db.execute(
+            delete(Session).where(Session.id.in_(session_ids))
         )
         await db.commit()
-        return result.rowcount
+        
+        return deleted_count

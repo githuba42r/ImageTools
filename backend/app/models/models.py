@@ -19,7 +19,7 @@ class Image(Base):
     __tablename__ = "images"
     
     id = Column(String, primary_key=True, index=True)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     original_filename = Column(String, nullable=False)
     original_size = Column(Integer, nullable=False)
     current_path = Column(String, nullable=False)
@@ -42,7 +42,7 @@ class History(Base):
     __tablename__ = "history"
     
     id = Column(String, primary_key=True, index=True)
-    image_id = Column(String, ForeignKey("images.id"), nullable=False, index=True)
+    image_id = Column(String, ForeignKey("images.id", ondelete="CASCADE"), nullable=False, index=True)
     operation_type = Column(String, nullable=False)
     operation_params = Column(Text, nullable=True)
     input_path = Column(String, nullable=False)
@@ -56,8 +56,8 @@ class Conversation(Base):
     __tablename__ = "conversations"
     
     id = Column(String, primary_key=True, index=True)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
-    image_id = Column(String, ForeignKey("images.id"), nullable=False)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    image_id = Column(String, ForeignKey("images.id", ondelete="CASCADE"), nullable=False)
     model = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -68,7 +68,7 @@ class Message(Base):
     __tablename__ = "messages"
     
     id = Column(String, primary_key=True, index=True)
-    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False, index=True)
+    conversation_id = Column(String, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
     role = Column(String, nullable=False)  # 'user' or 'assistant'
     content = Column(Text, nullable=False)
     tokens_used = Column(Integer, nullable=True)
@@ -84,7 +84,7 @@ class OpenRouterKey(Base):
     __tablename__ = "openrouter_keys"
     
     id = Column(String, primary_key=True, index=True)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True, unique=True)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True, unique=True)
     encrypted_api_key = Column(Text, nullable=False)  # Encrypted API key
     key_label = Column(String, nullable=True)  # Optional label from OpenRouter
     credits_remaining = Column(Float, nullable=True)  # Cache of remaining credits
@@ -102,7 +102,7 @@ class UserSettings(Base):
     __tablename__ = "user_settings"
     
     id = Column(String, primary_key=True, index=True)
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True, unique=True)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True, unique=True)
     selected_model_id = Column(String, nullable=True)  # OpenRouter model ID (e.g., "google/gemini-2.0-flash-exp:free")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -120,7 +120,7 @@ class MobileAppPairing(Base):
     __tablename__ = "mobile_app_pairings"
     
     id = Column(String, primary_key=True, index=True)  # UUID
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     device_name = Column(String, nullable=True)  # Optional device identifier
     
     # Device metadata (populated during token exchange)
@@ -157,7 +157,7 @@ class CompressionProfile(Base):
     __tablename__ = "compression_profiles"
     
     id = Column(String, primary_key=True, index=True)  # UUID
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=True, index=True)  # NULL or 'system' for system defaults
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=True, index=True)  # NULL or 'system' for system defaults
     name = Column(String, nullable=False)  # User-defined profile name
     max_width = Column(Integer, nullable=False)  # Maximum width in pixels
     max_height = Column(Integer, nullable=False)  # Maximum height in pixels
@@ -185,7 +185,7 @@ class BrowserAddonAuthorization(Base):
     __tablename__ = "browser_addon_authorizations"
     
     id = Column(String, primary_key=True, index=True)  # UUID
-    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id = Column(String, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     browser_name = Column(String, nullable=True)  # "firefox" or "chrome"
     browser_version = Column(String, nullable=True)  # Browser version
     os_name = Column(String, nullable=True)  # Operating system

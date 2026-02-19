@@ -18,6 +18,7 @@ class HealthCheckFilter(logging.Filter):
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.websocket_manager import manager as ws_manager
+from app.core.scheduler import start_scheduler, stop_scheduler
 from app.middleware import InternalAuthMiddleware
 from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles
 
@@ -54,9 +55,17 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized")
     
+    # Start background scheduler for cleanup tasks
+    start_scheduler()
+    logger.info("Background scheduler started")
+    
     yield
     
     logger.info("Shutting down Image Tools API...")
+    
+    # Stop background scheduler
+    stop_scheduler()
+    logger.info("Background scheduler stopped")
 
 
 # Create FastAPI app
