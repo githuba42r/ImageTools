@@ -153,10 +153,10 @@
               @click="showClearAllConfirm = true" 
               class="btn-icon btn-header btn-danger-header"
               :disabled="imageCount === 0"
-              title="Clear all images"
+              :title="selectedCount > 0 ? `Delete ${selectedCount} selected image${selectedCount !== 1 ? 's' : ''}` : 'Clear all images'"
             >
               <span class="icon">🗑</span>
-              <span class="tooltip">Clear All</span>
+              <span class="tooltip">{{ selectedCount > 0 ? 'Delete Selected' : 'Clear All' }}</span>
             </button>
           </div>
           
@@ -211,14 +211,19 @@
       </div>
     </main>
 
-    <!-- Clear All Confirmation Modal -->
+    <!-- Clear All / Delete Selected Confirmation Modal -->
     <div v-if="showClearAllConfirm" class="modal-overlay" @click="showClearAllConfirm = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h2>Clear All Images?</h2>
+          <h2>{{ selectedCount > 0 ? 'Delete Selected Images?' : 'Clear All Images?' }}</h2>
         </div>
         <div class="modal-body">
-          <p>Are you sure you want to remove all <strong>{{ imageCount }}</strong> image{{ imageCount !== 1 ? 's' : '' }}?</p>
+          <p v-if="selectedCount > 0">
+            Are you sure you want to remove <strong>{{ selectedCount }}</strong> selected image{{ selectedCount !== 1 ? 's' : '' }}?
+          </p>
+          <p v-else>
+            Are you sure you want to remove all <strong>{{ imageCount }}</strong> image{{ imageCount !== 1 ? 's' : '' }}?
+          </p>
           <p class="modal-warning">This action cannot be undone.</p>
         </div>
         <div class="modal-footer">
@@ -234,7 +239,7 @@
             class="btn-modal btn-danger"
             :disabled="isClearingAll"
           >
-            {{ isClearingAll ? '⏳ Removing...' : '🗑 Remove All' }}
+            {{ isClearingAll ? '⏳ Removing...' : (selectedCount > 0 ? '🗑 Remove Selected' : '🗑 Remove All') }}
           </button>
         </div>
       </div>
@@ -2845,14 +2850,24 @@ const handleClickOutside = () => {
 const confirmClearAll = async () => {
   isClearingAll.value = true;
   try {
-    // Delete all images
-    const deletePromises = images.value.map(image => imageStore.deleteImage(image.id));
+    // If images are selected, delete only selected images
+    // Otherwise, delete all images
+    const imagesToDelete = selectedCount.value > 0 
+      ? images.value.filter(img => selectedImages.value.includes(img.id))
+      : images.value;
+    
+    const deletePromises = imagesToDelete.map(image => imageStore.deleteImage(image.id));
     await Promise.all(deletePromises);
     
     showClearAllConfirm.value = false;
-    console.log(`Removed all ${deletePromises.length} images`);
+    
+    if (selectedCount.value > 0) {
+      console.log(`Removed ${deletePromises.length} selected image(s)`);
+    } else {
+      console.log(`Removed all ${deletePromises.length} images`);
+    }
   } catch (error) {
-    console.error('Failed to clear all images:', error);
+    console.error('Failed to delete images:', error);
   } finally {
     isClearingAll.value = false;
   }
