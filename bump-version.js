@@ -35,6 +35,8 @@ const VERSION_FILE = path.join(ROOT_DIR, 'version.json');
 const BACKEND_MAIN = path.join(ROOT_DIR, 'backend', 'app', 'main.py');
 const FIREFOX_MANIFEST = path.join(ROOT_DIR, 'browser-addons', 'firefox', 'manifest.json');
 const CHROME_MANIFEST = path.join(ROOT_DIR, 'browser-addons', 'chrome', 'manifest.json');
+const FIREFOX_POPUP = path.join(ROOT_DIR, 'browser-addons', 'firefox', 'popup.js');
+const CHROME_POPUP = path.join(ROOT_DIR, 'browser-addons', 'chrome', 'popup.js');
 const ANDROID_GRADLE = path.join(ROOT_DIR, 'android-app', 'app', 'build.gradle');
 
 /**
@@ -170,6 +172,23 @@ function updateManifest(manifestPath, addonName, newVersion) {
 }
 
 /**
+ * Update browser addon popup.js BUILD_DATE
+ */
+function updatePopupJs(popupPath, addonName, buildDate) {
+  console.log(`📝 Updating ${addonName} popup.js...`);
+  let content = fs.readFileSync(popupPath, 'utf8');
+  
+  // Update BUILD_DATE constant
+  content = content.replace(
+    /const BUILD_DATE = '[^']*';/,
+    `const BUILD_DATE = '${buildDate}';`
+  );
+  
+  fs.writeFileSync(popupPath, content);
+  console.log(`   ✓ Updated BUILD_DATE to ${buildDate}`);
+}
+
+/**
  * Update Android build.gradle
  */
 function updateAndroidGradle(newVersion, versionCode) {
@@ -230,6 +249,8 @@ function commitAndTag(newVersion) {
     'backend/app/main.py',
     'browser-addons/firefox/manifest.json',
     'browser-addons/chrome/manifest.json',
+    'browser-addons/firefox/popup.js',
+    'browser-addons/chrome/popup.js',
     'android-app/app/build.gradle'
   ];
   
@@ -326,11 +347,16 @@ function main() {
     
     console.log(`🚀 New version: ${newVersion} (code: ${versionCode})\n`);
     
+    // Get build date from version.json (will be set by updateVersionJson)
+    const buildDate = new Date().toISOString();
+    
     // Update all files
     updateVersionJson(newVersion, versionCode);
     updateBackendMain(newVersion);
     updateManifest(FIREFOX_MANIFEST, 'Firefox', newVersion);
     updateManifest(CHROME_MANIFEST, 'Chrome', newVersion);
+    updatePopupJs(FIREFOX_POPUP, 'Firefox', buildDate);
+    updatePopupJs(CHROME_POPUP, 'Chrome', buildDate);
     updateAndroidGradle(newVersion, versionCode);
     
     console.log('\n✅ Version bump complete!\n');
@@ -339,6 +365,8 @@ function main() {
     console.log('  • backend/app/main.py');
     console.log('  • browser-addons/firefox/manifest.json');
     console.log('  • browser-addons/chrome/manifest.json');
+    console.log('  • browser-addons/firefox/popup.js');
+    console.log('  • browser-addons/chrome/popup.js');
     console.log('  • android-app/app/build.gradle');
     console.log('\nNote: frontend/package.json is NOT updated (uses fixed version for Docker caching).');
     
