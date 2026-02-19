@@ -1,7 +1,7 @@
 // ImageTools Popup Script
 
 // Get build date from manifest (injected at build time)
-const BUILD_DATE = '2026-02-15T04:58:13.117Z';  // Will be updated by build script
+const BUILD_DATE = '2026-02-19T05:13:50.001Z';  // Will be updated by build script
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Display version information
