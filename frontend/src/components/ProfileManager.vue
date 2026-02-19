@@ -30,6 +30,7 @@
                 <h4>
                   <span v-if="profile.system_default" class="profile-icon" title="System default profile">🔧</span>
                   <span v-else-if="profile.overrides_system_default" class="profile-icon" title="Custom profile (overrides system default)">🎨</span>
+                  <span v-else class="profile-icon" title="Custom profile">📋</span>
                   {{ profile.name }}
                 </h4>
                 <p class="profile-specs">

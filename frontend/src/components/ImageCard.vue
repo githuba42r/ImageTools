@@ -911,7 +911,6 @@ onBeforeUnmount(() => {
   cursor: pointer;
   position: relative;
   overflow: visible;
-  isolation: isolate;
 }
 
 .image-card:hover {
