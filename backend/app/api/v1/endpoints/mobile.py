@@ -54,20 +54,6 @@ async def create_pairing(
         raise HTTPException(status_code=500, detail=f"Failed to create pairing: {str(e)}")
 
 
-@router.get("/pairings/{pairing_id}", response_model=MobileAppPairingResponse)
-async def get_pairing(
-    pairing_id: str,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Get a specific pairing by ID
-    """
-    pairing = await MobileService.get_pairing_by_id(db, pairing_id)
-    if not pairing:
-        raise HTTPException(status_code=404, detail="Pairing not found")
-    return pairing
-
-
 @router.get("/pairings/qr-data/{pairing_id}", response_model=QRCodeDataResponse)
 async def get_qr_code_data(
     pairing_id: str,
@@ -120,6 +106,20 @@ async def get_user_pairings(
         active_only=active_only
     )
     return pairings
+
+
+@router.get("/pairings/{pairing_id}", response_model=MobileAppPairingResponse)
+async def get_pairing(
+    pairing_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get a specific pairing by ID
+    """
+    pairing = await MobileService.get_pairing_by_id(db, pairing_id)
+    if not pairing:
+        raise HTTPException(status_code=404, detail="Pairing not found")
+    return pairing
 
 
 @router.delete("/pairings/{pairing_id}")
