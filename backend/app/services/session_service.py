@@ -5,8 +5,31 @@ from sqlalchemy import select, delete
 from app.models.models import Session
 from app.core.config import settings
 
+# Well-known fixed session ID used when no auth proxy is present.
+# All anonymous (unauthenticated) browsers share this single session so that
+# images are not siloed per browser or per localStorage entry.
+ANONYMOUS_SESSION_ID = "anonymous"
+
 
 class SessionService:
+    @staticmethod
+    async def get_active_session_by_username(db: AsyncSession, username: str) -> Session:
+        """
+        Find the most recently active non-expired session for a given username.
+
+        When Authelia (or another auth proxy) is in use, the username is the
+        canonical identity of the user.  We return the newest non-expired session
+        so that the same user always lands on the same session regardless of which
+        browser they use.
+        """
+        result = await db.execute(
+            select(Session)
+            .where(Session.username == username)
+            .where(Session.expires_at > datetime.utcnow())
+            .order_by(Session.expires_at.desc())
+        )
+        return result.scalars().first()
+
     @staticmethod
     async def create_session(
         db: AsyncSession, 
@@ -15,27 +38,60 @@ class SessionService:
         display_name: str = None,
         custom_session_id: str = None
     ) -> Session:
-        """Create a new session with optional Authelia user information."""
-        # Use custom session ID if provided (for testing), otherwise generate UUID
-        session_id = custom_session_id if custom_session_id else str(uuid.uuid4())
+        """
+        Return (or create) a session.
+
+        Resolution order:
+        1. If *username* is provided (Authelia / auth-proxy mode) look for an
+           existing non-expired session for that username and return it.  This
+           makes the session account-scoped: every browser that belongs to the
+           same authenticated user will share the same session and therefore see
+           the same images and pairings.
+        2. If *custom_session_id* is provided (VITE_SESSION_OVERRIDE / testing)
+           upsert on that exact ID — used only for developer overrides.
+        3. Anonymous mode (no username, no override): always upsert the single
+           well-known ANONYMOUS_SESSION_ID session so that every browser and
+           every device shares one global image store when no auth is present.
+        """
         expires_at = datetime.utcnow() + timedelta(days=settings.SESSION_EXPIRY_DAYS)
-        
-        # Check if session with this ID already exists
-        existing = await SessionService.get_session(db, session_id)
-        if existing:
-            # Update expiry time and user info for existing session
-            existing.expires_at = expires_at
-            if user_id:
-                existing.user_id = user_id
-            if username:
-                existing.username = username
-            if display_name:
-                existing.display_name = display_name
-            await db.commit()
-            await db.refresh(existing)
-            return existing
-        
-        # Create new session
+
+        # --- Account-scoped path (Authelia username present) ---
+        if username:
+            existing = await SessionService.get_active_session_by_username(db, username)
+            if existing:
+                # Refresh expiry and keep display_name up to date
+                existing.expires_at = expires_at
+                if display_name:
+                    existing.display_name = display_name
+                await db.commit()
+                await db.refresh(existing)
+                return existing
+            # First login for this user — fall through to create with their username
+
+        # --- Developer override path (VITE_SESSION_OVERRIDE) ---
+        elif custom_session_id:
+            existing = await SessionService.get_session(db, custom_session_id)
+            if existing:
+                existing.expires_at = expires_at
+                await db.commit()
+                await db.refresh(existing)
+                return existing
+            # Override ID not found — fall through to create it
+
+        # --- Anonymous path: no username, no override ---
+        else:
+            existing = await SessionService.get_session(db, ANONYMOUS_SESSION_ID)
+            if existing:
+                existing.expires_at = expires_at
+                await db.commit()
+                await db.refresh(existing)
+                return existing
+            # First ever startup — fall through to create the anonymous session
+
+        # --- Create new session ---
+        session_id = custom_session_id if (username is None and custom_session_id) else (
+            ANONYMOUS_SESSION_ID if username is None else str(uuid.uuid4())
+        )
         session = Session(
             id=session_id,
             user_id=user_id,

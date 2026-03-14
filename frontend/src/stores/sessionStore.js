@@ -13,13 +13,11 @@ export const useSessionStore = defineStore('session', {
     async initializeSession() {
       // Check for session override from environment (for testing multi-user sessions)
       const sessionOverride = import.meta.env.VITE_SESSION_OVERRIDE;
-      
+
       if (sessionOverride && sessionOverride.trim() !== '') {
         console.log('Using session override:', sessionOverride);
-        // Use override value as session ID
         this.sessionId = sessionOverride;
-        
-        // Try to validate and get session data
+
         try {
           const validation = await sessionService.validateSession(sessionOverride);
           if (validation.valid) {
@@ -30,31 +28,22 @@ export const useSessionStore = defineStore('session', {
         } catch (error) {
           console.log('Session override not found, creating new session with ID:', sessionOverride);
         }
-        
-        // Create session with override ID
+
         await this.createSession(null, sessionOverride);
         return;
       }
-      
-      // Normal flow: Check localStorage for existing session
-      const storedSessionId = localStorage.getItem('imagetools_session_id');
 
-      if (storedSessionId) {
-        // Validate stored session
-        try {
-          const validation = await sessionService.validateSession(storedSessionId);
-          if (validation.valid) {
-            this.sessionId = storedSessionId;
-            this.sessionData = await sessionService.getSession(storedSessionId);
-            console.log('Session restored:', this.sessionId);
-            return;
-          }
-        } catch (error) {
-          console.log('Stored session invalid, creating new session');
-        }
-      }
-
-      // Create new session
+      // Always call POST /sessions so the backend can resolve the canonical session.
+      //
+      // When an auth proxy (e.g. Authelia) is in use the backend reads the
+      // Remote-User header and returns the existing session for that user,
+      // making the session account-scoped.  Every browser used by the same
+      // authenticated user will therefore share one session and see the same
+      // images and mobile pairings.
+      //
+      // When there is no auth proxy the backend creates or returns the session
+      // identified by the ID stored in localStorage, preserving the existing
+      // single-user / anonymous behaviour.
       await this.createSession();
     },
 
@@ -63,20 +52,31 @@ export const useSessionStore = defineStore('session', {
       this.error = null;
 
       try {
-        const session = await sessionService.createSession(userId, customSessionId);
+        // Pass the locally-stored session ID as a hint so that in anonymous
+        // (no-auth) mode the backend can return the same session the browser
+        // was already using.  In authenticated mode the backend ignores this
+        // hint and returns the canonical session for the logged-in user.
+        const sessionOverride = import.meta.env.VITE_SESSION_OVERRIDE;
+        const storedSessionId = (!sessionOverride || sessionOverride.trim() === '')
+          ? localStorage.getItem('imagetools_session_id')
+          : null;
+        const hintId = customSessionId || storedSessionId || null;
+
+        const session = await sessionService.createSession(userId, hintId);
         this.sessionId = session.id;
         this.sessionData = session;
 
-        // Store in localStorage only if not using override
-        const sessionOverride = import.meta.env.VITE_SESSION_OVERRIDE;
+        // Always persist the canonical session ID returned by the server.
+        // In authenticated mode this overwrites any stale browser-local ID
+        // with the account-scoped one so future loads skip the round-trip.
         if (!sessionOverride || sessionOverride.trim() === '') {
           localStorage.setItem('imagetools_session_id', session.id);
         }
 
-        console.log('Session created:', this.sessionId);
+        console.log('Session resolved:', this.sessionId);
       } catch (error) {
         this.error = error.message;
-        console.error('Failed to create session:', error);
+        console.error('Failed to resolve session:', error);
         throw error;
       } finally {
         this.isLoading = false;
