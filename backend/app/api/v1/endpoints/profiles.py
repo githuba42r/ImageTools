@@ -13,7 +13,7 @@ from app.schemas.schemas import (
     CompressionProfileResponse
 )
 from app.services import profile_service
-from app.services.session_service import SessionService
+from app.services.user_service import UserService
 
 router = APIRouter()
 
@@ -21,53 +21,53 @@ router = APIRouter()
 @router.post("/profiles", response_model=CompressionProfileResponse, status_code=201)
 async def create_profile(
     profile_data: CompressionProfileCreate,
-    x_session_id: str = Header(..., alias="X-Session-ID"),
+    x_user_id: str = Header(..., alias="X-User-ID"),
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new compression profile"""
-    # Validate session exists
-    session = await SessionService.get_session(db, x_session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    profile = await profile_service.create_profile(db, x_session_id, profile_data)
+    # Validate user exists
+    user = await UserService.get_user(db, x_user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
+    profile = await profile_service.create_profile(db, x_user_id, profile_data)
     return profile
 
 
 @router.get("/profiles", response_model=List[CompressionProfileResponse])
 async def get_profiles(
-    x_session_id: str = Header(..., alias="X-Session-ID"),
+    x_user_id: str = Header(..., alias="X-User-ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all compression profiles for the current session"""
-    # Validate session exists
-    session = await SessionService.get_session(db, x_session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
+    """Get all compression profiles for the current user"""
+    # Validate user exists
+    user = await UserService.get_user(db, x_user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
     # Ensure system default profiles exist
     await profile_service.create_system_default_profiles(db)
-    
-    profiles = await profile_service.get_profiles(db, x_session_id)
+
+    profiles = await profile_service.get_profiles(db, x_user_id)
     return profiles
 
 
 @router.get("/profiles/{profile_id}", response_model=CompressionProfileResponse)
 async def get_profile(
     profile_id: str,
-    x_session_id: str = Header(..., alias="X-Session-ID"),
+    x_user_id: str = Header(..., alias="X-User-ID"),
     db: AsyncSession = Depends(get_db)
 ):
     """Get a specific compression profile"""
-    # Validate session exists
-    session = await SessionService.get_session(db, x_session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    profile = await profile_service.get_profile(db, profile_id, x_session_id)
+    # Validate user exists
+    user = await UserService.get_user(db, x_user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
+    profile = await profile_service.get_profile(db, profile_id, x_user_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     return profile
 
 
@@ -75,36 +75,36 @@ async def get_profile(
 async def update_profile(
     profile_id: str,
     profile_data: CompressionProfileUpdate,
-    x_session_id: str = Header(..., alias="X-Session-ID"),
+    x_user_id: str = Header(..., alias="X-User-ID"),
     db: AsyncSession = Depends(get_db)
 ):
     """Update a compression profile"""
-    # Validate session exists
-    session = await SessionService.get_session(db, x_session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    profile = await profile_service.update_profile(db, profile_id, x_session_id, profile_data)
+    # Validate user exists
+    user = await UserService.get_user(db, x_user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
+    profile = await profile_service.update_profile(db, profile_id, x_user_id, profile_data)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     return profile
 
 
 @router.delete("/profiles/{profile_id}", status_code=204)
 async def delete_profile(
     profile_id: str,
-    x_session_id: str = Header(..., alias="X-Session-ID"),
+    x_user_id: str = Header(..., alias="X-User-ID"),
     db: AsyncSession = Depends(get_db)
 ):
     """Delete a compression profile"""
-    # Validate session exists
-    session = await SessionService.get_session(db, x_session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
-    success = await profile_service.delete_profile(db, profile_id, x_session_id)
+    # Validate user exists
+    user = await UserService.get_user(db, x_user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
+    success = await profile_service.delete_profile(db, profile_id, x_user_id)
     if not success:
         raise HTTPException(status_code=404, detail="Profile not found")
-    
+
     return None

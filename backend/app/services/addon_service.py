@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, select
 
-from app.models.models import BrowserAddonAuthorization, Session as SessionModel
+from app.models.models import BrowserAddonAuthorization, User as UserModel
 from app.core.config import settings
 
 
@@ -23,7 +23,7 @@ class AddonService:
     @staticmethod
     async def create_authorization(
         db: AsyncSession,
-        session_id: str,
+        user_id: str,
         browser_name: Optional[str] = None,
         addon_identifier: Optional[str] = None,
         code_expiry_minutes: int = 5
@@ -33,7 +33,7 @@ class AddonService:
         
         Args:
             db: Database session
-            session_id: Session ID to link the authorization to
+            user_id: User ID to link the authorization to
             browser_name: Browser type ("firefox" or "chrome")
             addon_identifier: Optional addon ID
             code_expiry_minutes: Number of minutes until code expires (default 5)
@@ -41,11 +41,11 @@ class AddonService:
         Returns:
             Created BrowserAddonAuthorization object
         """
-        # Verify session exists
-        result = await db.execute(select(SessionModel).filter(SessionModel.id == session_id))
-        session = result.scalar_one_or_none()
-        if not session:
-            raise ValueError(f"Session {session_id} not found")
+        # Verify user exists
+        result = await db.execute(select(UserModel).filter(UserModel.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise ValueError(f"User {user_id} not found")
         
         # Generate authorization with 5-minute timeout
         auth_id = str(uuid.uuid4())
@@ -54,7 +54,7 @@ class AddonService:
         
         authorization = BrowserAddonAuthorization(
             id=auth_id,
-            session_id=session_id,
+            user_id=user_id,
             browser_name=browser_name,
             addon_identifier=addon_identifier,
             authorization_code=authorization_code,
@@ -243,24 +243,24 @@ class AddonService:
         return result.scalar_one_or_none()
     
     @staticmethod
-    async def get_session_authorizations(
+    async def get_user_authorizations(
         db: AsyncSession,
-        session_id: str,
+        user_id: str,
         active_only: bool = True
     ) -> list[BrowserAddonAuthorization]:
         """
-        Get all addon authorizations for a session
+        Get all addon authorizations for a user
         
         Args:
             db: Database session
-            session_id: Session ID
+            user_id: User ID
             active_only: Only return active authorizations (default True)
         
         Returns:
             List of authorizations
         """
         query = select(BrowserAddonAuthorization).filter(
-            BrowserAddonAuthorization.session_id == session_id
+            BrowserAddonAuthorization.user_id == user_id
         )
         
         if active_only:
@@ -296,16 +296,16 @@ class AddonService:
         return True
     
     @staticmethod
-    async def revoke_all_session_authorizations(
+    async def revoke_all_user_authorizations(
         db: AsyncSession,
-        session_id: str
+        user_id: str
     ) -> int:
         """
-        Revoke all addon authorizations for a session
+        Revoke all addon authorizations for a user
         
         Args:
             db: Database session
-            session_id: Session ID
+            user_id: User ID
         
         Returns:
             Number of authorizations revoked
@@ -313,7 +313,7 @@ class AddonService:
         result = await db.execute(
             select(BrowserAddonAuthorization).filter(
                 and_(
-                    BrowserAddonAuthorization.session_id == session_id,
+                    BrowserAddonAuthorization.user_id == user_id,
                     BrowserAddonAuthorization.is_active == True
                 )
             )

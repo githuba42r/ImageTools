@@ -6,7 +6,7 @@ from app.schemas.schemas import CompressionRequest, CompressionResponse
 from app.services.compression_service import CompressionService
 from app.services.image_service import ImageService
 from app.services import profile_service
-from app.services.session_service import SessionService
+from app.services.user_service import UserService
 
 router = APIRouter(prefix="/compression", tags=["compression"])
 
@@ -15,20 +15,20 @@ router = APIRouter(prefix="/compression", tags=["compression"])
 async def compress_image(
     image_id: str,
     request: CompressionRequest,
-    x_session_id: str = Header(..., alias="X-Session-ID"),
+    x_user_id: str = Header(..., alias="X-User-ID"),
     db: AsyncSession = Depends(get_db)
 ):
     """Compress an image with specified preset, custom profile, or custom parameters."""
-    # Verify session exists
-    session = await SessionService.get_session(db, x_session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
+    # Verify user exists
+    user = await UserService.get_user(db, x_user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
     # Verify image exists
     image = await ImageService.get_image(db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-    
+
     # Build custom params if provided
     custom_params = None
     if request.preset == "custom":
@@ -44,18 +44,18 @@ async def compress_image(
             "target_size_kb": request.target_size_kb,
             "format": request.format,
         }
-    
+
     # Compress image
     try:
         output_path, compressed_size, original_size = await CompressionService.compress_image(
-            db, image_id, x_session_id, request.preset, custom_params
+            db, image_id, x_user_id, request.preset, custom_params
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     # Calculate compression ratio
     compression_ratio = (1 - compressed_size / original_size) * 100 if original_size > 0 else 0
-    
+
     return CompressionResponse(
         image_id=image_id,
         original_size=original_size,
@@ -67,22 +67,22 @@ async def compress_image(
 
 @router.get("/presets")
 async def get_presets(
-    x_session_id: str = Header(..., alias="X-Session-ID"),
+    x_user_id: str = Header(..., alias="X-User-ID"),
     db: AsyncSession = Depends(get_db)
 ):
     """Get available compression presets and user custom profiles."""
-    # Verify session exists
-    session = await SessionService.get_session(db, x_session_id)
-    if not session:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    
+    # Verify user exists
+    user = await UserService.get_user(db, x_user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid user")
+
     # Ensure system default profiles exist
     await profile_service.create_system_default_profiles(db)
-    
+
     # Get system default profiles and user custom profiles
     # This returns the same list as the Manage Profiles modal
     presets = []
-    all_profiles = await profile_service.get_profiles(db, x_session_id)
+    all_profiles = await profile_service.get_profiles(db, x_user_id)
     for profile in all_profiles:
         presets.append({
             "id": profile.id,
@@ -99,5 +99,5 @@ async def get_presets(
             "overrides_system_default": getattr(profile, 'overrides_system_default', False),
             "type": "system" if profile.system_default else "custom"
         })
-    
+
     return {"presets": presets}

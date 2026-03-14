@@ -7,7 +7,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.services.session_service import SessionService
+from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +15,18 @@ logger = logging.getLogger(__name__)
 scheduler = None
 
 
-async def cleanup_expired_sessions_task():
-    """Scheduled task to cleanup expired sessions and their associated data."""
-    logger.info("Running scheduled cleanup of expired sessions...")
+async def cleanup_old_anonymous_images_task():
+    """Scheduled task to cleanup old anonymous images."""
+    logger.info("Running scheduled cleanup of old anonymous images...")
     
     try:
         async with AsyncSessionLocal() as db:
-            deleted_count = await SessionService.cleanup_expired_sessions(db)
+            deleted_count = await UserService.cleanup_anonymous_old_images(db, days=settings.ANONYMOUS_IMAGE_RETENTION_DAYS)
             
             if deleted_count > 0:
-                logger.info(f"Cleaned up {deleted_count} expired session(s)")
+                logger.info(f"Cleaned up {deleted_count} old anonymous image(s)")
             else:
-                logger.debug("No expired sessions to clean up")
+                logger.debug("No old anonymous images to clean up")
                 
     except Exception as e:
         logger.error(f"Error during scheduled cleanup: {e}", exc_info=True)
@@ -59,7 +59,7 @@ def start_scheduler():
         
         # Add cleanup job
         scheduler.add_job(
-            cleanup_expired_sessions_task,
+            cleanup_old_anonymous_images_task,
             trigger=CronTrigger(
                 minute=minute,
                 hour=hour,
@@ -67,8 +67,8 @@ def start_scheduler():
                 month=month,
                 day_of_week=day_of_week
             ),
-            id='cleanup_expired_sessions',
-            name='Cleanup Expired Sessions',
+            id='cleanup_anonymous_images',
+            name='Cleanup Old Anonymous Images',
             replace_existing=True
         )
         
@@ -78,7 +78,7 @@ def start_scheduler():
         # Also run cleanup on startup (but don't block)
         logger.info("Running initial cleanup on startup...")
         scheduler.add_job(
-            cleanup_expired_sessions_task,
+            cleanup_old_anonymous_images_task,
             id='cleanup_startup',
             name='Initial Cleanup on Startup',
             replace_existing=True

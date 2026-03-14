@@ -400,7 +400,7 @@ class AIChatService:
         
         return ConversationResponse(
             id=conversation.id,
-            session_id=conversation.session_id,
+            user_id=conversation.user_id,
             image_id=conversation.image_id,
             model=conversation.model,
             created_at=conversation.created_at,
@@ -438,19 +438,19 @@ class AIChatService:
         
         return True
     
-    async def get_session_conversations(self, session_id: str) -> List[ConversationResponse]:
+    async def get_user_conversations(self, user_id: str) -> List[ConversationResponse]:
         """
-        Get all conversations for a session
+        Get all conversations for a user
         
         Args:
-            session_id: Session ID
+            user_id: User ID
             
         Returns:
             List of ConversationResponse objects
         """
         result = await self.db.execute(
             select(Conversation)
-            .where(Conversation.session_id == session_id)
+            .where(Conversation.user_id == user_id)
             .order_by(Conversation.updated_at.desc())
         )
         conversations = result.scalars().all()
@@ -466,7 +466,7 @@ class AIChatService:
             
             response_list.append(ConversationResponse(
                 id=conv.id,
-                session_id=conv.session_id,
+                user_id=conv.user_id,
                 image_id=conv.image_id,
                 model=conv.model,
                 created_at=conv.created_at,
@@ -479,7 +479,7 @@ class AIChatService:
     
     async def _create_conversation(self, image_id: str, model: str) -> Conversation:
         """Create a new conversation"""
-        # Get image to find session_id
+        # Get image to find user_id
         result = await self.db.execute(
             select(Image).where(Image.id == image_id)
         )
@@ -489,7 +489,7 @@ class AIChatService:
         
         conversation = Conversation(
             id=str(uuid.uuid4()),
-            session_id=image.session_id,
+            user_id=image.user_id,
             image_id=image_id,
             model=model,
             created_at=datetime.utcnow(),

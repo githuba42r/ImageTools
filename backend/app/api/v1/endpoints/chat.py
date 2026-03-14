@@ -27,23 +27,23 @@ async def send_message(
 ):
     """
     Send a message in an AI chat conversation
-    
+
     - **message**: User's message/request
     - **image_id**: ID of the image to manipulate
     - **conversation_id**: Optional - continue existing conversation
     - **model**: Optional - AI model to use (defaults to gemini-2.0-flash-exp:free)
-    - **session_id**: Required - User session ID (used to fetch encrypted API key)
-    
+    - **user_id**: Required - User ID (used to fetch encrypted API key)
+
     Returns AI response with any image operations to apply
     """
     try:
         # Retrieve API key from encrypted storage
         oauth_service = OpenRouterOAuthService(db)
-        api_key = await oauth_service.get_api_key(request.session_id)
-        
+        api_key = await oauth_service.get_api_key(request.user_id)
+
         if not api_key:
             raise ValueError("OpenRouter API key not found. Please connect your OpenRouter account first.")
-        
+
         # Send message with retrieved API key
         service = AIChatService(db)
         response = await service.send_message(request, api_key=api_key)
@@ -67,20 +67,20 @@ async def get_conversation(
 ):
     """
     Get a conversation with all messages
-    
+
     - **conversation_id**: ID of the conversation
-    
+
     Returns conversation details and message history
     """
     service = AIChatService(db)
-    conversation = service.get_conversation(conversation_id)
-    
+    conversation = await service.get_conversation(conversation_id)
+
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Conversation {conversation_id} not found"
         )
-    
+
     return conversation
 
 
@@ -91,35 +91,35 @@ async def delete_conversation(
 ):
     """
     Delete a conversation and all its messages
-    
+
     - **conversation_id**: ID of the conversation
-    
+
     Returns success status
     """
     service = AIChatService(db)
-    deleted = service.delete_conversation(conversation_id)
-    
+    deleted = await service.delete_conversation(conversation_id)
+
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Conversation {conversation_id} not found"
         )
-    
+
     return {"success": True, "message": "Conversation deleted"}
 
 
-@router.get("/sessions/{session_id}/conversations", response_model=List[ConversationResponse])
-async def get_session_conversations(
-    session_id: str,
+@router.get("/users/{user_id}/conversations", response_model=List[ConversationResponse])
+async def get_user_conversations(
+    user_id: str,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Get all conversations for a session
-    
-    - **session_id**: ID of the session
-    
+    Get all conversations for a user
+
+    - **user_id**: ID of the user
+
     Returns list of conversations with messages
     """
     service = AIChatService(db)
-    conversations = service.get_session_conversations(session_id)
+    conversations = await service.get_user_conversations(user_id)
     return conversations

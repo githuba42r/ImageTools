@@ -51,19 +51,19 @@ class OpenRouterService {
   constructor() {
     // Use relative URL - works in both development (Vite proxy) and production
     this.baseURL = '/api/v1/openrouter';
-    this.sessionId = null;
+    this.userId = null;
   }
 
   /**
-   * Set the session ID for API requests
-   * @param {string} sessionId - Current session ID
+   * Set the user ID for API requests
+   * @param {string} userId - Current user ID
    */
-  setSessionId(sessionId) {
-    this.sessionId = sessionId;
+  setUserId(userId) {
+    this.userId = userId;
   }
 
   /**
-   * Get headers with session ID
+   * Get headers with user ID
    * @returns {Object} Headers object
    */
   _getHeaders() {
@@ -71,8 +71,8 @@ class OpenRouterService {
       'Content-Type': 'application/json',
     };
     
-    if (this.sessionId) {
-      headers['X-Session-ID'] = this.sessionId;
+    if (this.userId) {
+      headers['X-User-ID'] = this.userId;
     }
     
     return headers;

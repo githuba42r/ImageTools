@@ -217,7 +217,7 @@
       <ChatInterface
         v-if="showChatInterface"
         :image="image"
-        :sessionId="sessionId"
+        :userId="userId"
         :selectedModel="selectedModel"
         :isConnected="isOpenRouterConnected"
         @close="closeChatInterface"
@@ -341,7 +341,7 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  sessionId: {
+  userId: {
     type: String,
     required: true
   },
@@ -352,10 +352,6 @@ const props = defineProps({
   isOpenRouterConnected: {
     type: Boolean,
     default: false
-  },
-  expiryDays: {
-    type: Number,
-    default: 7
   },
   cardSize: {
     type: String,
@@ -401,43 +397,15 @@ const compressionRatio = computed(() => {
   return Math.round(ratio);
 });
 
-// Expiration date calculations
-const expirationDate = computed(() => {
-  // Parse the created_at date string, treating it as UTC
+// Upload date tooltip
+const expirationTooltip = computed(() => {
+  if (!props.image.created_at) return 'Uploaded: unknown';
   let createdDateStr = props.image.created_at;
-  
-  // If the date string doesn't end with 'Z', add it to indicate UTC
   if (!createdDateStr.endsWith('Z') && !createdDateStr.includes('+')) {
     createdDateStr += 'Z';
   }
-  
   const created = new Date(createdDateStr);
-  const expiry = new Date(created);
-  expiry.setDate(created.getDate() + props.expiryDays);
-  return expiry;
-});
-
-const expirationDateFormatted = computed(() => {
-  return expirationDate.value.toLocaleString();
-});
-
-const timeRemainingText = computed(() => {
-  const now = new Date();
-  const diff = expirationDate.value - now;
-  
-  if (diff <= 0) return 'Expired';
-  
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  
-  if (days > 0) return `${days} day${days !== 1 ? 's' : ''} ${hours}h remaining`;
-  if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''} ${minutes}m remaining`;
-  return `${minutes} minute${minutes !== 1 ? 's' : ''} remaining`;
-});
-
-const expirationTooltip = computed(() => {
-  return `Expires: ${expirationDateFormatted.value}\n${timeRemainingText.value}`;
+  return `Uploaded: ${created.toLocaleString()}`;
 });
 
 // Resize computed properties

@@ -22,12 +22,12 @@ let onPairingRevokedCallback = null;
 let onAddonConnectedCallback = null;
 let onAddonAuthorizationRevokedCallback = null;
 let pingTimeout = null;
-let currentSessionId = null;
+let currentUserId = null;
 
 /**
  * Get WebSocket URL based on current location
  */
-function getWebSocketUrl(sessionId) {
+function getWebSocketUrl(userId) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   
   // In development, Vite proxy doesn't support WebSocket upgrade
@@ -37,11 +37,11 @@ function getWebSocketUrl(sessionId) {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
     const url = new URL(apiUrl);
     const port = url.port || '8081';
-    return `${protocol}//${window.location.hostname}:${port}/ws?session_id=${sessionId}`;
+    return `${protocol}//${window.location.hostname}:${port}/ws?user_id=${userId}`;
   }
   
   // In production, use same host as current page
-  return `${protocol}//${window.location.host}/ws?session_id=${sessionId}`;
+  return `${protocol}//${window.location.host}/ws?user_id=${userId}`;
 }
 
 /**
@@ -74,13 +74,13 @@ function resetPingTimeout() {
 /**
  * Connect to WebSocket
  */
-export function connectWebSocket(sessionId) {
-  if (!sessionId) {
-    console.warn('[WebSocket] Cannot connect without session ID');
+export function connectWebSocket(userId) {
+  if (!userId) {
+    console.warn('[WebSocket] Cannot connect without user ID');
     return;
   }
   
-  currentSessionId = sessionId;
+  currentUserId = userId;
   
   if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
     console.log('[WebSocket] Already connected or connecting');
@@ -101,7 +101,7 @@ export function connectWebSocket(sessionId) {
     return;
   }
   
-  const url = getWebSocketUrl(sessionId);
+  const url = getWebSocketUrl(userId);
   console.log(`[WebSocket] Connecting to ${url}... (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
   
   try {
@@ -199,7 +199,7 @@ export function connectWebSocket(sessionId) {
       console.log(`[WebSocket] Scheduling reconnection in ${delay}ms...`);
       
       reconnectTimeout = setTimeout(() => {
-        connectWebSocket(currentSessionId);
+        connectWebSocket(currentUserId);
       }, delay);
     };
     
@@ -221,7 +221,7 @@ export function connectWebSocket(sessionId) {
     // Schedule reconnection
     const delay = getReconnectDelay();
     reconnectTimeout = setTimeout(() => {
-      connectWebSocket(currentSessionId);
+      connectWebSocket(currentUserId);
     }, delay);
   }
 }

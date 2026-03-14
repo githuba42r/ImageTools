@@ -13,7 +13,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 
-from app.models.models import OpenRouterKey, Session as DBSession
+from app.models.models import OpenRouterKey, User as DBUser
 from app.core.config import settings
 
 
@@ -82,7 +82,7 @@ class OpenRouterOAuthService:
     
     async def exchange_code_for_key(
         self,
-        session_id: str,
+        user_id: str,
         code: str,
         code_verifier: str,
         code_challenge_method: str = "S256"
@@ -94,7 +94,7 @@ class OpenRouterOAuthService:
         keeping the API key secure and never exposing it to the frontend.
         
         Args:
-            session_id: Current user session ID
+            user_id: Current user ID
             code: Authorization code from OAuth callback
             code_verifier: PKCE code verifier (matching the challenge)
             code_challenge_method: Challenge method used
@@ -102,13 +102,13 @@ class OpenRouterOAuthService:
         Returns:
             Dict with status and key info (without exposing the actual key)
         """
-        # Validate session exists
+        # Validate user exists
         result = await self.db.execute(
-            select(DBSession).where(DBSession.id == session_id)
+            select(DBUser).where(DBUser.id == user_id)
         )
-        db_session = result.scalar_one_or_none()
-        if not db_session:
-            raise ValueError(f"Session {session_id} not found")
+        db_user = result.scalar_one_or_none()
+        if not db_user:
+            raise ValueError(f"User {user_id} not found")
         
         # Exchange code for API key with OpenRouter
         async with httpx.AsyncClient() as client:
@@ -145,9 +145,9 @@ class OpenRouterOAuthService:
         # Encrypt and store the API key
         encrypted_key = self._encrypt_key(api_key)
         
-        # Check if key already exists for this session
+        # Check if key already exists for this user
         result = await self.db.execute(
-            select(OpenRouterKey).where(OpenRouterKey.session_id == session_id)
+            select(OpenRouterKey).where(OpenRouterKey.user_id == user_id)
         )
         existing_key = result.scalar_one_or_none()
         
@@ -161,7 +161,7 @@ class OpenRouterOAuthService:
             # Create new key record
             db_key = OpenRouterKey(
                 id=str(uuid.uuid4()),
-                session_id=session_id,
+                user_id=user_id,
                 encrypted_api_key=encrypted_key,
                 key_label=key_label,
                 is_active=True
@@ -181,22 +181,22 @@ class OpenRouterOAuthService:
             "credits_total": credits_info.get("credits_total")
         }
     
-    async def get_api_key(self, session_id: str) -> Optional[str]:
+    async def get_api_key(self, user_id: str) -> Optional[str]:
         """
-        Retrieve decrypted API key for a session
+        Retrieve decrypted API key for a user
         
         This method is used internally by the backend to make
         OpenRouter API calls on behalf of the user.
         
         Args:
-            session_id: User session ID
+            user_id: User ID
         
         Returns:
             Decrypted API key or None if not found
         """
         result = await self.db.execute(
             select(OpenRouterKey).where(
-                OpenRouterKey.session_id == session_id,
+                OpenRouterKey.user_id == user_id,
                 OpenRouterKey.is_active == True
             )
         )
@@ -211,21 +211,21 @@ class OpenRouterOAuthService:
         
         return self._decrypt_key(db_key.encrypted_api_key)
     
-    async def get_key_status(self, session_id: str) -> Dict[str, Any]:
+    async def get_key_status(self, user_id: str) -> Dict[str, Any]:
         """
-        Get status of OpenRouter API key for a session
+        Get status of OpenRouter API key for a user
         
         Returns key info without exposing the actual key.
         
         Args:
-            session_id: User session ID
+            user_id: User ID
         
         Returns:
             Dict with key status and info
         """
         result = await self.db.execute(
             select(OpenRouterKey).where(
-                OpenRouterKey.session_id == session_id,
+                OpenRouterKey.user_id == user_id,
                 OpenRouterKey.is_active == True
             )
         )
@@ -256,19 +256,19 @@ class OpenRouterOAuthService:
             "last_used_at": db_key.last_used_at.isoformat() if db_key.last_used_at else None
         }
     
-    async def revoke_key(self, session_id: str) -> bool:
+    async def revoke_key(self, user_id: str) -> bool:
         """
-        Revoke (deactivate) OpenRouter API key for a session
+        Revoke (deactivate) OpenRouter API key for a user
         
         Args:
-            session_id: User session ID
+            user_id: User ID
         
         Returns:
             True if key was revoked, False if not found
         """
         result = await self.db.execute(
             update(OpenRouterKey)
-            .where(OpenRouterKey.session_id == session_id)
+            .where(OpenRouterKey.user_id == user_id)
             .values(is_active=False, updated_at=datetime.utcnow())
         )
         

@@ -8,18 +8,18 @@ const API_BASE_URL = '/api/v1';
 class AddonService {
   /**
    * Create a new addon authorization
-   * @param {string} sessionId - Session ID to link the addon to
+   * @param {string} userId - User ID to link the addon to
    * @param {string} browserName - Browser type (firefox or chrome)
    * @returns {Promise<Object>} Authorization response with registration URL
    */
-  async createAuthorization(sessionId, browserName = null) {
+  async createAuthorization(userId, browserName = null) {
     const response = await fetch(`${API_BASE_URL}/addon/authorize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        session_id: sessionId,
+        user_id: userId,
         browser_name: browserName,
       }),
     });
@@ -33,12 +33,12 @@ class AddonService {
   }
 
   /**
-   * Get list of connected addons for a session
-   * @param {string} sessionId - Session ID
+   * Get list of connected addons for a user
+   * @param {string} userId - User ID
    * @returns {Promise<Array>} List of connected addons
    */
-  async listConnectedAddons(sessionId) {
-    const response = await fetch(`${API_BASE_URL}/addon/authorizations/session/${sessionId}/list`);
+  async listConnectedAddons(userId) {
+    const response = await fetch(`${API_BASE_URL}/addon/authorizations/user/${userId}/list`);
 
     if (!response.ok) {
       const error = await response.json();
@@ -67,12 +67,12 @@ class AddonService {
   }
 
   /**
-   * Revoke all addon authorizations for a session
-   * @param {string} sessionId - Session ID
+   * Revoke all addon authorizations for a user
+   * @param {string} userId - User ID
    * @returns {Promise<Object>} Revocation confirmation
    */
-  async revokeAllAuthorizations(sessionId) {
-    const response = await fetch(`${API_BASE_URL}/addon/authorizations/session/${sessionId}/revoke-all`, {
+  async revokeAllAuthorizations(userId) {
+    const response = await fetch(`${API_BASE_URL}/addon/authorizations/user/${userId}/revoke-all`, {
       method: 'POST',
     });
 

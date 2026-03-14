@@ -9,30 +9,22 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.schemas.schemas import ImageResponse, RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse
 from app.services.image_service import ImageService
-from app.services.session_service import SessionService
+from app.services.user_service import UserService, ANONYMOUS_USER_ID
 
 router = APIRouter(prefix="/images", tags=["images"])
 
 
 @router.post("", response_model=ImageResponse)
 async def upload_image(
-    session_id: str = Form(...),
+    user_id: str = Form(...),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db)
 ):
     """Upload a new image."""
-    # Validate session
-    if not await SessionService.validate_session(db, session_id):
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-    
-    # Check image limit
-    image_count = await ImageService.count_session_images(db, session_id)
-    if image_count >= settings.MAX_IMAGES_PER_SESSION:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Maximum {settings.MAX_IMAGES_PER_SESSION} images per session"
-        )
-    
+    # Validate user
+    if not await UserService.validate_user(db, user_id):
+        raise HTTPException(status_code=401, detail="Invalid user")
+
     # Validate file extension
     filename = file.filename or "image.jpg"
     ext = filename.split(".")[-1].lower()
@@ -41,16 +33,16 @@ async def upload_image(
             status_code=400,
             detail=f"File type .{ext} not allowed. Allowed: {settings.ALLOWED_EXTENSIONS}"
         )
-    
+
     # Save image
     image = await ImageService.save_uploaded_image(
-        db, session_id, filename, file.file
+        db, user_id, filename, file.file
     )
-    
+
     # Build response
     return ImageResponse(
         id=image.id,
-        session_id=image.session_id,
+        user_id=image.user_id,
         original_filename=image.original_filename,
         original_size=image.original_size,
         current_size=image.current_size,
@@ -64,18 +56,18 @@ async def upload_image(
     )
 
 
-@router.get("/session/{session_id}", response_model=List[ImageResponse])
-async def get_session_images(
-    session_id: str,
+@router.get("/user/{user_id}", response_model=List[ImageResponse])
+async def get_user_images(
+    user_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all images for a session."""
-    images = await ImageService.get_session_images(db, session_id)
-    
+    """Get all images for a user."""
+    images = await ImageService.get_user_images(db, user_id)
+
     return [
         ImageResponse(
             id=img.id,
-            session_id=img.session_id,
+            user_id=img.user_id,
             original_filename=img.original_filename,
             original_size=img.original_size,
             current_size=img.current_size,
@@ -100,10 +92,10 @@ async def get_image(
     image = await ImageService.get_image(db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-    
+
     return ImageResponse(
         id=image.id,
-        session_id=image.session_id,
+        user_id=image.user_id,
         original_filename=image.original_filename,
         original_size=image.original_size,
         current_size=image.current_size,
@@ -126,7 +118,7 @@ async def get_current_image(
     image = await ImageService.get_image(db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-    
+
     return FileResponse(
         image.current_path,
         media_type=f"image/{image.format.lower()}",
@@ -143,7 +135,7 @@ async def get_thumbnail(
     image = await ImageService.get_image(db, image_id)
     if not image or not image.thumbnail_path:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    
+
     return FileResponse(
         image.thumbnail_path,
         media_type=f"image/{image.format.lower()}"
@@ -159,7 +151,7 @@ async def delete_image(
     success = await ImageService.delete_image(db, image_id)
     if not success:
         raise HTTPException(status_code=404, detail="Image not found")
-    
+
     return {"success": True, "message": "Image deleted"}
 
 
@@ -170,19 +162,17 @@ async def rotate_image(
     db: AsyncSession = Depends(get_db)
 ):
     """Rotate an image by 90, 180, or 270 degrees."""
-    # Verify image exists
     image = await ImageService.get_image(db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-    
-    # Rotate image
+
     try:
         output_path, new_size, width, height = await ImageService.rotate_image(
             db, image_id, request.degrees
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     return RotateResponse(
         image_id=image_id,
         degrees=request.degrees,
@@ -200,19 +190,17 @@ async def flip_image(
     db: AsyncSession = Depends(get_db)
 ):
     """Flip an image horizontally or vertically."""
-    # Verify image exists
     image = await ImageService.get_image(db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-    
-    # Flip image
+
     try:
         output_path, new_size, width, height = await ImageService.flip_image(
             db, image_id, request.direction
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     return FlipResponse(
         image_id=image_id,
         direction=request.direction,
@@ -230,15 +218,13 @@ async def resize_image(
     db: AsyncSession = Depends(get_db)
 ):
     """Resize an image to specified dimensions."""
-    # Verify image exists
     image = await ImageService.get_image(db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-    
+
     original_width = image.width
     original_height = image.height
-    
-    # Resize image
+
     try:
         output_path, new_size, width, height = await ImageService.resize_image(
             db, image_id, request.width, request.height
@@ -247,7 +233,7 @@ async def resize_image(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Resize failed: {str(e)}")
-    
+
     return ResizeResponse(
         image_id=image_id,
         original_width=original_width,
@@ -268,16 +254,14 @@ async def save_edited_image(
     """Save edited image from editor."""
     print(f"[EDIT] Received edit request for image: {image_id}")
     print(f"[EDIT] File info: filename={file.filename}, content_type={file.content_type}")
-    
-    # Verify image exists
+
     image = await ImageService.get_image(db, image_id)
     if not image:
         print(f"[EDIT] Image not found: {image_id}")
         raise HTTPException(status_code=404, detail="Image not found")
-    
+
     print(f"[EDIT] Image found: {image.original_filename}")
-    
-    # Save edited image
+
     try:
         output_path, new_size, width, height = await ImageService.save_edited_image(
             db, image_id, file.file
@@ -288,15 +272,14 @@ async def save_edited_image(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to save edited image: {str(e)}")
-    
-    # Refresh image to get updated timestamp and all fields
+
     await db.refresh(image)
-    
+
     print(f"[EDIT] Returning response with dimensions: {image.width}x{image.height}")
-    
+
     return ImageResponse(
         id=image.id,
-        session_id=image.session_id,
+        user_id=image.user_id,
         original_filename=image.original_filename,
         original_size=image.original_size,
         current_size=image.current_size,
@@ -319,12 +302,10 @@ async def get_image_exif(
     image = await ImageService.get_image(db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-    
+
     try:
         exif_data = ImageService.extract_exif(image.current_path)
-        
-        # If no GPS data in EXIF but we have stored GPS coordinates from mobile upload,
-        # add them to the response
+
         if 'GPS' not in exif_data or not exif_data.get('GPS'):
             if image.gps_latitude is not None and image.gps_longitude is not None:
                 exif_data['GPS'] = {
@@ -335,7 +316,7 @@ async def get_image_exif(
                 }
                 if image.gps_altitude is not None:
                     exif_data['GPS']['altitude'] = image.gps_altitude
-        
+
         return {"image_id": image_id, "exif": exif_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to extract EXIF: {str(e)}")
@@ -349,33 +330,27 @@ async def download_images_as_zip(
     """Download multiple images as a ZIP file."""
     if not image_ids:
         raise HTTPException(status_code=400, detail="No images specified")
-    
-    # Get all images
+
     images = []
     for image_id in image_ids:
         image = await ImageService.get_image(db, image_id)
         if image:
             images.append(image)
-    
+
     if not images:
         raise HTTPException(status_code=404, detail="No valid images found")
-    
-    # Create ZIP file with date in filename
+
     date_str = datetime.now().strftime("%Y-%m-%d")
     zip_filename = f"Images-{date_str}.zip"
     zip_path = os.path.join(settings.TEMP_STORAGE_PATH, f"temp_{zip_filename}")
-    
-    # Ensure temp directory exists
+
     os.makedirs(settings.TEMP_STORAGE_PATH, exist_ok=True)
-    
-    # Create ZIP file
+
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for image in images:
             if os.path.exists(image.current_path):
-                # Use original filename in the ZIP
                 zipf.write(image.current_path, arcname=image.original_filename)
-    
-    # Return ZIP file and schedule cleanup
+
     return FileResponse(
         zip_path,
         media_type="application/zip",

@@ -41,13 +41,13 @@ class CompressionService:
         return presets.get(preset, presets["email"])
     
     @staticmethod
-    async def _get_profile_config(db: AsyncSession, profile_id: str, session_id: str) -> Optional[Dict[str, Any]]:
+    async def _get_profile_config(db: AsyncSession, profile_id: str, user_id: str) -> Optional[Dict[str, Any]]:
         """Get configuration from a custom user profile or system default profile."""
         result = await db.execute(
             select(CompressionProfile)
             .where(CompressionProfile.id == profile_id)
             .where(
-                (CompressionProfile.session_id == session_id) |
+                (CompressionProfile.user_id == user_id) |
                 (CompressionProfile.system_default == True)
             )
         )
@@ -70,7 +70,7 @@ class CompressionService:
     async def compress_image(
         db: AsyncSession,
         image_id: str,
-        session_id: str,
+        user_id: str,
         preset: str = "email",
         custom_params: Optional[Dict[str, Any]] = None
     ) -> tuple[str, int, int]:
@@ -85,7 +85,7 @@ class CompressionService:
             params = custom_params
         elif preset not in ["email", "web", "web_hq", "custom"]:
             # Treat as profile ID
-            params = await CompressionService._get_profile_config(db, preset, session_id)
+            params = await CompressionService._get_profile_config(db, preset, user_id)
             if not params:
                 raise ValueError(f"Profile {preset} not found")
             operation_type = f"compress_profile_{params.get('profile_name', preset)}"

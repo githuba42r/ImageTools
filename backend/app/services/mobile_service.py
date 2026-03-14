@@ -8,7 +8,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, select, or_
 
-from app.models.models import MobileAppPairing, Session as SessionModel
+from app.models.models import MobileAppPairing, User as UserModel
 from app.schemas.schemas import MobileAppPairingCreate, MobileAppPairingResponse
 
 
@@ -24,27 +24,27 @@ class MobileService:
     @staticmethod
     async def create_pairing(
         db: AsyncSession,
-        session_id: str,
+        user_id: str,
         device_name: Optional[str] = None,
         expiry_minutes: int = 2
     ) -> MobileAppPairing:
         """
-        Create a new mobile app pairing for a session with short-lived secret
+        Create a new mobile app pairing for a user with short-lived secret
         
         Args:
             db: Database session
-            session_id: Session ID to link the pairing to
+            user_id: User ID to link the pairing to
             device_name: Optional device identifier
             expiry_minutes: Number of minutes until pairing expires (default 2)
         
         Returns:
             Created MobileAppPairing object
         """
-        # Verify session exists
-        result = await db.execute(select(SessionModel).filter(SessionModel.id == session_id))
-        session = result.scalar_one_or_none()
-        if not session:
-            raise ValueError(f"Session {session_id} not found")
+        # Verify user exists
+        result = await db.execute(select(UserModel).filter(UserModel.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise ValueError(f"User {user_id} not found")
         
         # Generate pairing with 2-minute timeout
         pairing_id = str(uuid.uuid4())
@@ -53,7 +53,7 @@ class MobileService:
         
         pairing = MobileAppPairing(
             id=pairing_id,
-            session_id=session_id,
+            user_id=user_id,
             device_name=device_name,
             shared_secret=shared_secret,
             is_active=True,
@@ -239,23 +239,23 @@ class MobileService:
         return result.scalar_one_or_none()
     
     @staticmethod
-    async def get_session_pairings(
+    async def get_user_pairings(
         db: AsyncSession,
-        session_id: str,
+        user_id: str,
         active_only: bool = True
     ) -> list[MobileAppPairing]:
         """
-        Get all pairings for a session
+        Get all pairings for a user
         
         Args:
             db: Database session
-            session_id: Session ID
+            user_id: User ID
             active_only: Only return active pairings (default True)
         
         Returns:
             List of pairings
         """
-        query = select(MobileAppPairing).filter(MobileAppPairing.session_id == session_id)
+        query = select(MobileAppPairing).filter(MobileAppPairing.user_id == user_id)
         
         if active_only:
             query = query.filter(MobileAppPairing.is_active == True)
@@ -288,16 +288,16 @@ class MobileService:
         return True
     
     @staticmethod
-    async def revoke_all_session_pairings(
+    async def revoke_all_user_pairings(
         db: AsyncSession,
-        session_id: str
+        user_id: str
     ) -> int:
         """
-        Revoke all pairings for a session
+        Revoke all pairings for a user
         
         Args:
             db: Database session
-            session_id: Session ID
+            user_id: User ID
         
         Returns:
             Number of pairings revoked
@@ -305,7 +305,7 @@ class MobileService:
         result = await db.execute(
             select(MobileAppPairing).filter(
                 and_(
-                    MobileAppPairing.session_id == session_id,
+                    MobileAppPairing.user_id == user_id,
                     MobileAppPairing.is_active == True
                 )
             )

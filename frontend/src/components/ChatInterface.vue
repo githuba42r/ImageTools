@@ -304,7 +304,7 @@ const props = defineProps({
     type: Object,
     required: true
   },
-  sessionId: {
+  userId: {
     type: String,
     required: true
   },

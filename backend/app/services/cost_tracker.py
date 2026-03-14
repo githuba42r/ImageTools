@@ -40,12 +40,12 @@ class CostTracker:
         
         return float(conversation.total_cost) if conversation else 0.0
     
-    async def get_monthly_cost(self, session_id: str) -> float:
+    async def get_monthly_cost(self, user_id: str) -> float:
         """
-        Get total cost for current month for a session
+        Get total cost for current month for a user
         
         Args:
-            session_id: Session ID
+            user_id: User ID
             
         Returns:
             Total monthly cost in USD
@@ -54,11 +54,11 @@ class CostTracker:
         current_month = now.month
         current_year = now.year
         
-        # Query conversations for this session in current month
+        # Query conversations for this user in current month
         result = await self.db.execute(
             select(func.sum(Conversation.total_cost))
             .where(
-                Conversation.session_id == session_id,
+                Conversation.user_id == user_id,
                 extract('month', Conversation.created_at) == current_month,
                 extract('year', Conversation.created_at) == current_year
             )
@@ -69,7 +69,7 @@ class CostTracker:
     
     async def get_cost_summary(
         self,
-        session_id: str,
+        user_id: str,
         conversation_id: Optional[str] = None,
         monthly_limit: Optional[float] = None
     ) -> CostSummary:
@@ -77,7 +77,7 @@ class CostTracker:
         Get cost summary with conversation and monthly totals
         
         Args:
-            session_id: Session ID
+            user_id: User ID
             conversation_id: Optional conversation ID
             monthly_limit: Optional custom monthly limit
             
@@ -88,7 +88,7 @@ class CostTracker:
         if conversation_id:
             conversation_cost = await self.get_conversation_cost(conversation_id)
         
-        monthly_cost = await self.get_monthly_cost(session_id)
+        monthly_cost = await self.get_monthly_cost(user_id)
         limit = monthly_limit or self.DEFAULT_MONTHLY_LIMIT
         remaining = max(0.0, limit - monthly_cost)
         
@@ -101,7 +101,7 @@ class CostTracker:
     
     async def check_cost_limit(
         self,
-        session_id: str,
+        user_id: str,
         estimated_cost: float,
         monthly_limit: Optional[float] = None
     ) -> tuple[bool, float]:
@@ -109,14 +109,14 @@ class CostTracker:
         Check if a request would exceed monthly cost limit
         
         Args:
-            session_id: Session ID
+            user_id: User ID
             estimated_cost: Estimated cost for the request
             monthly_limit: Optional custom monthly limit
             
         Returns:
             Tuple of (allowed: bool, remaining_budget: float)
         """
-        monthly_cost = await self.get_monthly_cost(session_id)
+        monthly_cost = await self.get_monthly_cost(user_id)
         limit = monthly_limit or self.DEFAULT_MONTHLY_LIMIT
         remaining = limit - monthly_cost
         
@@ -157,19 +157,19 @@ class CostTracker:
         
         return result_list
     
-    async def get_session_total_cost(self, session_id: str) -> float:
+    async def get_user_total_cost(self, user_id: str) -> float:
         """
-        Get total cost across all conversations for a session (all time)
+        Get total cost across all conversations for a user (all time)
         
         Args:
-            session_id: Session ID
+            user_id: User ID
             
         Returns:
             Total cost in USD
         """
         result = await self.db.execute(
             select(func.sum(Conversation.total_cost))
-            .where(Conversation.session_id == session_id)
+            .where(Conversation.user_id == user_id)
         )
         total = result.scalar()
         

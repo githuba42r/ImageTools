@@ -16,11 +16,12 @@ class HealthCheckFilter(logging.Filter):
 
 # Import settings after defining the filter
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.database import init_db, AsyncSessionLocal
 from app.core.websocket_manager import manager as ws_manager
 from app.core.scheduler import start_scheduler, stop_scheduler
 from app.middleware import InternalAuthMiddleware
-from app.api.v1.endpoints import sessions, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles
+from app.services.user_service import UserService
+from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles
 
 # Configure logging
 logging.basicConfig(
@@ -54,6 +55,11 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await init_db()
     logger.info("Database initialized")
+    
+    # Ensure the anonymous user exists (upsert — safe to call every startup)
+    async with AsyncSessionLocal() as db:
+        anon_user = await UserService.get_or_create_user(db)
+        logger.info(f"Anonymous user ready: {anon_user.id}")
     
     # Start background scheduler for cleanup tasks
     start_scheduler()
@@ -95,7 +101,7 @@ if settings.CORS_ENABLED:
     logger.info(f"CORS enabled for origins: {settings.cors_origins_list}")
 
 # Include routers
-app.include_router(sessions.router, prefix=settings.API_PREFIX)
+app.include_router(users.router, prefix=settings.API_PREFIX)
 app.include_router(images.router, prefix=settings.API_PREFIX)
 app.include_router(compression.router, prefix=settings.API_PREFIX)
 app.include_router(profiles.router, prefix=settings.API_PREFIX)
@@ -134,16 +140,16 @@ async def get_version():
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, session_id: str = Query(...)):
+async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...)):
     """
     WebSocket endpoint for real-time updates.
-    Sends periodic pings and broadcasts session-specific events (e.g. new images from mobile).
+    Sends periodic pings and broadcasts user-specific events (e.g. new images from mobile).
     
     Query Parameters:
-        session_id: The session ID to subscribe to
+        user_id: The user ID to subscribe to
     """
-    await ws_manager.connect(websocket, session_id)
-    logger.info(f"WebSocket client connected for session {session_id}")
+    await ws_manager.connect(websocket, user_id)
+    logger.info(f"WebSocket client connected for user {user_id}")
     
     try:
         while True:
@@ -152,7 +158,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str = Query(...))
             await asyncio.sleep(10)
             
     except WebSocketDisconnect:
-        logger.info(f"WebSocket client disconnected for session {session_id}")
+        logger.info(f"WebSocket client disconnected for user {user_id}")
         ws_manager.disconnect(websocket)
     except Exception as e:
         logger.error(f"WebSocket error: {e}")

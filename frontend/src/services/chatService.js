@@ -8,19 +8,19 @@ class ChatService {
   constructor() {
     // Use relative URL - Vite proxy handles dev, production serves from same origin
     this.baseURL = '/api/v1/chat';
-    this.sessionId = null;
+    this.userId = null;
   }
 
   /**
-   * Set the session ID for API requests
-   * @param {string} sessionId - Current session ID
+   * Set the user ID for API requests
+   * @param {string} userId - Current user ID
    */
-  setSessionId(sessionId) {
-    this.sessionId = sessionId;
+  setUserId(userId) {
+    this.userId = userId;
   }
 
   /**
-   * Get headers with session ID
+   * Get headers with user ID
    * @returns {Object} Headers object
    */
   _getHeaders() {
@@ -28,8 +28,8 @@ class ChatService {
       'Content-Type': 'application/json',
     };
     
-    if (this.sessionId) {
-      headers['X-Session-ID'] = this.sessionId;
+    if (this.userId) {
+      headers['X-User-ID'] = this.userId;
     }
     
     return headers;
@@ -45,15 +45,15 @@ class ChatService {
    * @returns {Promise<Object>} Chat response with AI reply and operations
    */
   async sendMessage({ message, imageId, conversationId, model }) {
-    if (!this.sessionId) {
-      throw new Error('Session ID not set. Please initialize chat service first.');
+    if (!this.userId) {
+      throw new Error('User ID not set. Please initialize chat service first.');
     }
     
     const response = await fetch(`${this.baseURL}/send`, {
       method: 'POST',
       headers: this._getHeaders(),
       body: JSON.stringify({
-        session_id: this.sessionId,
+        user_id: this.userId,
         message,
         image_id: imageId,
         conversation_id: conversationId,
@@ -89,12 +89,12 @@ class ChatService {
   }
 
   /**
-   * Get all conversations for the current session
-   * @param {string} sessionId - Session ID
+   * Get all conversations for the current user
+   * @param {string} userId - User ID
    * @returns {Promise<Array>} List of conversations
    */
-  async getSessionConversations(sessionId) {
-    const response = await fetch(`${this.baseURL}/sessions/${sessionId}/conversations`, {
+  async getUserConversations(userId) {
+    const response = await fetch(`${this.baseURL}/users/${userId}/conversations`, {
       method: 'GET',
       headers: this._getHeaders()
     });

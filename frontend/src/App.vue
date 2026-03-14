@@ -6,7 +6,7 @@
           <div class="title-container">
             <h1 class="has-tooltip">
               🖼️ Image Tools
-              <span class="tooltip-text">Image Tools v1.0 | Session: {{ sessionId ? sessionId.substring(0, 8) + '...' : 'None' }}</span>
+              <span class="tooltip-text">Image Tools v1.0 | User: {{ userId ? userId.substring(0, 8) + '...' : 'None' }}</span>
             </h1>
             
             <button 
@@ -29,10 +29,7 @@
           <!-- Image count and selection info -->
           <div v-if="imageCount > 0" class="image-stats">
             <span class="image-count">
-              {{ imageCount }} / {{ appConfig.max_images_per_session }} image{{ imageCount !== 1 ? 's' : '' }}
-              <span class="expiry-info" :title="`Images expire after ${appConfig.session_expiry_days} days`">
-                (expires in {{ appConfig.session_expiry_days }} days)
-              </span>
+              {{ imageCount }} image{{ imageCount !== 1 ? 's' : '' }}
             </span>
             <span v-if="selectedCount > 0" class="selected-count">
               ({{ selectedCount }} selected)
@@ -81,7 +78,7 @@
               <span class="menu-icon">ℹ️</span>
               <div class="menu-text">
                 <span class="menu-title">About</span>
-                <span class="menu-desc">App info & session details</span>
+                <span class="menu-desc">App info & user details</span>
               </div>
             </button>
           </div>
@@ -162,7 +159,7 @@
           
           <div class="header-spacer"></div>
           
-          <UploadArea @upload-complete="handleUploadComplete" :compact="true" :inline="true" :maxImages="appConfig.max_images_per_session" />
+          <UploadArea @upload-complete="handleUploadComplete" :compact="true" :inline="true" />
         </div>
       </div>
     </header>
@@ -171,7 +168,7 @@
       <div class="container">
         <div v-if="isLoading" class="loading-state">
           <div class="spinner-large"></div>
-          <p>Loading session...</p>
+          <p>Loading...</p>
         </div>
 
         <div v-else-if="error" class="error-state">
@@ -190,10 +187,9 @@
                   :key="image.id"
                   :image="image"
                   :presets="presets"
-                  :sessionId="sessionId"
+                  :userId="userId"
                   :selectedModel="selectedModel"
                   :isOpenRouterConnected="openRouterConnected"
-                  :expiryDays="appConfig.session_expiry_days"
                   :cardSize="imageCardSize"
                   @image-click="handleImageClick"
                   @edit-click="handleEditClick"
@@ -205,7 +201,7 @@
           </div>
 
           <div v-else>
-            <UploadArea @upload-complete="handleUploadComplete" :compact="false" :inline="false" :maxImages="appConfig.max_images_per_session" />
+            <UploadArea @upload-complete="handleUploadComplete" :compact="false" :inline="false" />
           </div>
         </div>
       </div>
@@ -479,17 +475,16 @@
             </div>
             
             <div class="info-box">
-              <p><strong>Session Information:</strong></p>
+              <p><strong>User Information:</strong></p>
               <p v-if="username"><strong>Remote Username:</strong> <code>{{ username }}</code></p>
               <p v-if="displayName"><strong>Remote Name:</strong> <code>{{ displayName }}</code></p>
-              <p><strong>Images in Session:</strong> {{ imageCount }} / {{ appConfig.max_images_per_session }}</p>
+              <p><strong>Images uploaded:</strong> {{ imageCount }}</p>
             </div>
             
             <div class="info-box info-box-highlight">
               <p><strong>⚠️ Important Information:</strong></p>
               <ul>
-                <li><strong>Temporary Storage:</strong> All uploaded images are temporary and will be automatically removed after <strong>{{ appConfig.session_expiry_days }} days</strong></li>
-                <li><strong>Session Limit:</strong> You can upload a maximum of <strong>{{ appConfig.max_images_per_session }} images</strong> per session</li>
+                <li><strong>Temporary Storage (anonymous):</strong> Images uploaded without an account are automatically removed after <strong>{{ appConfig.anonymous_image_retention_days || 30 }} days</strong></li>
                 <li><strong>File Size Limit:</strong> Maximum upload size is <strong>{{ appConfig.max_upload_size_mb }} MB</strong> per image</li>
               </ul>
             </div>
@@ -630,7 +625,7 @@
               </div>
               
               <p style="margin-top: 10px; font-size: 0.9em; color: #666; text-align: center;">
-                This QR code pairs your mobile device with this session for secure image uploads.
+                This QR code pairs your mobile device with your account for secure image uploads.
               </p>
               <p style="margin-top: 8px; font-size: 1.1em; color: #ff6b35; font-weight: 600; text-align: center;">
                 ⏱️ Expires in {{ qrCodeTimeRemaining }} • Single-use only
@@ -1383,10 +1378,10 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { useSessionStore } from './stores/sessionStore';
+import { useUserStore } from './stores/userStore';
 import { useImageStore } from './stores/imageStore';
 import { storeToRefs } from 'pinia';
-import { imageService, sessionService, setOfflineCallback, markOnline } from './services/api';
+import { imageService, userService, setOfflineCallback, markOnline } from './services/api';
 import { openRouterService, generateCodeVerifier, generateCodeChallenge } from './services/openRouterService';
 import { chatService } from './services/chatService';
 import mobileService from './services/mobileService';
@@ -1418,10 +1413,10 @@ import OfflineModal from './components/OfflineModal.vue';
 import ToastNotification from './components/ToastNotification.vue';
 import ProfileManager from './components/ProfileManager.vue';
 
-const sessionStore = useSessionStore();
+const userStore = useUserStore();
 const imageStore = useImageStore();
 
-const { sessionId } = storeToRefs(sessionStore);
+const { userId } = storeToRefs(userStore);
 const { images, imageCount, selectedCount, presets } = storeToRefs(imageStore);
 
 const isLoading = ref(true);
@@ -1465,8 +1460,7 @@ const imageCardSize = ref(localStorage.getItem('imageCardSize') || 'small');
 
 // App configuration state
 const appConfig = ref({
-  session_expiry_days: 7,
-  max_images_per_session: 5,
+  anonymous_image_retention_days: 30,
   max_upload_size_mb: 20,
   debug_enrolment: null
 });
@@ -1649,41 +1643,36 @@ const availableTags = computed(() => {
   return Array.from(tags).sort();
 });
 
-// Get username from session
+// Get username from user data
 const username = computed(() => {
-  // First check if sessionData has username (Remote-User from Authelia)
-  if (sessionStore.sessionData && sessionStore.sessionData.username) {
-    return sessionStore.sessionData.username;
+  // First check if userData has username (Remote-User from Authelia)
+  if (userStore.userData && userStore.userData.username) {
+    return userStore.userData.username;
   }
   
-  // Fallback to user_id for legacy support
-  if (sessionStore.sessionData && sessionStore.sessionData.user_id) {
-    return sessionStore.sessionData.user_id;
+  // Check if user override is being used (for testing)
+  const userOverride = import.meta.env.VITE_USER_OVERRIDE;
+  if (userOverride && userOverride.trim() !== '') {
+    return userOverride;
   }
   
-  // Check if session override is being used (for testing)
-  const sessionOverride = import.meta.env.VITE_SESSION_OVERRIDE;
-  if (sessionOverride && sessionOverride.trim() !== '') {
-    return sessionOverride;
-  }
-  
-  // Check if sessionId looks like a username (not a UUID)
-  if (sessionId.value) {
+  // Check if userId looks like a username (not a UUID)
+  if (userId.value) {
     // UUIDs have format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId.value);
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId.value);
     if (!isUUID) {
-      // Session ID doesn't look like UUID, might be a username
-      return sessionId.value;
+      // User ID doesn't look like UUID, might be a username
+      return userId.value;
     }
   }
   
   return null;
 });
 
-// Get display name from session (Remote-Name from Authelia)
+// Get display name from user data (Remote-Name from Authelia)
 const displayName = computed(() => {
-  if (sessionStore.sessionData && sessionStore.sessionData.display_name) {
-    return sessionStore.sessionData.display_name;
+  if (userStore.userData && userStore.userData.display_name) {
+    return userStore.userData.display_name;
   }
   return null;
 });
@@ -1836,18 +1825,18 @@ const initializeApp = async () => {
   error.value = null;
 
   try {
-    await sessionStore.initializeSession();
+    await userStore.initializeUser();
     await Promise.all([
-      imageStore.loadSessionImages(),
+      imageStore.loadUserImages(),
       imageStore.loadPresets(),
       fetchAppConfig(),
       fetchAppVersion()
     ]);
     
-    // Set session ID in OpenRouter service
-    if (sessionId.value) {
-      openRouterService.setSessionId(sessionId.value);
-      chatService.setSessionId(sessionId.value);
+    // Set user ID in OpenRouter service
+    if (userId.value) {
+      openRouterService.setUserId(userId.value);
+      chatService.setUserId(userId.value);
     }
     
     // Check if we're returning from OAuth callback
@@ -2109,8 +2098,8 @@ const checkPairingStatus = async () => {
 };
 
 const generateQRCode = async () => {
-  if (!sessionId.value) {
-    qrCodeError.value = 'No active session';
+  if (!userId.value) {
+    qrCodeError.value = 'No active user';
     return;
   }
 
@@ -2139,7 +2128,7 @@ const generateQRCode = async () => {
     qrCodeError.value = null;
 
     // Create a new pairing (single-use, 2-minute timeout)
-    const pairing = await mobileService.createPairing(sessionId.value, 'Mobile Device');
+    const pairing = await mobileService.createPairing(userId.value, 'Mobile Device');
     qrCodePairingId.value = pairing.id;
 
     // Get QR code data
@@ -2158,7 +2147,7 @@ const generateQRCode = async () => {
       instance_url: instanceUrl,
       shared_secret: qrDataResponse.shared_secret,
       pairing_id: qrDataResponse.pairing_id,
-      session_id: qrDataResponse.session_id
+      user_id: qrDataResponse.user_id
     });
 
     // Generate QR code as data URL
@@ -2230,12 +2219,12 @@ const getPairingIntentUrl = () => {
   if (!qrData.value) return '#';
   
   // Create Android deep link with pairing data
-  // Format: imagetools://pair/link?url=<encoded_url>&secret=<secret>&pairing_id=<id>&session_id=<session>
+  // Format: imagetools://pair/link?url=<encoded_url>&secret=<secret>&pairing_id=<id>&user_id=<user>
   const params = new URLSearchParams({
     url: qrData.value.instance_url,
     secret: qrData.value.shared_secret,
     pairing_id: qrData.value.pairing_id,
-    session_id: sessionId.value
+    user_id: userId.value
   });
   
   const deepLink = `imagetools://pair/link?${params.toString()}`;
@@ -2248,7 +2237,7 @@ const getPairingIntentUrl = () => {
 const loadPairedDevices = async () => {
   try {
     isLoadingDevices.value = true;
-    const devices = await mobileService.listPairedDevices(sessionId.value);
+    const devices = await mobileService.listPairedDevices(userId.value);
     pairedDevices.value = devices;
     console.log('[Mobile] Loaded paired devices:', devices);
   } catch (error) {
@@ -2294,15 +2283,15 @@ const openAddonModal = async () => {
 };
 
 const generateAddonRegistrationUrl = async () => {
-  if (!sessionId.value) {
-    console.error('[Addon] No session ID available');
+  if (!userId.value) {
+    console.error('[Addon] No user ID available');
     return;
   }
   
   isGeneratingAddonUrl.value = true;
   
   try {
-    const authorization = await addonService.createAuthorization(sessionId.value);
+    const authorization = await addonService.createAuthorization(userId.value);
     
     // Parse the registration URL to extract code and instance
     const url = new URL(authorization.registration_url);
@@ -2480,10 +2469,10 @@ const copyAddonUrl = async () => {
 };
 
 const loadConnectedAddons = async () => {
-  if (!sessionId.value) return;
+  if (!userId.value) return;
   
   try {
-    connectedAddons.value = await addonService.listConnectedAddons(sessionId.value);
+    connectedAddons.value = await addonService.listConnectedAddons(userId.value);
   } catch (error) {
     console.error('[Addon] Failed to load connected addons:', error);
   }
@@ -2980,7 +2969,7 @@ onMounted(() => {
   setNewImageCallback((data) => {
     console.log('[App] New image from mobile:', data.image_id);
     // Reload images to show the new upload
-    imageStore.loadSessionImages();
+    imageStore.loadUserImages();
   });
   
   // Handle pairing revoked events from Android device unpairing
@@ -3068,23 +3057,23 @@ onMounted(() => {
     markOnline();
   });
   
-  // Start WebSocket connection with session ID
-  if (sessionId.value) {
-    connectWebSocket(sessionId.value);
+  // Start WebSocket connection with user ID
+  if (userId.value) {
+    connectWebSocket(userId.value);
   }
   
-  // Watch for session ID changes and reconnect WebSocket
-  watch(sessionId, (newSessionId, oldSessionId) => {
-    console.log('[App] Session ID changed:', { old: oldSessionId, new: newSessionId });
+  // Watch for user ID changes and reconnect WebSocket
+  watch(userId, (newUserId, oldUserId) => {
+    console.log('[App] User ID changed:', { old: oldUserId, new: newUserId });
     
-    // Disconnect old connection if session changed
-    if (oldSessionId && oldSessionId !== newSessionId) {
+    // Disconnect old connection if user changed
+    if (oldUserId && oldUserId !== newUserId) {
       disconnectWebSocket();
     }
     
-    // Connect with new session ID
-    if (newSessionId) {
-      connectWebSocket(newSessionId);
+    // Connect with new user ID
+    if (newUserId) {
+      connectWebSocket(newUserId);
     }
   });
   

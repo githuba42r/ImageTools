@@ -61,7 +61,7 @@ class ImageService:
     @staticmethod
     async def save_uploaded_image(
         db: AsyncSession,
-        session_id: str,
+        user_id: str,
         filename: str,
         file: BinaryIO,
         gps_latitude: Optional[float] = None,
@@ -72,7 +72,7 @@ class ImageService:
         
         Args:
             db: Database session
-            session_id: Session ID to associate image with
+            user_id: User ID to associate image with
             filename: Original filename
             file: File-like object with image data
             gps_latitude: Optional GPS latitude from mobile device (used when EXIF is stripped)
@@ -162,7 +162,7 @@ class ImageService:
         # Create database record
         image = Image(
             id=image_id,
-            session_id=session_id,
+            user_id=user_id,
             original_filename=filename,
             original_size=file_size,
             current_path=original_path,
@@ -219,11 +219,11 @@ class ImageService:
         return result.scalar_one_or_none()
     
     @staticmethod
-    async def get_session_images(db: AsyncSession, session_id: str) -> list[Image]:
-        """Get all images for a session."""
+    async def get_user_images(db: AsyncSession, user_id: str) -> list[Image]:
+        """Get all images for a user."""
         result = await db.execute(
             select(Image)
-            .where(Image.session_id == session_id)
+            .where(Image.user_id == user_id)
             .order_by(Image.created_at.desc())
         )
         return result.scalars().all()
@@ -258,10 +258,10 @@ class ImageService:
         return True
     
     @staticmethod
-    async def count_session_images(db: AsyncSession, session_id: str) -> int:
-        """Count images in session."""
+    async def count_user_images(db: AsyncSession, user_id: str) -> int:
+        """Count images for a user."""
         result = await db.execute(
-            select(func.count(Image.id)).where(Image.session_id == session_id)
+            select(func.count(Image.id)).where(Image.user_id == user_id)
         )
         return result.scalar()
     

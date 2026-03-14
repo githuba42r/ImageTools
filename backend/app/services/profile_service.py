@@ -83,7 +83,7 @@ async def create_system_default_profiles(db: AsyncSession) -> List[CompressionPr
         for profile_data in default_profiles_data:
             profile = CompressionProfile(
                 id=str(uuid.uuid4()),
-                session_id=None,  # System defaults have no session
+                user_id=None,  # System defaults have no user
                 **profile_data
             )
             db.add(profile)
@@ -99,15 +99,15 @@ async def create_system_default_profiles(db: AsyncSession) -> List[CompressionPr
         await db.rollback()
         # If we got an integrity error about session_id NOT NULL,
         # it means the migration hasn't completed yet
-        if "NOT NULL constraint failed: compression_profiles.session_id" in str(e):
+        if "NOT NULL constraint failed: compression_profiles.user_id" in str(e):
             # Return empty list - migration will create them later
             return []
         raise
 
 
-async def create_default_profiles(db: AsyncSession, session_id: str) -> List[CompressionProfile]:
+async def create_default_profiles(db: AsyncSession, user_id: str) -> List[CompressionProfile]:
     """
-    Deprecated: System defaults are now global, not per-session.
+    Deprecated: System defaults are now global, not per-user.
     This function is kept for backward compatibility.
     """
     # Just ensure system defaults exist
@@ -117,7 +117,7 @@ async def create_default_profiles(db: AsyncSession, session_id: str) -> List[Com
 async def copy_profile_for_user(
     db: AsyncSession,
     system_profile_id: str,
-    session_id: str,
+    user_id: str,
     new_name: Optional[str] = None
 ) -> Optional[CompressionProfile]:
     """Create a user copy of a system default profile."""
@@ -135,7 +135,7 @@ async def copy_profile_for_user(
     # Create user copy
     user_profile = CompressionProfile(
         id=str(uuid.uuid4()),
-        session_id=session_id,
+        user_id=user_id,
         name=new_name or system_profile.name,
         max_width=system_profile.max_width,
         max_height=system_profile.max_height,
@@ -156,7 +156,7 @@ async def copy_profile_for_user(
 
 async def create_profile(
     db: AsyncSession,
-    session_id: str,
+    user_id: str,
     profile_data: CompressionProfileCreate
 ) -> CompressionProfile:
     """Create a new compression profile"""
@@ -164,14 +164,14 @@ async def create_profile(
     if profile_data.is_default:
         await db.execute(
             update(CompressionProfile)
-            .where(CompressionProfile.session_id == session_id)
+            .where(CompressionProfile.user_id == user_id)
             .where(CompressionProfile.is_default == True)
             .values(is_default=False)
         )
     
     profile = CompressionProfile(
         id=str(uuid.uuid4()),
-        session_id=session_id,
+        user_id=user_id,
         name=profile_data.name,
         max_width=profile_data.max_width,
         max_height=profile_data.max_height,
@@ -188,14 +188,14 @@ async def create_profile(
     return profile
 
 
-async def get_profile(db: AsyncSession, profile_id: str, session_id: str) -> Optional[CompressionProfile]:
+async def get_profile(db: AsyncSession, profile_id: str, user_id: str) -> Optional[CompressionProfile]:
     """Get a specific profile by ID (user profile or system default)"""
     result = await db.execute(
         select(CompressionProfile)
         .where(CompressionProfile.id == profile_id)
         .where(
             or_(
-                CompressionProfile.session_id == session_id,
+                CompressionProfile.user_id == user_id,
                 CompressionProfile.system_default == True
             )
         )
@@ -218,9 +218,9 @@ async def get_profile(db: AsyncSession, profile_id: str, session_id: str) -> Opt
     return profile
 
 
-async def get_profiles(db: AsyncSession, session_id: str) -> List[CompressionProfile]:
+async def get_profiles(db: AsyncSession, user_id: str) -> List[CompressionProfile]:
     """
-    Get all profiles for a session (includes system defaults and user profiles).
+    Get all profiles for a user (includes system defaults and user profiles).
     If a user has a custom profile with the same name as a system default,
     the system default is hidden/excluded from results.
     """
@@ -228,7 +228,7 @@ async def get_profiles(db: AsyncSession, session_id: str) -> List[CompressionPro
         select(CompressionProfile)
         .where(
             or_(
-                CompressionProfile.session_id == session_id,
+                CompressionProfile.user_id == user_id,
                 CompressionProfile.system_default == True
             )
         )
@@ -247,7 +247,7 @@ async def get_profiles(db: AsyncSession, session_id: str) -> List[CompressionPro
     custom_profile_names = {
         profile.name 
         for profile in all_profiles 
-        if not profile.system_default and profile.session_id == session_id
+        if not profile.system_default and profile.user_id == user_id
     }
     
     # Filter out system defaults that have been overridden by custom profiles with same name
@@ -269,11 +269,11 @@ async def get_profiles(db: AsyncSession, session_id: str) -> List[CompressionPro
     return filtered_profiles
 
 
-async def get_default_profile(db: AsyncSession, session_id: str) -> Optional[CompressionProfile]:
-    """Get the default profile for a session"""
+async def get_default_profile(db: AsyncSession, user_id: str) -> Optional[CompressionProfile]:
+    """Get the default profile for a user"""
     result = await db.execute(
         select(CompressionProfile)
-        .where(CompressionProfile.session_id == session_id)
+        .where(CompressionProfile.user_id == user_id)
         .where(CompressionProfile.is_default == True)
     )
     return result.scalars().first()
@@ -282,14 +282,14 @@ async def get_default_profile(db: AsyncSession, session_id: str) -> Optional[Com
 async def update_profile(
     db: AsyncSession,
     profile_id: str,
-    session_id: str,
+    user_id: str,
     profile_data: CompressionProfileUpdate
 ) -> Optional[CompressionProfile]:
     """
     Update an existing profile.
     If trying to edit a system default, creates a user copy instead.
     """
-    profile = await get_profile(db, profile_id, session_id)
+    profile = await get_profile(db, profile_id, user_id)
     if not profile:
         return None
     
@@ -300,7 +300,7 @@ async def update_profile(
         
         new_profile = CompressionProfile(
             id=str(uuid.uuid4()),
-            session_id=session_id,
+            user_id=user_id,
             name=update_data.get('name', profile.name),
             max_width=update_data.get('max_width', profile.max_width),
             max_height=update_data.get('max_height', profile.max_height),
@@ -316,7 +316,7 @@ async def update_profile(
         if new_profile.is_default:
             await db.execute(
                 update(CompressionProfile)
-                .where(CompressionProfile.session_id == session_id)
+                .where(CompressionProfile.user_id == user_id)
                 .where(CompressionProfile.is_default == True)
                 .values(is_default=False)
             )
@@ -331,7 +331,7 @@ async def update_profile(
     if profile_data.is_default:
         await db.execute(
             update(CompressionProfile)
-            .where(CompressionProfile.session_id == session_id)
+            .where(CompressionProfile.user_id == user_id)
             .where(CompressionProfile.is_default == True)
             .where(CompressionProfile.id != profile_id)
             .values(is_default=False)
@@ -348,9 +348,9 @@ async def update_profile(
     return profile
 
 
-async def delete_profile(db: AsyncSession, profile_id: str, session_id: str) -> bool:
+async def delete_profile(db: AsyncSession, profile_id: str, user_id: str) -> bool:
     """Delete a profile (cannot delete system defaults)"""
-    profile = await get_profile(db, profile_id, session_id)
+    profile = await get_profile(db, profile_id, user_id)
     if not profile:
         return False
     

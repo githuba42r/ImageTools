@@ -24,8 +24,6 @@ class DebugEnrolmentInfo(BaseModel):
 
 
 class AppConfigResponse(BaseModel):
-    session_expiry_days: int
-    max_images_per_session: int
     max_upload_size_mb: int
     debug_enrolment: Optional[DebugEnrolmentInfo] = None
 
@@ -38,15 +36,13 @@ async def get_app_config(request: Request):
         # Use auto-detected instance URL from request headers (same as mobile/addon)
         instance_url = get_instance_url(request)
         oauth_callback = f"{instance_url.rstrip('/')}/oauth/callback"
-        
+
         debug_info = DebugEnrolmentInfo(
             openrouter_oauth_callback_url=oauth_callback,
             instance_url=instance_url
         )
-    
+
     return AppConfigResponse(
-        session_expiry_days=app_settings.SESSION_EXPIRY_DAYS,
-        max_images_per_session=app_settings.MAX_IMAGES_PER_SESSION,
         max_upload_size_mb=app_settings.MAX_UPLOAD_SIZE_MB,
         debug_enrolment=debug_info
     )
@@ -54,11 +50,11 @@ async def get_app_config(request: Request):
 
 @router.get("", response_model=SettingsResponse)
 async def get_settings(
-    x_session_id: str = Header(...),
+    x_user_id: str = Header(..., alias="X-User-ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get user settings for the session."""
-    settings = await SettingsService.get_settings(db, x_session_id)
+    """Get user settings for the user."""
+    settings = await SettingsService.get_settings(db, x_user_id)
     return SettingsResponse(
         selected_model_id=settings.selected_model_id if settings else None
     )
@@ -67,9 +63,9 @@ async def get_settings(
 @router.put("/model", response_model=SettingsResponse)
 async def update_model(
     request: UpdateModelRequest,
-    x_session_id: str = Header(...),
+    x_user_id: str = Header(..., alias="X-User-ID"),
     db: AsyncSession = Depends(get_db)
 ):
     """Update the selected AI model."""
-    settings = await SettingsService.update_model(db, x_session_id, request.model_id)
+    settings = await SettingsService.update_model(db, x_user_id, request.model_id)
     return SettingsResponse(selected_model_id=settings.selected_model_id)

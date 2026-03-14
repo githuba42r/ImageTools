@@ -6,13 +6,13 @@ import { api } from './api';
 const mobileService = {
   /**
    * Create a new mobile app pairing
-   * @param {string} sessionId - Session ID to link the pairing to
+   * @param {string} userId - User ID to link the pairing to
    * @param {string} deviceName - Optional device name
    * @returns {Promise} Pairing data
    */
-  async createPairing(sessionId, deviceName = null) {
+  async createPairing(userId, deviceName = null) {
     const response = await api.post('/mobile/pairings', {
-      session_id: sessionId,
+      user_id: userId,
       device_name: deviceName
     });
     return response.data;
@@ -39,25 +39,25 @@ const mobileService = {
   },
 
   /**
-   * Get all pairings for a session
-   * @param {string} sessionId - Session ID
+   * Get all pairings for a user
+   * @param {string} userId - User ID
    * @param {boolean} activeOnly - Only return active pairings
    * @returns {Promise} List of pairings
    */
-  async getSessionPairings(sessionId, activeOnly = true) {
-    const response = await api.get(`/mobile/pairings/session/${sessionId}`, {
+  async getUserPairings(userId, activeOnly = true) {
+    const response = await api.get(`/mobile/pairings/user/${userId}`, {
       params: { active_only: activeOnly }
     });
     return response.data;
   },
 
   /**
-   * List all paired devices for a session (with device metadata)
-   * @param {string} sessionId - Session ID
+   * List all paired devices for a user (with device metadata)
+   * @param {string} userId - User ID
    * @returns {Promise} List of paired devices with metadata
    */
-  async listPairedDevices(sessionId) {
-    const response = await api.get(`/mobile/pairings/session/${sessionId}/list`);
+  async listPairedDevices(userId) {
+    const response = await api.get(`/mobile/pairings/user/${userId}/list`);
     return response.data;
   },
 
@@ -72,12 +72,12 @@ const mobileService = {
   },
 
   /**
-   * Revoke all pairings for a session
-   * @param {string} sessionId - Session ID
+   * Revoke all pairings for a user
+   * @param {string} userId - User ID
    * @returns {Promise}
    */
-  async revokeAllPairings(sessionId) {
-    const response = await api.post(`/mobile/pairings/session/${sessionId}/revoke-all`);
+  async revokeAllPairings(userId) {
+    const response = await api.post(`/mobile/pairings/user/${userId}/revoke-all`);
     return response.data;
   }
 };

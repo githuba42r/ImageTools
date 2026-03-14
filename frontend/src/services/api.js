@@ -19,19 +19,19 @@ export const setOfflineCallback = (callback) => {
   offlineCallback = callback;
 };
 
-// Request interceptor to add session ID header
+// Request interceptor to add user ID header
 api.interceptors.request.use(
   config => {
-    // Get session ID from localStorage
-    const sessionId = localStorage.getItem('imagetools_session_id');
+    // Get user ID from localStorage
+    const userId = localStorage.getItem('imagetools_user_id');
     
-    // Check if using session override from environment
-    const sessionOverride = import.meta?.env?.VITE_SESSION_OVERRIDE;
-    const activeSessionId = (sessionOverride && sessionOverride.trim() !== '') ? sessionOverride : sessionId;
+    // Check if using user override from environment
+    const userOverride = import.meta?.env?.VITE_USER_OVERRIDE;
+    const activeUserId = (userOverride && userOverride.trim() !== '') ? userOverride : userId;
     
-    // Add X-Session-ID header if session exists
-    if (activeSessionId) {
-      config.headers['X-Session-ID'] = activeSessionId;
+    // Add X-User-ID header if user exists
+    if (activeUserId) {
+      config.headers['X-User-ID'] = activeUserId;
     }
     
     return config;
@@ -61,33 +61,33 @@ export const markOnline = () => {
   isOffline = false;
 };
 
-// Session API
-export const sessionService = {
-  async createSession(userId = null, customSessionId = null) {
-    const payload = { user_id: userId };
-    if (customSessionId) {
-      payload.custom_session_id = customSessionId;
+// User API
+export const userService = {
+  async getOrCreateUser(hintId = null) {
+    const payload = {};
+    if (hintId) {
+      payload.hint_id = hintId;
     }
-    const response = await api.post('/sessions', payload);
+    const response = await api.post('/users', payload);
     return response.data;
   },
 
-  async getSession(sessionId) {
-    const response = await api.get(`/sessions/${sessionId}`);
+  async getUser(userId) {
+    const response = await api.get(`/users/${userId}`);
     return response.data;
   },
 
-  async validateSession(sessionId) {
-    const response = await api.get(`/sessions/${sessionId}/validate`);
+  async validateUser(userId) {
+    const response = await api.get(`/users/${userId}/validate`);
     return response.data;
   },
 };
 
 // Image API
 export const imageService = {
-  async uploadImage(sessionId, file) {
+  async uploadImage(userId, file) {
     const formData = new FormData();
-    formData.append('session_id', sessionId);
+    formData.append('user_id', userId);
     formData.append('file', file);
 
     const response = await api.post('/images', formData, {
@@ -98,8 +98,8 @@ export const imageService = {
     return response.data;
   },
 
-  async getSessionImages(sessionId) {
-    const response = await api.get(`/images/session/${sessionId}`);
+  async getUserImages(userId) {
+    const response = await api.get(`/images/user/${userId}`);
     return response.data;
   },
 

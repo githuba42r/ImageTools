@@ -4,7 +4,7 @@ Mobile app pairing endpoints
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.websocket_manager import manager as ws_manager
@@ -33,18 +33,18 @@ router = APIRouter()
 @router.post("/pairings", response_model=MobileAppPairingResponse)
 async def create_pairing(
     pairing_data: MobileAppPairingCreate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Create a new mobile app pairing for a session
-    
+    Create a new mobile app pairing for a user
+
     This endpoint is called when the user wants to generate a QR code
     for linking their mobile device
     """
     try:
         pairing = await MobileService.create_pairing(
             db=db,
-            session_id=pairing_data.session_id,
+            user_id=pairing_data.user_id,
             device_name=pairing_data.device_name
         )
         return pairing
@@ -57,7 +57,7 @@ async def create_pairing(
 @router.get("/pairings/{pairing_id}", response_model=MobileAppPairingResponse)
 async def get_pairing(
     pairing_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get a specific pairing by ID
@@ -72,51 +72,51 @@ async def get_pairing(
 async def get_qr_code_data(
     pairing_id: str,
     request: Request,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get QR code data for a pairing
-    
+
     Returns the data that should be encoded in the QR code:
     - Instance URL (derived from request origin)
     - Shared secret (single-use, 2-minute timeout)
     - Pairing ID
-    - Session ID
+    - User ID
     """
     pairing = await MobileService.get_pairing_by_id(db, pairing_id)
     if not pairing or not pairing.is_active:
         raise HTTPException(status_code=404, detail="Pairing not found or inactive")
-    
+
     # Check if pairing has expired or been used
     if pairing.used:
         raise HTTPException(status_code=410, detail="Pairing secret already used")
-    
+
     if pairing.expires_at and pairing.expires_at < datetime.utcnow():
         raise HTTPException(status_code=410, detail="Pairing expired")
-    
+
     # Auto-detect instance URL from reverse proxy headers or use configured INSTANCE_URL
     instance_url = get_instance_url(request)
-    
+
     return QRCodeDataResponse(
         instance_url=instance_url,
         shared_secret=pairing.shared_secret,
         pairing_id=pairing.id,
-        session_id=pairing.session_id
+        user_id=pairing.user_id
     )
 
 
-@router.get("/pairings/session/{session_id}", response_model=List[MobileAppPairingResponse])
-async def get_session_pairings(
-    session_id: str,
+@router.get("/pairings/user/{user_id}", response_model=List[MobileAppPairingResponse])
+async def get_user_pairings(
+    user_id: str,
     active_only: bool = True,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Get all pairings for a session
+    Get all pairings for a user
     """
-    pairings = await MobileService.get_session_pairings(
+    pairings = await MobileService.get_user_pairings(
         db=db,
-        session_id=session_id,
+        user_id=user_id,
         active_only=active_only
     )
     return pairings
@@ -125,46 +125,46 @@ async def get_session_pairings(
 @router.delete("/pairings/{pairing_id}")
 async def delete_pairing(
     pairing_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Deactivate a pairing (called from web UI)
-    
+
     Broadcasts pairing_revoked event to notify the Android device
     """
     # Get pairing info before deleting
     pairing = await MobileService.get_pairing_by_id(db, pairing_id)
     if not pairing:
         raise HTTPException(status_code=404, detail="Pairing not found")
-    
-    session_id = pairing.session_id
-    
+
+    user_id = pairing.user_id
+
     # Deactivate the pairing
     success = await MobileService.deactivate_pairing(db, pairing_id)
     if not success:
         raise HTTPException(status_code=404, detail="Pairing not found")
-    
+
     # Broadcast to Android device that pairing was revoked
     await ws_manager.broadcast_to_session(
-        session_id=session_id,
+        user_id=user_id,
         message={
             "type": "pairing_revoked",
             "pairing_id": pairing_id
         }
     )
-    
+
     return {"message": "Pairing deactivated successfully"}
 
 
-@router.post("/pairings/session/{session_id}/revoke-all")
+@router.post("/pairings/user/{user_id}/revoke-all")
 async def revoke_all_pairings(
-    session_id: str,
-    db: Session = Depends(get_db)
+    user_id: str,
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Revoke all pairings for a session
+    Revoke all pairings for a user
     """
-    count = await MobileService.revoke_all_session_pairings(db, session_id)
+    count = await MobileService.revoke_all_user_pairings(db, user_id)
     return {"message": f"Revoked {count} pairing(s)"}
 
 
@@ -176,14 +176,14 @@ async def upload_image_from_mobile(
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
     altitude: Optional[float] = Form(None),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Upload an image from a mobile device using long-term secret authentication
-    
+
     This endpoint is used by the Android app to upload images shared to it.
     Authentication is done via the long_term_secret obtained after QR code pairing.
-    
+
     Optional GPS coordinates can be provided if the image EXIF data was stripped by Android.
     """
     import logging
@@ -191,42 +191,42 @@ async def upload_image_from_mobile(
     logger.info(f"[MOBILE UPLOAD] Received upload request, filename: {file.filename}")
     if latitude is not None and longitude is not None:
         logger.info(f"[MOBILE UPLOAD] GPS coordinates provided: lat={latitude}, lon={longitude}, alt={altitude}")
-    
+
     # Validate long-term secret and get pairing
     pairing = await MobileService.validate_long_term_secret(db, long_term_secret)
     if not pairing:
         logger.error("[MOBILE UPLOAD] Invalid or expired long-term secret")
         raise HTTPException(status_code=401, detail="Invalid or expired long-term secret")
-    
-    logger.info(f"[MOBILE UPLOAD] Valid pairing found for session: {pairing.session_id}")
-    
-    # Upload image using the session from the pairing
+
+    logger.info(f"[MOBILE UPLOAD] Valid pairing found for user: {pairing.user_id}")
+
+    # Upload image using the user from the pairing
     try:
         # Save uploaded image using ImageService with GPS coordinates if provided
         image = await ImageService.save_uploaded_image(
             db=db,
-            session_id=pairing.session_id,
+            user_id=pairing.user_id,
             filename=file.filename or "image.jpg",
             file=file.file,
             gps_latitude=latitude,
             gps_longitude=longitude,
             gps_altitude=altitude
         )
-        
-        # Broadcast new_image event to all WebSocket clients in this session
+
+        # Broadcast new_image event to all WebSocket clients for this user
         await ws_manager.broadcast_to_session(
-            session_id=pairing.session_id,
+            user_id=pairing.user_id,
             message={
                 "type": "new_image",
                 "image_id": image.id,
                 "source": "mobile"
             }
         )
-        
+
         # Get instance URL from request headers or fallback to config
         instance_url = get_instance_url(request)
         base_url = f"{instance_url}/api/v1"
-        
+
         return MobileImageUploadResponse(
             image_id=image.id,
             filename=image.original_filename,
@@ -247,11 +247,11 @@ async def upload_image_from_mobile(
 @router.post("/validate-secret", response_model=ValidateSecretResponse)
 async def validate_shared_secret(
     request: ValidateSecretRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Validate initial shared secret and exchange for long-term authorization
-    
+
     Called when mobile app scans QR code. Returns long-term and refresh secrets
     for ongoing authentication.
     """
@@ -266,11 +266,11 @@ async def validate_shared_secret(
     )
     if not pairing:
         raise HTTPException(status_code=401, detail="Invalid or expired shared secret")
-    
+
     return ValidateSecretResponse(
         valid=True,
         pairing_id=pairing.id,
-        session_id=pairing.session_id,
+        user_id=pairing.user_id,
         device_name=pairing.device_name,
         device_model=pairing.device_model,
         device_manufacturer=pairing.device_manufacturer,
@@ -287,18 +287,18 @@ async def validate_shared_secret(
 @router.post("/refresh-secret", response_model=RefreshSecretResponse)
 async def refresh_secret(
     request: RefreshSecretRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Refresh/renew a long-term secret using refresh secret
-    
+
     Can be used up to 90 days after long-term secret expires
     (within the 180-day refresh secret validity period)
     """
     pairing = await MobileService.refresh_long_term_secret(db, request.refresh_secret)
     if not pairing:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh secret")
-    
+
     return RefreshSecretResponse(
         long_term_secret=pairing.long_term_secret,
         long_term_expires_at=pairing.long_term_expires_at
@@ -308,11 +308,11 @@ async def refresh_secret(
 @router.post("/validate-auth", response_model=ValidateAuthResponse)
 async def validate_auth(
     request: ValidateAuthRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Validate current authentication status
-    
+
     Used by Android app to check if long-term secret is still valid
     and whether it needs refresh soon
     """
@@ -322,13 +322,13 @@ async def validate_auth(
             valid=False,
             needs_refresh=False
         )
-    
+
     # Check if needs refresh (within 7 days of expiration)
     needs_refresh = False
     if pairing.long_term_expires_at:
         days_until_expiry = (pairing.long_term_expires_at - datetime.utcnow()).days
         needs_refresh = days_until_expiry <= 7
-    
+
     return ValidateAuthResponse(
         valid=True,
         expires_at=pairing.long_term_expires_at,
@@ -339,11 +339,11 @@ async def validate_auth(
 @router.post("/unpair")
 async def unpair_device(
     request: ValidateAuthRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Unpair a device (called from Android app)
-    
+
     Validates the long-term secret and deactivates the pairing.
     This allows the Android app to unpair itself.
     Broadcasts pairing_revoked event to notify the web app.
@@ -351,51 +351,51 @@ async def unpair_device(
     pairing = await MobileService.validate_long_term_secret(db, request.long_term_secret)
     if not pairing:
         raise HTTPException(status_code=401, detail="Invalid or expired authentication")
-    
+
     pairing_id = pairing.id
-    session_id = pairing.session_id
-    
+    user_id = pairing.user_id
+
     # Deactivate the pairing
     success = await MobileService.deactivate_pairing(db, pairing_id)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to unpair device")
-    
+
     # Broadcast to web app that pairing was revoked
     await ws_manager.broadcast_to_session(
-        session_id=session_id,
+        user_id=user_id,
         message={
             "type": "pairing_revoked",
             "pairing_id": pairing_id
         }
     )
-    
+
     return {"message": "Device unpaired successfully"}
 
 
-@router.get("/pairings/session/{session_id}/list", response_model=List[PairedDeviceInfo])
+@router.get("/pairings/user/{user_id}/list", response_model=List[PairedDeviceInfo])
 async def list_paired_devices(
-    session_id: str,
-    db: Session = Depends(get_db)
+    user_id: str,
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    List all paired devices for a session
-    
+    List all paired devices for a user
+
     Returns only active pairings with long-term secrets.
     Used by web UI for device management.
     """
-    pairings = await MobileService.get_session_pairings(
+    pairings = await MobileService.get_user_pairings(
         db=db,
-        session_id=session_id,
+        user_id=user_id,
         active_only=True
     )
-    
+
     # Filter to only pairings that have completed initial exchange
     # (have long_term_secret populated)
     active_pairings = [
-        p for p in pairings 
+        p for p in pairings
         if p.long_term_secret and p.long_term_expires_at
     ]
-    
+
     return [
         PairedDeviceInfo(
             id=p.id,

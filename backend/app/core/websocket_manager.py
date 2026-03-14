@@ -12,50 +12,50 @@ class ConnectionManager:
     """Manages WebSocket connections and broadcasts messages"""
     
     def __init__(self):
-        # Map of session_id -> set of WebSocket connections
+        # Map of user_id -> set of WebSocket connections
         self.active_connections: Dict[str, Set[WebSocket]] = {}
-        # Map of WebSocket -> session_id for reverse lookup
-        self.websocket_sessions: Dict[WebSocket, str] = {}
+        # Map of WebSocket -> user_id for reverse lookup
+        self.websocket_users: Dict[WebSocket, str] = {}
     
-    async def connect(self, websocket: WebSocket, session_id: str):
-        """Accept and store a new WebSocket connection for a session"""
+    async def connect(self, websocket: WebSocket, user_id: str):
+        """Accept and store a new WebSocket connection for a user"""
         await websocket.accept()
         
-        if session_id not in self.active_connections:
-            self.active_connections[session_id] = set()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = set()
         
-        self.active_connections[session_id].add(websocket)
-        self.websocket_sessions[websocket] = session_id
+        self.active_connections[user_id].add(websocket)
+        self.websocket_users[websocket] = user_id
         
-        logger.info(f"WebSocket connected for session {session_id}. Total connections: {len(self.active_connections[session_id])}")
+        logger.info(f"WebSocket connected for user {user_id}. Total connections: {len(self.active_connections[user_id])}")
     
     def disconnect(self, websocket: WebSocket):
         """Remove a WebSocket connection"""
-        session_id = self.websocket_sessions.get(websocket)
-        if session_id:
-            if session_id in self.active_connections:
-                self.active_connections[session_id].discard(websocket)
+        user_id = self.websocket_users.get(websocket)
+        if user_id:
+            if user_id in self.active_connections:
+                self.active_connections[user_id].discard(websocket)
                 
-                # Clean up empty session sets
-                if not self.active_connections[session_id]:
-                    del self.active_connections[session_id]
+                # Clean up empty user sets
+                if not self.active_connections[user_id]:
+                    del self.active_connections[user_id]
             
-            del self.websocket_sessions[websocket]
-            logger.info(f"WebSocket disconnected for session {session_id}")
+            del self.websocket_users[websocket]
+            logger.info(f"WebSocket disconnected for user {user_id}")
     
-    async def broadcast_to_session(self, session_id: str, message: dict):
-        """Broadcast a message to all connections for a specific session"""
-        logger.info(f"[WS BROADCAST] Attempting to broadcast to session '{session_id}'")
+    async def broadcast_to_session(self, user_id: str, message: dict):
+        """Broadcast a message to all connections for a specific user"""
+        logger.info(f"[WS BROADCAST] Attempting to broadcast to user '{user_id}'")
         logger.info(f"[WS BROADCAST] Message: {message}")
-        logger.info(f"[WS BROADCAST] All active sessions: {list(self.active_connections.keys())}")
+        logger.info(f"[WS BROADCAST] All active users: {list(self.active_connections.keys())}")
         
-        if session_id not in self.active_connections:
-            logger.warning(f"[WS BROADCAST] No active connections for session '{session_id}'")
-            logger.warning(f"[WS BROADCAST] Available sessions: {list(self.active_connections.keys())}")
+        if user_id not in self.active_connections:
+            logger.warning(f"[WS BROADCAST] No active connections for user '{user_id}'")
+            logger.warning(f"[WS BROADCAST] Available users: {list(self.active_connections.keys())}")
             return
         
         # Copy the set to avoid issues if connections are removed during iteration
-        connections = self.active_connections[session_id].copy()
+        connections = self.active_connections[user_id].copy()
         logger.info(f"[WS BROADCAST] Broadcasting to {len(connections)} connection(s)")
         
         for websocket in connections:
@@ -69,8 +69,8 @@ class ConnectionManager:
     
     async def broadcast_to_all(self, message: dict):
         """Broadcast a message to all connected clients"""
-        for session_id in list(self.active_connections.keys()):
-            await self.broadcast_to_session(session_id, message)
+        for user_id in list(self.active_connections.keys()):
+            await self.broadcast_to_session(user_id, message)
 
 
 # Global connection manager instance

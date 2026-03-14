@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { imageService, compressionService, historyService } from '../services/api';
 import { backgroundService } from '../services/backgroundService';
-import { useSessionStore } from './sessionStore';
+import { useUserStore } from './userStore';
 
 export const useImageStore = defineStore('image', {
   state: () => ({
@@ -20,12 +20,12 @@ export const useImageStore = defineStore('image', {
   },
 
   actions: {
-    async loadSessionImages() {
-      const sessionStore = useSessionStore();
-      if (!sessionStore.sessionId) return;
+    async loadUserImages() {
+      const userStore = useUserStore();
+      if (!userStore.userId) return;
 
       try {
-        this.images = await imageService.getSessionImages(sessionStore.sessionId);
+        this.images = await imageService.getUserImages(userStore.userId);
         console.log(`Loaded ${this.images.length} images`);
       } catch (error) {
         this.error = error.message;
@@ -34,16 +34,16 @@ export const useImageStore = defineStore('image', {
     },
 
     async uploadImage(file) {
-      const sessionStore = useSessionStore();
-      if (!sessionStore.sessionId) {
-        throw new Error('No active session');
+      const userStore = useUserStore();
+      if (!userStore.userId) {
+        throw new Error('No active user');
       }
 
       this.isUploading = true;
       this.error = null;
 
       try {
-        const image = await imageService.uploadImage(sessionStore.sessionId, file);
+        const image = await imageService.uploadImage(userStore.userId, file);
         this.images.unshift(image);
         console.log('Image uploaded:', image.id);
         return image;

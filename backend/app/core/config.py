@@ -19,10 +19,9 @@ class Settings(BaseSettings):
     # Examples: http://10.0.1.97:8000 or https://yourdomain.com
     INSTANCE_URL: str = "http://localhost:8000"
     
-    # Session
-    SESSION_EXPIRY_DAYS: int = 7
-    MAX_IMAGES_PER_SESSION: int = 5
+    # User / Security
     SESSION_SECRET_KEY: str = "change-this-secret-key-in-production"
+    ANONYMOUS_IMAGE_RETENTION_DAYS: int = 30
     
     # Upload
     MAX_UPLOAD_SIZE_MB: int = 20
@@ -88,7 +87,7 @@ class Settings(BaseSettings):
     # When deployed behind Authelia, user information is automatically extracted from:
     # - Remote-User header: Username/email from Authelia authentication
     # - Remote-Name header: Display name from Authelia user profile
-    # These headers are automatically captured by the middleware and stored in sessions.
+    # These headers are automatically captured by the middleware and stored in the user record.
     # No additional configuration required - just ensure your reverse proxy forwards these headers.
     
     @property

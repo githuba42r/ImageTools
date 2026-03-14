@@ -3,33 +3,30 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 
-class SessionCreate(BaseModel):
-    user_id: Optional[str] = None  # Legacy field
-    username: Optional[str] = None  # Remote-User from Authelia
-    display_name: Optional[str] = None  # Remote-Name from Authelia
-    custom_session_id: Optional[str] = None
+class UserCreate(BaseModel):
+    """Sent by the frontend on page load to get/create the caller's user identity."""
+    username: Optional[str] = None       # Remote-User from Authelia / basic-auth (set by middleware)
+    display_name: Optional[str] = None   # Remote-Name from Authelia
 
 
-class SessionResponse(BaseModel):
+class UserResponse(BaseModel):
     id: str
-    user_id: Optional[str]
     username: Optional[str]
     display_name: Optional[str]
     created_at: datetime
-    expires_at: datetime
-    
+
     class Config:
         from_attributes = True
 
 
 class ImageUpload(BaseModel):
-    session_id: str
+    user_id: str
     filename: str
 
 
 class ImageResponse(BaseModel):
     id: str
-    session_id: str
+    user_id: str
     original_filename: str
     original_size: int
     current_size: int
@@ -40,7 +37,7 @@ class ImageResponse(BaseModel):
     image_url: str
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -69,7 +66,7 @@ class CompressionProfileUpdate(BaseModel):
 
 class CompressionProfileResponse(BaseModel):
     id: str
-    session_id: Optional[str]
+    user_id: Optional[str]
     name: str
     max_width: int
     max_height: int
@@ -82,7 +79,7 @@ class CompressionProfileResponse(BaseModel):
     overrides_system_default: bool = False
     created_at: datetime
     updated_at: Optional[datetime]
-    
+
     class Config:
         from_attributes = True
 
@@ -112,7 +109,7 @@ class HistoryResponse(BaseModel):
     file_size: int
     created_at: datetime
     sequence: int
-    
+
     class Config:
         from_attributes = True
 
@@ -203,7 +200,7 @@ class MessageResponse(BaseModel):
     tokens_used: Optional[int] = None
     cost: Optional[float] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -215,20 +212,20 @@ class ConversationCreate(BaseModel):
 
 class ConversationResponse(BaseModel):
     id: str
-    session_id: str
+    user_id: str
     image_id: str
     model: str
     created_at: datetime
     updated_at: datetime
     total_cost: float
     messages: List[MessageResponse] = []
-    
+
     class Config:
         from_attributes = True
 
 
 class ChatRequest(BaseModel):
-    session_id: str = Field(..., description="User session ID for API key retrieval")
+    user_id: str = Field(..., description="User ID for API key retrieval")
     conversation_id: Optional[str] = Field(None, description="Existing conversation ID, or None for new conversation")
     image_id: str = Field(..., description="ID of the image to manipulate")
     message: str = Field(..., min_length=1, max_length=10000, description="User message")
@@ -257,10 +254,10 @@ class ChatResponse(BaseModel):
     message_id: str
     response: str
     operations: List[AIOperation] = []
-    model_recommendations: List[ModelRecommendation] = []  # New field for model suggestions
+    model_recommendations: List[ModelRecommendation] = []
     image_updated: bool = False
     new_image_url: Optional[str] = None
-    history_sequence: Optional[int] = None  # Sequence number of the history entry for this version
+    history_sequence: Optional[int] = None
     tokens_used: Optional[int] = None
     cost: Optional[float] = None
     total_conversation_cost: float
@@ -272,7 +269,7 @@ class ModelInfo(BaseModel):
     description: Optional[str] = None
     context_length: Optional[int] = None
     pricing: Optional[Dict[str, float]] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -292,13 +289,13 @@ class CostSummary(BaseModel):
 # Mobile App Pairing Schemas
 
 class MobileAppPairingCreate(BaseModel):
-    session_id: str = Field(..., description="Session ID to link the mobile app to")
+    user_id: str = Field(..., description="User ID to link the mobile app to")
     device_name: Optional[str] = Field(None, description="Optional device identifier")
 
 
 class MobileAppPairingResponse(BaseModel):
     id: str
-    session_id: str
+    user_id: str
     device_name: Optional[str]
     device_model: Optional[str] = None
     device_manufacturer: Optional[str] = None
@@ -311,7 +308,7 @@ class MobileAppPairingResponse(BaseModel):
     created_at: datetime
     last_used_at: Optional[datetime]
     expires_at: Optional[datetime]
-    
+
     class Config:
         from_attributes = True
 
@@ -321,7 +318,7 @@ class QRCodeDataResponse(BaseModel):
     instance_url: str = Field(..., description="URL of the ImageTools instance")
     shared_secret: str = Field(..., description="Shared secret for authentication")
     pairing_id: str = Field(..., description="Pairing ID")
-    session_id: str = Field(..., description="Session ID this pairing is linked to")
+    user_id: str = Field(..., description="User ID this pairing is linked to")
 
 
 class ValidateSecretRequest(BaseModel):
@@ -338,7 +335,7 @@ class ValidateSecretResponse(BaseModel):
     """Response from secret validation with long-term authorization"""
     valid: bool = Field(..., description="Whether the secret is valid")
     pairing_id: str = Field(..., description="Pairing ID")
-    session_id: str = Field(..., description="Session ID")
+    user_id: str = Field(..., description="User ID")
     device_name: Optional[str] = Field(None, description="Device name")
     device_model: Optional[str] = Field(None, description="Device model")
     device_manufacturer: Optional[str] = Field(None, description="Device manufacturer")
@@ -404,7 +401,7 @@ class PairedDeviceInfo(BaseModel):
     last_used_at: Optional[datetime]
     long_term_expires_at: Optional[datetime]
     is_active: bool
-    
+
     class Config:
         from_attributes = True
 
@@ -413,7 +410,7 @@ class PairedDeviceInfo(BaseModel):
 
 class AddonAuthorizationCreate(BaseModel):
     """Request to create a new addon authorization"""
-    session_id: str = Field(..., description="Session ID to link the addon to")
+    user_id: str = Field(..., description="User ID to link the addon to")
     browser_name: Optional[str] = Field(None, description="Browser type: firefox or chrome")
     addon_identifier: Optional[str] = Field(None, description="Optional addon ID")
 
@@ -421,14 +418,14 @@ class AddonAuthorizationCreate(BaseModel):
 class AddonAuthorizationResponse(BaseModel):
     """Response with authorization details"""
     id: str
-    session_id: str
+    user_id: str
     browser_name: Optional[str]
     authorization_code: str
     registration_url: str
     code_expires_at: datetime
     is_active: bool
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -448,7 +445,7 @@ class AddonTokenExchangeResponse(BaseModel):
     refresh_token: str = Field(..., description="Refresh token for renewal (90 days)")
     access_expires_at: datetime = Field(..., description="Access token expiration")
     refresh_expires_at: datetime = Field(..., description="Refresh token expiration")
-    session_id: str = Field(..., description="Session ID this authorization is linked to")
+    user_id: str = Field(..., description="User ID this authorization is linked to")
     instance_url: str = Field(..., description="Image Tools instance URL")
 
 
@@ -473,7 +470,7 @@ class AddonValidateTokenResponse(BaseModel):
     valid: bool = Field(..., description="Whether token is valid")
     expires_at: Optional[datetime] = Field(None, description="Expiration date if valid")
     needs_refresh: bool = Field(False, description="True if nearing expiration (within 3 days)")
-    session_id: Optional[str] = Field(None, description="Session ID if valid")
+    user_id: Optional[str] = Field(None, description="User ID if valid")
 
 
 class AddonScreenshotUploadResponse(BaseModel):
@@ -500,8 +497,6 @@ class ConnectedAddonInfo(BaseModel):
     last_used_at: Optional[datetime]
     access_expires_at: Optional[datetime]
     is_active: bool
-    
+
     class Config:
         from_attributes = True
-
-
