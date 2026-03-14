@@ -43,7 +43,8 @@ async def migrate_database():
                     id VARCHAR NOT NULL PRIMARY KEY,
                     username VARCHAR,
                     display_name VARCHAR,
-                    created_at DATETIME
+                    created_at DATETIME,
+                    last_activity DATETIME
                 )
             """))
             await conn.execute(text("CREATE INDEX ix_users_username ON users(username)"))
@@ -236,6 +237,26 @@ async def migrate_database():
         elif not users_table_exists and not sessions_table_exists:
             # Fresh database — users table will be created by init_db(); nothing to do here
             logger.info("No sessions table found; users table will be created by init_db()")
+
+        # ------------------------------------------------------------------ #
+        # BLOCK 1b: users table — add missing last_activity column           #
+        # ------------------------------------------------------------------ #
+
+        # Re-check — the users table now exists if it was pre-existing or just
+        # created from the sessions migration above.  Fresh DBs skip this block
+        # because init_db() will create the table correctly from the model.
+        result = await conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='users'"
+        ))
+        if result.fetchone() is not None:
+            result = await conn.execute(text("PRAGMA table_info(users)"))
+            user_columns = {row[1] for row in result.fetchall()}
+            if 'last_activity' not in user_columns:
+                logger.info("Adding last_activity column to users table...")
+                await conn.execute(text(
+                    "ALTER TABLE users ADD COLUMN last_activity DATETIME"
+                ))
+                migrations_applied.append("Added last_activity column to users")
 
         # ------------------------------------------------------------------ #
         # BLOCK 2: messages tokens schema migration                           #
