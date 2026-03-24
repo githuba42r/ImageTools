@@ -54,6 +54,7 @@ class InternalAuthMiddleware(BaseHTTPMiddleware):
     BYPASS_PREFIXES = [
         "/api/v1/mobile/",  # Mobile API uses long-term secrets
         "/api/v1/addon/",   # Addon API uses OAuth tokens
+        "/s/",              # Temporary share links (public, ephemeral)
     ]
     
     def __init__(self, app):
