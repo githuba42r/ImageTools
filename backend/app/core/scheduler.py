@@ -8,6 +8,7 @@ from datetime import datetime
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.services.user_service import UserService
+from app.services.share_service import cleanup_expired as cleanup_expired_share_links
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,14 @@ async def cleanup_old_anonymous_images_task():
                 
     except Exception as e:
         logger.error(f"Error during scheduled cleanup: {e}", exc_info=True)
+
+
+async def cleanup_expired_share_links_task():
+    """Scheduled task to clean up expired share links."""
+    try:
+        cleanup_expired_share_links()
+    except Exception as e:
+        logger.error(f"Error during share link cleanup: {e}", exc_info=True)
 
 
 def start_scheduler():
@@ -72,6 +81,16 @@ def start_scheduler():
             replace_existing=True
         )
         
+        # Add share link cleanup job (every 60 seconds)
+        scheduler.add_job(
+            cleanup_expired_share_links_task,
+            trigger='interval',
+            seconds=60,
+            id='cleanup_expired_share_links',
+            name='Cleanup Expired Share Links',
+            replace_existing=True
+        )
+
         scheduler.start()
         logger.info(f"Scheduler started - Cleanup will run on schedule: {settings.CLEANUP_SCHEDULE_CRON}")
         
