@@ -67,38 +67,47 @@
             </div>
           </div>
 
-          <!-- Download Button -->
-          <button 
-            @click="handleDownload" 
-            class="btn-icon"
-            :disabled="isProcessing"
-            :title="'Download image'"
-          >
-            <span class="icon">⬇</span>
-            <span class="tooltip">Download</span>
-          </button>
+          <!-- Share/Export Dropdown Button -->
+          <div class="share-actions-wrapper">
+            <button
+              @click="toggleShareMenu"
+              class="btn-icon btn-share"
+              :disabled="isProcessing"
+              :title="'Download, copy, or share'"
+            >
+              <span class="icon">⬇</span>
+              <span class="tooltip">Share</span>
+            </button>
 
-          <!-- Copy to Clipboard Button -->
-          <button 
-            @click="handleCopyToClipboard" 
-            class="btn-icon"
-            :disabled="isProcessing"
-            :title="'Copy image to clipboard'"
-          >
-            <span class="icon">📋</span>
-            <span class="tooltip">Copy</span>
-          </button>
+            <div v-if="showShareMenu" class="share-actions-menu" @click.stop>
+              <button
+                @click="handleShareAction(handleDownload)"
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">⬇</span>
+                <span class="menu-label">Download</span>
+              </button>
 
-          <!-- Copy Share Link Button -->
-          <button
-            @click="handleCopyShareLink"
-            class="btn-icon"
-            :disabled="isProcessing"
-            :title="'Copy link'"
-          >
-            <span class="icon">🔗</span>
-            <span class="tooltip">Copy Link</span>
-          </button>
+              <button
+                @click="handleShareAction(handleCopyToClipboard)"
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">📋</span>
+                <span class="menu-label">Copy to Clipboard</span>
+              </button>
+
+              <button
+                @click="handleShareAction(handleCopyShareLink)"
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">🔗</span>
+                <span class="menu-label">Copy Share Link</span>
+              </button>
+            </div>
+          </div>
 
           <!-- AI Chat Button -->
           <button 
@@ -381,6 +390,7 @@ const processingMessage = ref('');
 const canUndo = ref(false);
 const showPresetMenu = ref(false);
 const showMoreActionsMenu = ref(false);
+const showShareMenu = ref(false);
 const imageRefreshKey = ref(Date.now());
 const showDeleteConfirm = ref(false);
 const showChatInterface = ref(false);
@@ -489,10 +499,23 @@ const getPresetLabel = (presetId) => {
 
 const togglePresetMenu = () => {
   showPresetMenu.value = !showPresetMenu.value;
+  showShareMenu.value = false;
+  showMoreActionsMenu.value = false;
 };
 
 const toggleMoreActionsMenu = () => {
   showMoreActionsMenu.value = !showMoreActionsMenu.value;
+  showShareMenu.value = false;
+};
+
+const toggleShareMenu = () => {
+  showShareMenu.value = !showShareMenu.value;
+  showMoreActionsMenu.value = false;
+};
+
+const handleShareAction = (action) => {
+  showShareMenu.value = false;
+  action();
 };
 
 const handleMenuAction = (action) => {
@@ -845,6 +868,9 @@ const handleClickOutside = (event) => {
   if (showMoreActionsMenu.value) {
     showMoreActionsMenu.value = false;
   }
+  if (showShareMenu.value) {
+    showShareMenu.value = false;
+  }
 };
 
 // Watch for image changes and update refresh key to bust cache
@@ -973,6 +999,7 @@ onBeforeUnmount(() => {
   font-size: 1.35rem;
 }
 
+.image-card.card-size-medium .share-actions-menu,
 .image-card.card-size-medium .more-actions-menu {
   min-width: 180px;
   margin-bottom: 0.375rem;
@@ -1044,6 +1071,7 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
 }
 
+.image-card.card-size-large .share-actions-menu,
 .image-card.card-size-large .more-actions-menu {
   min-width: 220px;
   margin-bottom: 0.5rem;
@@ -1194,6 +1222,37 @@ onBeforeUnmount(() => {
 .preset-selector-wrapper {
   position: relative;
   overflow: visible;
+}
+
+.share-actions-wrapper {
+  position: relative;
+  overflow: visible;
+}
+
+.share-actions-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.25rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000000;
+  min-width: 160px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.btn-share {
+  background-color: white;
+  color: #333;
+  border-color: #ddd;
+}
+
+.btn-share:hover:not(:disabled) {
+  background-color: #f5f5f5;
+  border-color: #bbb;
 }
 
 .more-actions-wrapper {
