@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -21,7 +21,7 @@ from app.core.websocket_manager import manager as ws_manager
 from app.core.scheduler import start_scheduler, stop_scheduler
 from app.middleware import InternalAuthMiddleware
 from app.services.user_service import UserService
-from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles
+from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing
 
 # Configure logging
 logging.basicConfig(
@@ -112,6 +112,7 @@ app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["cha
 app.include_router(settings_router.router, prefix=settings.API_PREFIX)
 app.include_router(mobile.router, prefix=f"{settings.API_PREFIX}/mobile", tags=["mobile"])
 app.include_router(addon.router, prefix=f"{settings.API_PREFIX}/addon", tags=["addon"])
+app.include_router(sharing.router, prefix=settings.API_PREFIX)
 
 # Serve frontend static files (if they exist)
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
@@ -137,6 +138,22 @@ async def get_version():
         "versionCode": VERSION_INFO.get("versionCode", 0),
         "service": "ImageTools Backend API"
     }
+
+
+@app.get("/s/{token}")
+async def serve_shared_image(token: str):
+    """Serve a temporarily shared image. No authentication required."""
+    from app.services.share_service import get_shared_image
+
+    entry = get_shared_image(token)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    return FileResponse(
+        entry.image_path,
+        media_type=entry.media_type,
+        filename=entry.original_filename,
+    )
 
 
 @app.websocket("/ws")
