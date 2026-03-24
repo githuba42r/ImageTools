@@ -221,3 +221,11 @@ export const historyService = {
     return response.data;
   },
 };
+
+// Share Link API
+export const shareService = {
+  async createShareLink(imageId) {
+    const response = await api.post(`/images/${imageId}/share`);
+    return response.data;
+  },
+};
