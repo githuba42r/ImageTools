@@ -110,8 +110,7 @@ Update `docs/NGINX_AUTHELIA_DEPLOYMENT.md` to document that `/s/` paths are inte
 | `backend/app/core/config.py` | Add `SHARE_LINK_EXPIRY_SECONDS` setting |
 | `backend/app/services/share_service.py` | New — in-memory token store and management |
 | `backend/app/api/v1/endpoints/sharing.py` | New — POST endpoint for creating share links |
-| `backend/app/api/v1/router.py` | Register sharing endpoints |
-| `backend/app/main.py` | Add `GET /s/{token}` route, register scheduler job |
+| `backend/app/main.py` | Add `GET /s/{token}` route, register sharing router, register scheduler job |
 | `backend/app/middleware/internal_auth.py` | Add `/s/` to bypass list |
 | `backend/app/core/scheduler.py` | Add cleanup job for expired share links |
 | `frontend/src/components/ImageCard.vue` | Add Copy Link button and handler |
