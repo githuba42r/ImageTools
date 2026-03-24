@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     # User / Security
     SESSION_SECRET_KEY: str = "change-this-secret-key-in-production"
     ANONYMOUS_IMAGE_RETENTION_DAYS: int = 30
-    
+    SHARE_LINK_EXPIRY_SECONDS: int = 300  # TTL for temporary share links (default 5 minutes)
+
     # Upload
     MAX_UPLOAD_SIZE_MB: int = 20
     CHUNK_SIZE_MB: int = 5
