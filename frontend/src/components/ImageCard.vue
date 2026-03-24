@@ -89,6 +89,17 @@
             <span class="tooltip">Copy</span>
           </button>
 
+          <!-- Copy Share Link Button -->
+          <button
+            @click="handleCopyShareLink"
+            class="btn-icon"
+            :disabled="isProcessing"
+            :title="'Copy link'"
+          >
+            <span class="icon">🔗</span>
+            <span class="tooltip">Copy Link</span>
+          </button>
+
           <!-- AI Chat Button -->
           <button 
             @click="openChatInterface" 
@@ -328,7 +339,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useImageStore } from '../stores/imageStore';
-import { historyService } from '../services/api';
+import { historyService, shareService } from '../services/api';
 import ChatInterface from './ChatInterface.vue';
 import { useToast } from '../composables/useToast';
 
@@ -632,6 +643,24 @@ const handleCopyToClipboard = async () => {
   } catch (error) {
     console.error('Copy/download failed:', error);
     showToast('Failed to copy image. Please try the Download button instead.', 'error', 3000);
+  }
+};
+
+const handleCopyShareLink = async () => {
+  try {
+    const data = await shareService.createShareLink(props.image.id);
+    const fullUrl = `${window.location.origin}${data.url}`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(fullUrl);
+      const minutes = Math.round(data.expires_in / 60);
+      showToast(`Link copied! Expires in ${minutes} minute${minutes !== 1 ? 's' : ''}.`, 'success', 3000);
+    } else {
+      showToast(`Share URL: ${fullUrl}`, 'info', 8000);
+    }
+  } catch (error) {
+    console.error('Failed to create share link:', error);
+    showToast('Failed to create share link.', 'error', 3000);
   }
 };
 
