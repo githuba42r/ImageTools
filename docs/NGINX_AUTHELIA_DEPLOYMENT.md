@@ -406,6 +406,45 @@ docker inspect imagetools-nginx | grep -A 10 Mounts
 docker-compose up nginx
 ```
 
+## Temporary Share Links
+
+ImageTools supports temporary, unauthenticated image share links at `/s/{token}`. These allow users to share an image URL with AI agents or external tools without requiring authentication.
+
+### Security Model
+
+- **Short-lived:** Links expire after a configurable period (default 5 minutes, controlled by `SHARE_LINK_EXPIRY_SECONDS`)
+- **High entropy:** 16-character base62 tokens (~95 bits of entropy) — infeasible to guess
+- **In-memory only:** Links are lost on server restart
+- **No enumeration:** No endpoint lists active links
+
+### Nginx Configuration
+
+The `/s/` path is configured to bypass `auth_basic` in `nginx.conf`:
+
+```nginx
+location /s/ {
+    auth_basic off;
+    proxy_pass http://imagetools:8081;
+    ...
+}
+```
+
+### Authelia Configuration
+
+If using Authelia, add `/s/` to the access control bypass rules in your Authelia configuration:
+
+```yaml
+access_control:
+  rules:
+    - domain: yourdomain.com
+      policy: bypass
+      resources:
+        - "^/s/.*$"
+        - "^/health$"
+```
+
+This ensures Authelia does not intercept requests to temporary share URLs.
+
 ## Security Considerations
 
 ### Production Recommendations
