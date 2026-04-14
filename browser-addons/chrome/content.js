@@ -184,13 +184,7 @@ function initSelectionCapture() {
         height: height
       };
       
-      // Position action buttons below the selection box
-      const boxBottom = currentRect.y + currentRect.height;
-      const boxLeft = currentRect.x;
-      
-      actionsContainer.style.left = boxLeft + 'px';
-      actionsContainer.style.top = (boxBottom + 10) + 'px';
-      actionsContainer.style.display = 'flex';
+      positionActionsContainer(actionsContainer, currentRect);
       
       // Change cursor to default
       overlay.style.cursor = 'default';
@@ -203,23 +197,16 @@ function initSelectionCapture() {
   });
   
   // OK button - capture and cleanup
-  okButton.addEventListener('click', async () => {
-    if (currentRect) {
-      // Hide UI immediately
-      actionsContainer.style.display = 'none';
-      overlay.style.display = 'none';
-      selectionBox.style.display = 'none';
-      
-      // Wait a moment for UI to disappear
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Capture the selection
-      await captureSelection(currentRect);
-      
-      // Clean up
-      cleanupSelectionUI();
-    }
-  });
+  const confirmCapture = async () => {
+    if (!currentRect) return;
+    actionsContainer.style.display = 'none';
+    overlay.style.display = 'none';
+    selectionBox.style.display = 'none';
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await captureSelection(currentRect);
+    cleanupSelectionUI();
+  };
+  okButton.addEventListener('click', confirmCapture);
   
   // Cancel button - cleanup
   cancelButton.addEventListener('click', () => {
@@ -236,14 +223,53 @@ function initSelectionCapture() {
     currentRect = null;
   });
   
-  // ESC to cancel
-  const escapeHandler = (e) => {
+  // Enter to capture, Escape to cancel
+  const keyHandler = (e) => {
     if (e.key === 'Escape') {
+      e.preventDefault();
+      document.removeEventListener('keydown', keyHandler);
       cleanupSelectionUI();
-      document.removeEventListener('keydown', escapeHandler);
+    } else if (e.key === 'Enter' && currentRect) {
+      e.preventDefault();
+      document.removeEventListener('keydown', keyHandler);
+      confirmCapture();
     }
   };
-  document.addEventListener('keydown', escapeHandler);
+  document.addEventListener('keydown', keyHandler);
+}
+
+// Position the actions container relative to the selection, keeping it in viewport.
+function positionActionsContainer(actionsContainer, rect) {
+  const margin = 10;
+  // Reveal off-screen to measure size, then place.
+  actionsContainer.style.visibility = 'hidden';
+  actionsContainer.style.left = '0px';
+  actionsContainer.style.top = '0px';
+  actionsContainer.style.display = 'flex';
+
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const { width: aw, height: ah } = actionsContainer.getBoundingClientRect();
+  const boxTop = rect.y;
+  const boxBottom = rect.y + rect.height;
+
+  let top;
+  if (boxBottom + margin + ah <= vh) {
+    top = boxBottom + margin;
+  } else if (boxTop - margin - ah >= 0) {
+    top = boxTop - margin - ah;
+  } else {
+    top = Math.max(margin, vh - ah - margin);
+  }
+
+  let left = rect.x;
+  const maxLeft = vw - aw - margin;
+  if (left > maxLeft) left = maxLeft;
+  if (left < margin) left = margin;
+
+  actionsContainer.style.left = left + 'px';
+  actionsContainer.style.top = top + 'px';
+  actionsContainer.style.visibility = 'visible';
 }
 
 // Clean up selection UI elements
