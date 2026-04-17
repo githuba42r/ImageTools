@@ -126,19 +126,28 @@ function initSelectionCapture() {
   document.body.appendChild(overlay);
   document.body.appendChild(selectionBox);
   document.body.appendChild(actionsContainer);
-  
+
+  // Prevent mouse events from bubbling to page-level listeners (e.g. click-outside
+  // handlers that dismiss modals). Applied to both the overlay and the actions
+  // container so button clicks also stay contained.
+  const blockPropagation = (e) => e.stopPropagation();
+  for (const evt of ['mousedown', 'mouseup', 'click', 'pointerdown', 'pointerup']) {
+    overlay.addEventListener(evt, blockPropagation);
+    actionsContainer.addEventListener(evt, blockPropagation);
+  }
+
   let startX = null;
   let startY = null;
   let isDrawing = false;
   let currentRect = null;
-  
+
   // Mouse down - start selection
   overlay.addEventListener('mousedown', (e) => {
     if (actionsContainer.style.display === 'flex') {
       // Already have a selection, ignore
       return;
     }
-    
+
     isDrawing = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -148,28 +157,28 @@ function initSelectionCapture() {
     selectionBox.style.height = '0px';
     selectionBox.style.display = 'block';
   });
-  
+
   // Mouse move - draw selection
   overlay.addEventListener('mousemove', (e) => {
     if (!isDrawing || startX === null) return;
-    
+
     const currentX = e.clientX;
     const currentY = e.clientY;
     const width = Math.abs(currentX - startX);
     const height = Math.abs(currentY - startY);
     const left = Math.min(startX, currentX);
     const top = Math.min(startY, currentY);
-    
+
     selectionBox.style.left = left + 'px';
     selectionBox.style.top = top + 'px';
     selectionBox.style.width = width + 'px';
     selectionBox.style.height = height + 'px';
   });
-  
+
   // Mouse up - finish selection and show actions
   overlay.addEventListener('mouseup', (e) => {
     if (!isDrawing) return;
-    
+
     isDrawing = false;
     
     const width = parseInt(selectionBox.style.width);

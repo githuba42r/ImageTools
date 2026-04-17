@@ -117,96 +117,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getAuthState' });
       const { authState } = response;
-      
+
       if (authState && authState.accessToken && authState.instanceUrl) {
-        // Validate token with backend to check if still authorized
-        // Use a timeout to prevent hanging
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
-          
-          const validateResponse = await fetch(`${authState.instanceUrl}/api/v1/addon/validate`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              access_token: authState.accessToken
-            }),
-            signal: controller.signal
-          });
-          
-          clearTimeout(timeoutId);
-          
-          if (validateResponse.ok) {
-            const validationData = await validateResponse.json();
-            
-            if (!validationData.valid) {
-              // Token is no longer valid - clear auth state and show connect screen
-              console.log('[Popup] Token no longer valid, clearing auth state');
-              await chrome.runtime.sendMessage({ action: 'logout' });
-              initialSection.style.display = 'block';
-              connectSection.style.display = 'none';
-              captureSection.style.display = 'none';
-              return;
-            }
-          } else if (validateResponse.status === 401) {
-            // Unauthorized - token revoked, clear auth state
-            console.log('[Popup] Token revoked (401), clearing auth state');
-            await chrome.runtime.sendMessage({ action: 'logout' });
-            initialSection.style.display = 'block';
-            connectSection.style.display = 'none';
-            captureSection.style.display = 'none';
-            return;
-          }
-        } catch (error) {
-          console.warn('[Popup] Failed to validate token:', error);
-          // Continue showing UI even if validation fails (network issue or timeout)
-        }
-        
-        // Connected - show capture buttons
+        // Show capture UI immediately from cached auth state. Token validation
+        // and current-tab checks run in the background and can revise the UI.
         initialSection.style.display = 'none';
         connectSection.style.display = 'none';
         captureSection.style.display = 'block';
-        
-        // Check if current tab can be captured
-        const tabCheck = await chrome.runtime.sendMessage({ action: 'checkCurrentTab' });
-        
-        if (!tabCheck.canCapture) {
-          // Disable capture buttons and show message
-          captureVisibleBtn.disabled = true;
-          captureFullBtn.disabled = true;
-          captureSelectionBtn.disabled = true;
-          
-          // Add warning message if not already present
-          let warningMsg = document.getElementById('captureWarning');
-          if (!warningMsg) {
-            warningMsg = document.createElement('div');
-            warningMsg.id = 'captureWarning';
-            warningMsg.style.cssText = 'background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #92400e; line-height: 1.5;';
-            
-            if (tabCheck.isImageTools) {
-              warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on ImageTools pages for security.';
-            } else if (tabCheck.isRestricted) {
-              warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on browser internal pages.';
-            } else {
-              warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>This page cannot be captured.';
-            }
-            
-            captureSection.insertBefore(warningMsg, captureSection.firstChild);
-          }
-        } else {
-          // Enable capture buttons
-          captureVisibleBtn.disabled = false;
-          captureFullBtn.disabled = false;
-          captureSelectionBtn.disabled = false;
-          
-          // Remove warning message if present
-          const warningMsg = document.getElementById('captureWarning');
-          if (warningMsg) {
-            warningMsg.remove();
-          }
-        }
+
+        captureVisibleBtn.disabled = false;
+        captureFullBtn.disabled = false;
+        captureSelectionBtn.disabled = false;
+
+        const existingWarning = document.getElementById('captureWarning');
+        if (existingWarning) existingWarning.remove();
+
+        applyCurrentTabCheck();
+        validateTokenInBackground(authState);
       } else {
         // Not connected - show initial screen
         initialSection.style.display = 'block';
@@ -219,6 +146,76 @@ document.addEventListener('DOMContentLoaded', async () => {
       initialSection.style.display = 'block';
       connectSection.style.display = 'none';
       captureSection.style.display = 'none';
+    }
+  }
+
+  async function applyCurrentTabCheck() {
+    try {
+      const tabCheck = await chrome.runtime.sendMessage({ action: 'checkCurrentTab' });
+
+      // Bail if UI has moved off the capture section in the meantime
+      if (captureSection.style.display === 'none') return;
+
+      if (!tabCheck.canCapture) {
+        captureVisibleBtn.disabled = true;
+        captureFullBtn.disabled = true;
+        captureSelectionBtn.disabled = true;
+
+        let warningMsg = document.getElementById('captureWarning');
+        if (!warningMsg) {
+          warningMsg = document.createElement('div');
+          warningMsg.id = 'captureWarning';
+          warningMsg.style.cssText = 'background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px; margin-bottom: 15px; font-size: 13px; color: #92400e; line-height: 1.5;';
+
+          if (tabCheck.isImageTools) {
+            warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on ImageTools pages for security.';
+          } else if (tabCheck.isRestricted) {
+            warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>Screenshots are disabled on browser internal pages.';
+          } else {
+            warningMsg.innerHTML = '<strong>⚠️ Cannot capture</strong><br>This page cannot be captured.';
+          }
+
+          captureSection.insertBefore(warningMsg, captureSection.firstChild);
+        }
+      }
+    } catch (error) {
+      console.warn('[Popup] Failed to check current tab:', error);
+    }
+  }
+
+  async function validateTokenInBackground(authState) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+      const validateResponse = await fetch(`${authState.instanceUrl}/api/v1/addon/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: authState.accessToken }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      let invalid = false;
+      if (validateResponse.ok) {
+        const validationData = await validateResponse.json();
+        if (!validationData.valid) invalid = true;
+      } else if (validateResponse.status === 401) {
+        invalid = true;
+      }
+
+      if (invalid) {
+        console.log('[Popup] Token no longer valid, clearing auth state');
+        await chrome.runtime.sendMessage({ action: 'logout' });
+        initialSection.style.display = 'block';
+        connectSection.style.display = 'none';
+        captureSection.style.display = 'none';
+      }
+    } catch (error) {
+      // Network errors or timeouts: keep the optimistic UI — the upload path
+      // will surface any real auth failure via its own error handling.
+      console.warn('[Popup] Background token validation failed:', error);
     }
   }
   
