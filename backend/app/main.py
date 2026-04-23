@@ -21,7 +21,7 @@ from app.core.websocket_manager import manager as ws_manager
 from app.core.scheduler import start_scheduler, stop_scheduler
 from app.middleware import InternalAuthMiddleware
 from app.services.user_service import UserService
-from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing
+from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens
 
 # Configure logging
 logging.basicConfig(
@@ -112,6 +112,7 @@ app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["cha
 app.include_router(settings_router.router, prefix=settings.API_PREFIX)
 app.include_router(mobile.router, prefix=f"{settings.API_PREFIX}/mobile", tags=["mobile"])
 app.include_router(addon.router, prefix=f"{settings.API_PREFIX}/addon", tags=["addon"])
+app.include_router(mcp_tokens.router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
 app.include_router(sharing.router, prefix=settings.API_PREFIX)
 
 # Serve frontend static files (if they exist)
