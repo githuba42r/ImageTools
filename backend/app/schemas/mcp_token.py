@@ -1,10 +1,10 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class McpTokenCreate(BaseModel):
-    label: str
+    label: str = Field(min_length=1, max_length=120)
 
 
 class McpTokenCreateResponse(BaseModel):
