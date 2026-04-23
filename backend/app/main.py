@@ -73,22 +73,22 @@ async def lifespan(app: FastAPI):
             return await McpTokenService.validate(db, token)
 
     mcp = build_backend_mcp(session_factory=AsyncSessionLocal, verify_token=_verify_token)
-    # Call streamable_http_app() first — it initialises the session_manager lazily
+    # Set streamable_http_path to "/" before building the ASGI app so that
+    # mounting at "/mcp" yields the real endpoint at "/mcp" (not "/mcp/mcp").
+    mcp.settings.streamable_http_path = "/"
     mcp_http_app = mcp.streamable_http_app()
     app.mount("/mcp", mcp_http_app)
     logger.info("MCP server mounted at /mcp")
 
     async with AsyncExitStack() as stack:
+        # Register scheduler teardown first — fires even if subsequent setup raises.
+        stack.callback(stop_scheduler)
         await stack.enter_async_context(mcp.session_manager.run())
         logger.info("MCP session manager started")
 
         yield
 
     logger.info("Shutting down Image Tools API...")
-
-    # Stop background scheduler
-    stop_scheduler()
-    logger.info("Background scheduler stopped")
 
 
 # Create FastAPI app

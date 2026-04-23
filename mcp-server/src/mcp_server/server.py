@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from mcp.server.fastmcp import Context, FastMCP, Image
 from mcp.server.auth.provider import AccessToken, TokenVerifier
+from mcp.server.auth.middleware.auth_context import get_access_token
 
 from .backend import BackendClient
 from . import tools as tool_fns
@@ -57,12 +58,11 @@ def build_server(backend: BackendClient, verify_token, *, name: str = "imagetool
     else:
         mcp = FastMCP(name, json_response=True)
 
-    def _user_id(ctx: Context) -> str:
-        # FastMCP populates client_id from the verified AccessToken.
-        if ctx.client_id:
-            return ctx.client_id
-        # stdio (no auth) uses env var resolution wired at CLI layer
-        raise RuntimeError("no user_id in context; auth misconfigured")
+    def _user_id(ctx: Context) -> str:  # noqa: ARG001 — ctx kept for type annotation
+        tok = get_access_token()
+        if tok is None or not tok.client_id:
+            raise RuntimeError("no authenticated user in context")
+        return tok.client_id
 
     @mcp.tool()
     async def list_recent_images(count: int = 10, ctx: Context = None) -> dict[str, Any]:
