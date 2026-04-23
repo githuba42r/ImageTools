@@ -74,6 +74,14 @@
               </div>
             </button>
             
+            <button class="settings-menu-item" @click="openMcpTokens">
+              <span class="menu-icon">🔑</span>
+              <div class="menu-text">
+                <span class="menu-title">MCP Access Tokens</span>
+                <span class="menu-desc">Tokens for Claude Code and other MCP clients</span>
+              </div>
+            </button>
+
             <button class="settings-menu-item" @click="openAbout">
               <span class="menu-icon">ℹ️</span>
               <div class="menu-text">
@@ -258,6 +266,17 @@
       @save="handleEditorSave"
       @close="handleEditorClose"
     />
+
+    <!-- MCP Access Tokens Modal -->
+    <div v-if="showMcpTokenModal" class="modal-overlay" @click="showMcpTokenModal = false">
+      <div class="modal-content" @click.stop>
+        <button class="modal-close-btn" @click="showMcpTokenModal = false">✕</button>
+        <div class="modal-header">
+          <h2>🔑 MCP Access Tokens</h2>
+        </div>
+        <McpTokenManager />
+      </div>
+    </div>
 
     <!-- AI Settings Modal -->
     <div v-if="showAISettingsModal" class="modal-overlay" @click="showAISettingsModal = false">
@@ -1412,6 +1431,7 @@ import ImageEditor from './components/ImageEditor.vue';
 import OfflineModal from './components/OfflineModal.vue';
 import ToastNotification from './components/ToastNotification.vue';
 import ProfileManager from './components/ProfileManager.vue';
+import McpTokenManager from './components/McpTokenManager.vue';
 
 const userStore = useUserStore();
 const imageStore = useImageStore();
@@ -1440,6 +1460,7 @@ const showAboutModal = ref(false);
 const showImageCardSettingsModal = ref(false);
 const showMobileQRModal = ref(false);
 const showAddonModal = ref(false);
+const showMcpTokenModal = ref(false);
 
 // Addon authorization state
 const addonRegistrationUrl = ref(null);
@@ -2037,6 +2058,11 @@ const closeMobileQRAndAbout = () => {
 const openImageCardSettings = () => {
   showSettingsMenu.value = false;
   showImageCardSettingsModal.value = true;
+};
+
+const openMcpTokens = () => {
+  showMcpTokenModal.value = true;
+  showSettingsMenu.value = false;
 };
 
 // Mobile app pairing / QR code generation
@@ -2880,6 +2906,10 @@ const handleKeyboardShortcuts = (event) => {
     }
     if (showAboutModal.value) {
       showAboutModal.value = false;
+      return;
+    }
+    if (showMcpTokenModal.value) {
+      showMcpTokenModal.value = false;
       return;
     }
     if (showSettingsMenu.value) {
