@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -53,3 +53,22 @@ async def revoke_mcp_token(
     if not ok:
         raise HTTPException(status_code=404, detail="token not found or already revoked")
     return {"status": "revoked"}
+
+
+whoami_router = APIRouter(prefix="/mcp-tokens", tags=["mcp-tokens"])
+
+
+@whoami_router.get("/whoami")
+async def whoami(
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Resolve a bearer token to its owning user_id. Used by the stdio MCP
+    transport to identify which user to fetch images for."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="bearer token required")
+    token = authorization.split(" ", 1)[1]
+    user_id = await McpTokenService.validate(db, token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="invalid or revoked token")
+    return {"user_id": user_id}

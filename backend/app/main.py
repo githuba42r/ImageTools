@@ -130,6 +130,7 @@ app.include_router(settings_router.router, prefix=settings.API_PREFIX)
 app.include_router(mobile.router, prefix=f"{settings.API_PREFIX}/mobile", tags=["mobile"])
 app.include_router(addon.router, prefix=f"{settings.API_PREFIX}/addon", tags=["addon"])
 app.include_router(mcp_tokens.router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
+app.include_router(mcp_tokens.whoami_router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
 app.include_router(sharing.router, prefix=settings.API_PREFIX)
 
 # Serve frontend static files (if they exist)
