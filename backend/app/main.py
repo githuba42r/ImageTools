@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPExceptio
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, AsyncExitStack
 from pathlib import Path
 import logging
 import os
@@ -21,7 +21,9 @@ from app.core.websocket_manager import manager as ws_manager
 from app.core.scheduler import start_scheduler, stop_scheduler
 from app.middleware import InternalAuthMiddleware
 from app.services.user_service import UserService
+from app.services.mcp_token_service import McpTokenService
 from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens
+from mcp_server.http_app import build_backend_mcp
 
 # Configure logging
 logging.basicConfig(
@@ -51,24 +53,39 @@ VERSION_INFO = load_version_info()
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("Starting Image Tools API...")
-    
+
     # Initialize database
     await init_db()
     logger.info("Database initialized")
-    
+
     # Ensure the anonymous user exists (upsert — safe to call every startup)
     async with AsyncSessionLocal() as db:
         anon_user = await UserService.get_or_create_user(db)
         logger.info(f"Anonymous user ready: {anon_user.id}")
-    
+
     # Start background scheduler for cleanup tasks
     start_scheduler()
     logger.info("Background scheduler started")
-    
-    yield
-    
+
+    # Build and mount the MCP server
+    async def _verify_token(token: str):
+        async with AsyncSessionLocal() as db:
+            return await McpTokenService.validate(db, token)
+
+    mcp = build_backend_mcp(session_factory=AsyncSessionLocal, verify_token=_verify_token)
+    # Call streamable_http_app() first — it initialises the session_manager lazily
+    mcp_http_app = mcp.streamable_http_app()
+    app.mount("/mcp", mcp_http_app)
+    logger.info("MCP server mounted at /mcp")
+
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(mcp.session_manager.run())
+        logger.info("MCP session manager started")
+
+        yield
+
     logger.info("Shutting down Image Tools API...")
-    
+
     # Stop background scheduler
     stop_scheduler()
     logger.info("Background scheduler stopped")

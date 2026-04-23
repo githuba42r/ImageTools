@@ -94,6 +94,10 @@ COPY version.json /version.json
 # Create storage directory
 RUN mkdir -p /app/storage/temp
 
+# Install the MCP server package (editable) for the /mcp route
+COPY mcp-server /app/mcp-server
+RUN pip install --no-cache-dir -e /app/mcp-server
+
 # Expose port 8081 (backend will serve both API and static files)
 EXPOSE 8081
 
