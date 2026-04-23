@@ -2841,8 +2841,8 @@ const confirmClearAll = async () => {
   try {
     // If images are selected, delete only selected images
     // Otherwise, delete all images
-    const imagesToDelete = selectedCount.value > 0 
-      ? images.value.filter(img => selectedImages.value.includes(img.id))
+    const imagesToDelete = selectedCount.value > 0
+      ? images.value.filter(img => imageStore.selectedImages.includes(img.id))
       : images.value;
     
     const deletePromises = imagesToDelete.map(image => imageStore.deleteImage(image.id));
