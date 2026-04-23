@@ -1,6 +1,3 @@
-import pytest
-
-@pytest.mark.asyncio
 async def test_mcp_authorization_table_created(db_session):
     from app.models.models import McpAuthorization
     row = McpAuthorization(

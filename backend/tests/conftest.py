@@ -1,17 +1,8 @@
 """Shared pytest fixtures for backend tests."""
-import asyncio
-import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.core.database import Base
 from app.models import models  # noqa: F401 - ensure models are registered on Base
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest_asyncio.fixture
