@@ -3,6 +3,59 @@
 // Get build date from manifest (injected at build time)
 const BUILD_DATE = '2026-04-25T04:49:06.635Z';  // Will be updated by build script
 
+const TAG_KEY = 'imagetools_current_tag';
+
+async function loadCurrentTag() {
+  const got = await browser.storage.local.get([TAG_KEY]);
+  const input = document.getElementById('current-tag');
+  if (input) input.value = got[TAG_KEY] || '';
+}
+
+async function persistCurrentTag(tag) {
+  if (tag) {
+    await browser.storage.local.set({ [TAG_KEY]: tag });
+  } else {
+    await browser.storage.local.remove(TAG_KEY);
+  }
+}
+
+async function refreshTagSuggestions(authState) {
+  if (!authState || !authState.userId || !authState.instanceUrl) return;
+  try {
+    const r = await fetch(
+      `${authState.instanceUrl}/api/v1/users/${authState.userId}/tags`,
+      { headers: { 'Authorization': `Bearer ${authState.accessToken}` } }
+    );
+    if (!r.ok) return;
+    const tags = await r.json();
+    const dl = document.getElementById('tag-suggestions');
+    if (!dl) return;
+    dl.innerHTML = '';
+    for (const { tag } of tags) {
+      const opt = document.createElement('option');
+      opt.value = tag;
+      dl.appendChild(opt);
+    }
+  } catch (e) {
+    console.warn('[ImageTools] tag suggestions fetch failed', e);
+  }
+}
+
+function attachTagHandlers() {
+  const input = document.getElementById('current-tag');
+  const clearBtn = document.getElementById('clear-tag');
+  if (input) {
+    input.addEventListener('change', e => persistCurrentTag(e.target.value.trim()));
+    input.addEventListener('blur', e => persistCurrentTag(e.target.value.trim()));
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      if (input) input.value = '';
+      persistCurrentTag('');
+    });
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Display version information
   displayVersionInfo();
@@ -22,7 +75,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Check auth state on load
   await updateUI();
-  
+
+  // Attach tag handlers once — safe regardless of auth state
+  attachTagHandlers();
+
   // Show connect form button
   showConnectBtn.addEventListener('click', () => {
     initialSection.style.display = 'none';
@@ -134,6 +190,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         applyCurrentTabCheck();
         validateTokenInBackground(authState);
+        loadCurrentTag();
+        refreshTagSuggestions(authState);
       } else {
         // Not connected - show initial screen
         initialSection.style.display = 'block';

@@ -132,6 +132,10 @@
       border-top: 1px solid #e5e7eb;
       margin-top: 15px;
     }
+    .tag-row { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
+    .tag-row label { white-space: nowrap; font-size: 0.9em; margin: 0; font-weight: 400; }
+    .tag-row input { flex: 1; padding: 4px 6px; min-width: 0; }
+    .tag-row button { padding: 0 8px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -176,6 +180,13 @@
     
     <!-- Connected State -->
     <div id="captureSection" style="display: none;">
+      <div class="tag-row">
+        <label for="current-tag">Tag uploads as:</label>
+        <input id="current-tag" type="text" list="tag-suggestions"
+               placeholder="(none)" maxlength="64" autocomplete="off" />
+        <button id="clear-tag" type="button" title="Clear current tag">&#x00D7;</button>
+        <datalist id="tag-suggestions"></datalist>
+      </div>
       <div class="capture-buttons">
         <button id="captureVisibleBtn">📸 Capture Visible Area</button>
         <button id="captureFullBtn">📄 Capture Full Page</button>
