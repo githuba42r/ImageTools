@@ -22,7 +22,7 @@ from app.core.scheduler import start_scheduler, stop_scheduler
 from app.middleware import InternalAuthMiddleware
 from app.services.user_service import UserService
 from app.services.mcp_token_service import McpTokenService
-from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens
+from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens, tags
 from mcp_server.http_app import build_backend_mcp
 
 # Configure logging
@@ -135,6 +135,7 @@ app.include_router(mobile.router, prefix=f"{settings.API_PREFIX}/mobile", tags=[
 app.include_router(addon.router, prefix=f"{settings.API_PREFIX}/addon", tags=["addon"])
 app.include_router(mcp_tokens.router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
 app.include_router(mcp_tokens.whoami_router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
+app.include_router(tags.router, prefix=settings.API_PREFIX, tags=["tags"])
 app.include_router(sharing.router, prefix=settings.API_PREFIX)
 
 # Serve frontend static files (if they exist)
