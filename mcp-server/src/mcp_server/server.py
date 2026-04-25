@@ -4,7 +4,7 @@ from __future__ import annotations
 import base64
 from typing import Any, Callable
 
-from mcp.server.fastmcp import Context, FastMCP, Image
+from mcp.server.fastmcp import FastMCP, Image
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.middleware.auth_context import get_access_token
 
@@ -58,32 +58,32 @@ def build_server(backend: BackendClient, verify_token, *, name: str = "imagetool
     else:
         mcp = FastMCP(name, json_response=True)
 
-    def _user_id(ctx: Context) -> str:  # noqa: ARG001 — ctx kept for type annotation
+    def _user_id() -> str:
         tok = get_access_token()
         if tok is None or not tok.client_id:
             raise RuntimeError("no authenticated user in context")
         return tok.client_id
 
     @mcp.tool()
-    async def list_recent_images(count: int = 10, ctx: Context = None) -> dict[str, Any]:
+    async def list_recent_images(count: int = 10) -> dict[str, Any]:
         """List metadata for the N most recent images for the authenticated user,
         newest first. Does not return image bytes — use get_image or
         get_recent_images to fetch content."""
-        return await tool_fns.list_recent_images(backend, _user_id(ctx), count)
+        return await tool_fns.list_recent_images(backend, _user_id(), count)
 
     @mcp.tool()
-    async def get_image(id: str, ctx: Context = None) -> list:
+    async def get_image(id: str) -> list:
         """Fetch one image by id as an MCP image content block, along with
         its metadata."""
-        result = await tool_fns.get_image(backend, _user_id(ctx), id)
+        result = await tool_fns.get_image(backend, _user_id(), id)
         return _to_mcp_content(result["data"], result["mime_type"], result["meta"])
 
     @mcp.tool()
-    async def get_recent_images(count: int = 1, ctx: Context = None) -> list:
+    async def get_recent_images(count: int = 1) -> list:
         """Fetch the N most recent images (up to 6) as MCP image content blocks,
         newest first, with metadata for each. For larger batches use
         list_recent_images + get_image."""
-        result = await tool_fns.get_recent_images(backend, _user_id(ctx), count)
+        result = await tool_fns.get_recent_images(backend, _user_id(), count)
         out: list = []
         for img in result["images"]:
             out.extend(_to_mcp_content(img["data"], img["mime_type"], img["meta"]))

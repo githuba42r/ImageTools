@@ -14,7 +14,7 @@ import httpx
 
 from .backend_http import HttpBackendClient
 from . import tools as tool_fns
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp import FastMCP
 
 
 async def _resolve_user_id(base_url: str, token: str) -> str:
