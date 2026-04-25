@@ -36,6 +36,10 @@
       </span>
     </div>
 
+    <div v-if="image.tags && image.tags.length" class="tag-chips">
+      <span v-for="t in image.tags" :key="t" class="tag-chip">{{ t }}</span>
+    </div>
+
     <div class="card-actions" @click.stop>
       <div class="icon-buttons" v-if="!showDeleteConfirm">
           <!-- Compress Preset Button -->
@@ -1207,6 +1211,21 @@ onBeforeUnmount(() => {
 .info-item.compression-ratio .value {
   color: #4CAF50;
   font-weight: 600;
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.tag-chip {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  background: #eef;
+  color: #336;
+  border-radius: 999px;
 }
 
 .card-actions {
