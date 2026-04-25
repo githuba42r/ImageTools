@@ -20,20 +20,23 @@
     </div>
 
     <div class="image-info">
-      <span class="info-item has-tooltip-card" :title="expirationTooltip">
-        <span class="label">Size:</span>
-        <span class="value">{{ formatSize(image.current_size) }} / {{ formatSize(image.original_size) }}</span>
-      </span>
-      <span class="info-separator">•</span>
-      <span class="info-item has-tooltip-card" :title="expirationTooltip">
-        <span class="label">Dim:</span>
-        <span class="value">{{ image.width }} × {{ image.height }}</span>
-      </span>
-      <span v-if="compressionRatio" class="info-separator">•</span>
-      <span v-if="compressionRatio" class="info-item compression-ratio has-tooltip-card" :title="expirationTooltip">
-        <span class="label">Saved:</span>
-        <span class="value">{{ compressionRatio }}%</span>
-      </span>
+      <div class="info-line">
+        <span class="info-item has-tooltip-card" :title="expirationTooltip">
+          <span class="label">Size:</span>
+          <span class="value">{{ formatSize(image.current_size) }} / {{ formatSize(image.original_size) }}</span>
+        </span>
+        <span v-if="compressionRatio" class="info-separator">•</span>
+        <span v-if="compressionRatio" class="info-item compression-ratio has-tooltip-card" :title="expirationTooltip">
+          <span class="label">Saved:</span>
+          <span class="value">{{ compressionRatio }}%</span>
+        </span>
+      </div>
+      <div class="info-line">
+        <span class="info-item has-tooltip-card" :title="expirationTooltip">
+          <span class="label">Dim:</span>
+          <span class="value">{{ image.width }} × {{ image.height }}</span>
+        </span>
+      </div>
     </div>
 
     <div v-if="image.tags && image.tags.length" class="tag-chips">
@@ -1171,6 +1174,12 @@ onBeforeUnmount(() => {
 .image-info {
   margin-bottom: 0.5rem;
   font-size: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.info-line {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
