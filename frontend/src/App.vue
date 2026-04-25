@@ -36,7 +36,33 @@
             </span>
           </div>
         </div>
-        
+
+        <!-- Tag filter sits in the centre of the top bar -->
+        <div
+          v-if="imageCount > 0 && imageStore.availableTags.length > 0"
+          class="header-center"
+        >
+          <div class="tag-filter-bar header-filter">
+            <span class="tag-filter-label">Filter by tag:</span>
+            <button
+              v-for="t in imageStore.availableTags"
+              :key="t"
+              class="tag-filter-chip"
+              :class="{ active: imageStore.selectedTagFilters.includes(t.toLowerCase()) }"
+              @click="imageStore.toggleTagFilter(t)"
+            >{{ t }}</button>
+            <button
+              v-if="imageStore.hasTagFilter"
+              class="tag-filter-clear"
+              @click="imageStore.clearTagFilters()"
+              title="Clear tag filter"
+            >✕ clear</button>
+            <span v-if="imageStore.hasTagFilter" class="tag-filter-count">
+              {{ imageStore.filteredImageCount }} of {{ imageCount }}
+            </span>
+          </div>
+        </div>
+
         <!-- Settings button - always visible -->
         <div class="settings-menu-container">
           <button 
@@ -169,30 +195,6 @@
 
           <UploadArea @upload-complete="handleUploadComplete" :compact="true" :inline="true" />
         </div>
-      </div>
-
-      <!-- Tag filter row inside the top bar; visible only when there are tagged images -->
-      <div
-        v-if="imageCount > 0 && imageStore.availableTags.length > 0"
-        class="tag-filter-bar header-filter"
-      >
-        <span class="tag-filter-label">Filter by tag:</span>
-        <button
-          v-for="t in imageStore.availableTags"
-          :key="t"
-          class="tag-filter-chip"
-          :class="{ active: imageStore.selectedTagFilters.includes(t.toLowerCase()) }"
-          @click="imageStore.toggleTagFilter(t)"
-        >{{ t }}</button>
-        <button
-          v-if="imageStore.hasTagFilter"
-          class="tag-filter-clear"
-          @click="imageStore.clearTagFilters()"
-          title="Clear tag filter"
-        >✕ clear</button>
-        <span v-if="imageStore.hasTagFilter" class="tag-filter-count">
-          {{ imageStore.filteredImageCount }} of {{ imageCount }}
-        </span>
       </div>
     </header>
 
@@ -3208,9 +3210,21 @@ body {
 
 .header-left {
   text-align: left;
-  flex: 1;
+  flex: 0 1 auto;
   overflow: visible;
   position: relative;
+}
+
+/* Center cell of the top bar — holds the tag filter chip row.
+   Grows to fill the space between header-left and the right-side
+   controls; chips are horizontally centered inside it. */
+.header-center {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 1rem;
+  overflow: hidden;
 }
 
 .title-container {
@@ -3617,17 +3631,27 @@ body {
   overflow: visible;
 }
 
-/* Tag filter bar — sits inside the dark .app-header so the colour
-   palette matches the surrounding bar. */
+/* Tag filter chip row — sits in the centre of the top bar. Stays on a
+   single line and overflows horizontally if there are too many tags
+   to keep the header height stable. */
 .tag-filter-bar.header-filter {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.5rem 1rem 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
+.tag-filter-bar.header-filter::-webkit-scrollbar { height: 4px; }
+.tag-filter-bar.header-filter::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+.tag-filter-bar.header-filter > * { flex: 0 0 auto; }
 .tag-filter-label {
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.85);
