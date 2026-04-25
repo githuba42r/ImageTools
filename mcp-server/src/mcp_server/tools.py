@@ -22,11 +22,12 @@ def _meta_dict(m: ImageMeta) -> dict[str, Any]:
 
 
 async def list_recent_images(
-    backend: BackendClient, user_id: str, count: int = DEFAULT_LIST_COUNT
+    backend: BackendClient, user_id: str, count: int = DEFAULT_LIST_COUNT,
+    tag: str | None = None,
 ) -> dict[str, Any]:
     """Return metadata for the N most recent images, newest first."""
     clamped, was_clamped = _clamp(count, 1, MAX_LIST_COUNT)
-    metas = await backend.list_user_images(user_id, clamped)
+    metas = await backend.list_user_images(user_id, clamped, tag=tag)
     return {
         "images": [_meta_dict(m) for m in metas],
         "clamped": was_clamped,
@@ -48,11 +49,12 @@ async def get_image(
 
 
 async def get_recent_images(
-    backend: BackendClient, user_id: str, count: int = DEFAULT_RECENT_COUNT
+    backend: BackendClient, user_id: str, count: int = DEFAULT_RECENT_COUNT,
+    tag: str | None = None,
 ) -> dict[str, Any]:
     """Fetch bytes + metadata for the N most recent images, newest first."""
     clamped, was_clamped = _clamp(count, 1, MAX_RECENT_COUNT)
-    metas = await backend.list_user_images(user_id, clamped)
+    metas = await backend.list_user_images(user_id, clamped, tag=tag)
     images: list[dict[str, Any]] = []
     missing: list[str] = []
     for m in metas:

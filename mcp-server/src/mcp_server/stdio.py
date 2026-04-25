@@ -11,6 +11,7 @@ introspection TypeErrors on string parameter annotations.
 import asyncio
 import os
 import sys
+from typing import Optional
 
 import httpx
 
@@ -35,9 +36,9 @@ def _build_stdio_server(user_id: str, backend: HttpBackendClient) -> FastMCP:
     mcp = FastMCP("imagetools-stdio", json_response=True)
 
     @mcp.tool()
-    async def list_recent_images(count: int = 10) -> dict:
-        """List metadata for the N most recent images (newest first)."""
-        return await tool_fns.list_recent_images(backend, user_id, count)
+    async def list_recent_images(count: int = 10, tag: Optional[str] = None) -> dict:
+        """List metadata for the N most recent images (newest first); optionally filter by tag."""
+        return await tool_fns.list_recent_images(backend, user_id, count, tag=tag)
 
     @mcp.tool()
     async def get_image(id: str) -> list:
@@ -47,10 +48,10 @@ def _build_stdio_server(user_id: str, backend: HttpBackendClient) -> FastMCP:
         return _to_mcp_content(result["data"], result["mime_type"], result["meta"])
 
     @mcp.tool()
-    async def get_recent_images(count: int = 1) -> list:
-        """Fetch the N most recent images (up to 6) as MCP content blocks."""
+    async def get_recent_images(count: int = 1, tag: Optional[str] = None) -> list:
+        """Fetch the N most recent images (up to 6) as MCP content blocks; optionally filter by tag."""
         from .server import _to_mcp_content
-        result = await tool_fns.get_recent_images(backend, user_id, count)
+        result = await tool_fns.get_recent_images(backend, user_id, count, tag=tag)
         out: list = []
         for img in result["images"]:
             out.extend(_to_mcp_content(img["data"], img["mime_type"], img["meta"]))
