@@ -24,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import com.imagetools.mobile.data.models.ValidateAuthRequest
 import com.imagetools.mobile.data.network.RetrofitClient
 import com.imagetools.mobile.utils.PairingPreferences
+import com.imagetools.mobile.utils.TagPreferences
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -660,14 +661,20 @@ class ShareActivity : ComponentActivity() {
         val latitudePart = gpsMetadata?.get("latitude")?.toRequestBody("text/plain".toMediaTypeOrNull())
         val longitudePart = gpsMetadata?.get("longitude")?.toRequestBody("text/plain".toMediaTypeOrNull())
         val altitudePart = gpsMetadata?.get("altitude")?.toRequestBody("text/plain".toMediaTypeOrNull())
-        
-        // Upload with GPS metadata
+
+        // Read persisted tag and include in upload if set
+        val tagPrefs = TagPreferences(this@ShareActivity)
+        val tagValue = tagPrefs.getCurrentTag()
+        val tagBody = tagValue?.toRequestBody("text/plain".toMediaTypeOrNull())
+
+        // Upload with GPS metadata and optional tag
         val response = RetrofitClient.getApi().uploadImage(
             longTermSecret = secretPart,
             file = filePart,
             latitude = latitudePart,
             longitude = longitudePart,
-            altitude = altitudePart
+            altitude = altitudePart,
+            tag = tagBody
         )
         
         // Clean up temp file

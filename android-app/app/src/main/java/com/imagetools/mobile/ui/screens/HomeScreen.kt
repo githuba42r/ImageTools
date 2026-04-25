@@ -5,6 +5,8 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,12 +24,14 @@ import com.imagetools.mobile.data.models.ValidateAuthRequest
 import com.imagetools.mobile.data.models.ValidateSecretRequest
 import com.imagetools.mobile.data.network.RetrofitClient
 import com.imagetools.mobile.utils.PairingPreferences
+import com.imagetools.mobile.utils.TagPreferences
 import com.imagetools.mobile.utils.DeviceInfo
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val TAG = "HomeScreen"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     pairingPrefs: PairingPreferences,
@@ -42,6 +46,11 @@ fun HomeScreen(
     var showUnpairDialog by remember { mutableStateOf(false) }
     var isProcessingIntent by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    val tagPrefs = remember { TagPreferences(context) }
+    var tagInput by remember { mutableStateOf("") }
+    var tagSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+    var tagDropdownExpanded by remember { mutableStateOf(false) }
     
     // Function to validate pairing status
     val validatePairingStatus = {
@@ -188,6 +197,21 @@ fun HomeScreen(
         }
     }
     
+    // Load persisted tag and fetch suggestions when paired state changes
+    LaunchedEffect(isPaired) {
+        if (isPaired) {
+            tagInput = tagPrefs.getCurrentTag().orEmpty()
+            try {
+                val resp = RetrofitClient.getApi().listUserTags(sessionId.orEmpty())
+                if (resp.isSuccessful) {
+                    tagSuggestions = resp.body().orEmpty().map { it.tag }
+                }
+            } catch (_: Exception) {
+                // Network errors leave suggestions empty
+            }
+        }
+    }
+
     // Unpair confirmation dialog
     if (showUnpairDialog) {
         AlertDialog(
@@ -338,6 +362,62 @@ fun HomeScreen(
                         )
                     ) {
                         Text("Unpair Device")
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Tag uploads as", style = MaterialTheme.typography.titleMedium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            ExposedDropdownMenuBox(
+                                expanded = tagDropdownExpanded,
+                                onExpandedChange = { tagDropdownExpanded = it },
+                            ) {
+                                OutlinedTextField(
+                                    value = tagInput,
+                                    onValueChange = {
+                                        tagInput = it
+                                        scope.launch { tagPrefs.setCurrentTag(it) }
+                                    },
+                                    placeholder = { Text("(none)") },
+                                    singleLine = true,
+                                    trailingIcon = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (tagInput.isNotEmpty()) {
+                                                IconButton(onClick = {
+                                                    tagInput = ""
+                                                    scope.launch { tagPrefs.setCurrentTag(null) }
+                                                }) {
+                                                    Icon(Icons.Default.Close, contentDescription = "Clear tag")
+                                                }
+                                            }
+                                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = tagDropdownExpanded)
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(),
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = tagDropdownExpanded,
+                                    onDismissRequest = { tagDropdownExpanded = false },
+                                ) {
+                                    tagSuggestions
+                                        .filter { it.contains(tagInput, ignoreCase = true) }
+                                        .forEach { suggestion ->
+                                            DropdownMenuItem(
+                                                text = { Text(suggestion) },
+                                                onClick = {
+                                                    tagInput = suggestion
+                                                    tagDropdownExpanded = false
+                                                    scope.launch { tagPrefs.setCurrentTag(suggestion) }
+                                                },
+                                            )
+                                        }
+                                }
+                            }
+                        }
                     }
                 } else {
                     Text(
