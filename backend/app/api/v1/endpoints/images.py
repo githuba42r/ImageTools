@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import zipfile
 import os
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/images", tags=["images"])
 async def upload_image(
     user_id: str = Form(...),
     file: UploadFile = File(...),
+    tag: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
     """Upload a new image."""
@@ -36,7 +37,7 @@ async def upload_image(
 
     # Save image
     image = await ImageService.save_uploaded_image(
-        db, user_id, filename, file.file
+        db, user_id, filename, file.file, tag=tag
     )
 
     # Build response
@@ -52,7 +53,8 @@ async def upload_image(
         thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
         image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
         created_at=image.created_at,
-        updated_at=image.updated_at
+        updated_at=image.updated_at,
+        tags=ImageService.get_tags(image),
     )
 
 
@@ -77,7 +79,8 @@ async def get_user_images(
             thumbnail_url=f"{settings.API_PREFIX}/images/{img.id}/thumbnail",
             image_url=f"{settings.API_PREFIX}/images/{img.id}/current",
             created_at=img.created_at,
-            updated_at=img.updated_at
+            updated_at=img.updated_at,
+            tags=ImageService.get_tags(img),
         )
         for img in images
     ]
@@ -105,7 +108,8 @@ async def get_image(
         thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
         image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
         created_at=image.created_at,
-        updated_at=image.updated_at
+        updated_at=image.updated_at,
+        tags=ImageService.get_tags(image),
     )
 
 
@@ -289,7 +293,8 @@ async def save_edited_image(
         thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail?t={int(image.updated_at.timestamp() * 1000)}",
         image_url=f"{settings.API_PREFIX}/images/{image.id}/current?t={int(image.updated_at.timestamp() * 1000)}",
         created_at=image.created_at,
-        updated_at=image.updated_at
+        updated_at=image.updated_at,
+        tags=ImageService.get_tags(image),
     )
 
 
