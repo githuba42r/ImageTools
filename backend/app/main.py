@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPExceptio
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from contextlib import asynccontextmanager, AsyncExitStack
+from contextlib import asynccontextmanager
 from pathlib import Path
 import logging
 import os
@@ -63,11 +63,11 @@ async def lifespan(app: FastAPI):
         anon_user = await UserService.get_or_create_user(db)
         logger.info(f"Anonymous user ready: {anon_user.id}")
 
-    # Start background scheduler for cleanup tasks
-    start_scheduler()
-    logger.info("Background scheduler started")
-
-    # Build and mount the MCP server
+    # Build and mount the MCP server. Done before the scheduler so the
+    # scheduler's immediate "startup cleanup" job doesn't race with MCP
+    # session-manager entry — apscheduler runs that job as a top-level task,
+    # and starting it mid-await on session_manager.run() caused the in-flight
+    # aiosqlite query to surface a CancelledError.
     async def _verify_token(token: str):
         async with AsyncSessionLocal() as db:
             return await McpTokenService.validate(db, token)
@@ -80,13 +80,17 @@ async def lifespan(app: FastAPI):
     app.mount("/mcp", mcp_http_app)
     logger.info("MCP server mounted at /mcp")
 
-    async with AsyncExitStack() as stack:
-        # Register scheduler teardown first — fires even if subsequent setup raises.
-        stack.callback(stop_scheduler)
-        await stack.enter_async_context(mcp.session_manager.run())
+    async with mcp.session_manager.run():
         logger.info("MCP session manager started")
 
-        yield
+        # Start the background scheduler now that MCP is fully up.
+        start_scheduler()
+        logger.info("Background scheduler started")
+        try:
+            yield
+        finally:
+            stop_scheduler()
+            logger.info("Background scheduler stopped")
 
     logger.info("Shutting down Image Tools API...")
 
