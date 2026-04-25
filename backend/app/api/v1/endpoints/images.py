@@ -7,7 +7,7 @@ import zipfile
 import os
 from app.core.database import get_db
 from app.core.config import settings
-from app.schemas.schemas import ImageResponse, RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse
+from app.schemas.schemas import ImageResponse, ImageTagsUpdate, RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse
 from app.services.image_service import ImageService
 from app.services.user_service import UserService, ANONYMOUS_USER_ID
 
@@ -292,6 +292,36 @@ async def save_edited_image(
         format=image.format,
         thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail?t={int(image.updated_at.timestamp() * 1000)}",
         image_url=f"{settings.API_PREFIX}/images/{image.id}/current?t={int(image.updated_at.timestamp() * 1000)}",
+        created_at=image.created_at,
+        updated_at=image.updated_at,
+        tags=ImageService.get_tags(image),
+    )
+
+
+@router.put("/{image_id}/tags", response_model=ImageResponse)
+async def update_image_tags(
+    image_id: str,
+    payload: ImageTagsUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update tags for an image."""
+    image = await ImageService.get_image(db, image_id)
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    ImageService.set_tags(image, payload.tags)
+    await db.commit()
+    await db.refresh(image)
+    return ImageResponse(
+        id=image.id,
+        user_id=image.user_id,
+        original_filename=image.original_filename,
+        original_size=image.original_size,
+        current_size=image.current_size,
+        width=image.width,
+        height=image.height,
+        format=image.format,
+        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
+        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
         created_at=image.created_at,
         updated_at=image.updated_at,
         tags=ImageService.get_tags(image),

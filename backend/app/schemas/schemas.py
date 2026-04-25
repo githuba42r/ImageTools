@@ -43,6 +43,10 @@ class ImageResponse(BaseModel):
         from_attributes = True
 
 
+class ImageTagsUpdate(BaseModel):
+    tags: list[str]
+
+
 class CompressionProfileCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Profile name")
     max_width: int = Field(..., ge=100, le=10000, description="Maximum width in pixels")
