@@ -102,6 +102,13 @@ export const mcpTokenService = {
 };
 
 // Image API
+export const tagsService = {
+  async list(userId) {
+    const response = await api.get(`/users/${userId}/tags`);
+    return response.data;  // [{ tag, last_used_at }]
+  },
+};
+
 export const imageService = {
   async uploadImage(userId, file) {
     const formData = new FormData();
