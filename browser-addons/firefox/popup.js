@@ -19,11 +19,40 @@ async function persistCurrentTag(tag) {
   }
 }
 
-async function refreshTagSuggestions(authState) {
-  if (!authState || !authState.userId || !authState.instanceUrl) return;
+async function ensureUserId(authState) {
+  if (!authState || !authState.accessToken || !authState.instanceUrl) return null;
+  if (authState.userId) return authState.userId;
+  // Backfill for addons paired before user_id was stashed: hit /validate.
   try {
     const r = await fetch(
-      `${authState.instanceUrl}/api/v1/users/${authState.userId}/tags`,
+      `${authState.instanceUrl}/api/v1/addon/validate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authState.accessToken}`,
+        },
+        body: JSON.stringify({ access_token: authState.accessToken }),
+      }
+    );
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!data.valid || !data.user_id) return null;
+    authState.userId = data.user_id;
+    await browser.storage.local.set({ authState });
+    return data.user_id;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function refreshTagSuggestions(authState) {
+  if (!authState || !authState.instanceUrl) return;
+  const userId = await ensureUserId(authState);
+  if (!userId) return;
+  try {
+    const r = await fetch(
+      `${authState.instanceUrl}/api/v1/users/${userId}/tags`,
       { headers: { 'Authorization': `Bearer ${authState.accessToken}` } }
     );
     if (!r.ok) return;
