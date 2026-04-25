@@ -41,6 +41,8 @@ class Image(Base):
     gps_latitude = Column(Float, nullable=True)
     gps_longitude = Column(Float, nullable=True)
     gps_altitude = Column(Float, nullable=True)
+    # Free-text tags for MCP retrieval. JSON array stored as TEXT; default '[]'.
+    tags = Column(Text, nullable=False, server_default="[]")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
