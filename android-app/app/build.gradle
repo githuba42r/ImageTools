@@ -12,7 +12,7 @@ android {
         minSdk 26
         targetSdk 34
         versionCode 10703
-        versionName "1.7.3-rc.5"
+        versionName "1.7.3-rc.6"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
