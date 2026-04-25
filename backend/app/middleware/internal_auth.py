@@ -52,9 +52,11 @@ class InternalAuthMiddleware(BaseHTTPMiddleware):
     
     # Path prefixes that bypass internal auth (API endpoints with their own auth)
     BYPASS_PREFIXES = [
-        "/api/v1/mobile/",  # Mobile API uses long-term secrets
-        "/api/v1/addon/",   # Addon API uses OAuth tokens
-        "/s/",              # Temporary share links (public, ephemeral)
+        "/api/v1/mobile/",          # Mobile API uses long-term secrets
+        "/api/v1/addon/",           # Addon API uses OAuth tokens
+        "/api/v1/mcp-tokens/",      # MCP whoami uses bearer token (for stdio transport)
+        "/mcp",                     # MCP Streamable HTTP uses bearer token (FastMCP TokenVerifier)
+        "/s/",                      # Temporary share links (public, ephemeral)
     ]
     
     def __init__(self, app):

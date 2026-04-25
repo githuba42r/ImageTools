@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { imageService, compressionService, historyService } from '../services/api';
+import { imageService, compressionService, historyService, tagsService } from '../services/api';
 import { backgroundService } from '../services/backgroundService';
 import { useUserStore } from './userStore';
 
@@ -11,12 +11,34 @@ export const useImageStore = defineStore('image', {
     uploadProgress: {},
     presets: [],
     error: null,
+    availableTags: [],
+    // Lower-cased tag strings the user is filtering by. OR semantics:
+    // an image matches if it has ANY of these tags. Empty = no filter.
+    selectedTagFilters: [],
   }),
 
   getters: {
     imageCount: (state) => state.images.length,
     selectedCount: (state) => state.selectedImages.length,
     hasSelectedImages: (state) => state.selectedImages.length > 0,
+    filteredImages: (state) => {
+      if (state.selectedTagFilters.length === 0) return state.images;
+      const wanted = new Set(state.selectedTagFilters);
+      return state.images.filter(img =>
+        Array.isArray(img.tags) &&
+        img.tags.some(t => wanted.has(t.toLowerCase())),
+      );
+    },
+    filteredImageCount: (state, getters) => {
+      // Pinia option-syntax getter: re-derive from filteredImages.
+      if (state.selectedTagFilters.length === 0) return state.images.length;
+      const wanted = new Set(state.selectedTagFilters);
+      return state.images.filter(img =>
+        Array.isArray(img.tags) &&
+        img.tags.some(t => wanted.has(t.toLowerCase())),
+      ).length;
+    },
+    hasTagFilter: (state) => state.selectedTagFilters.length > 0,
   },
 
   actions: {
@@ -27,10 +49,36 @@ export const useImageStore = defineStore('image', {
       try {
         this.images = await imageService.getUserImages(userStore.userId);
         console.log(`Loaded ${this.images.length} images`);
+        // Refresh tag list whenever images reload so the filter UI stays in sync.
+        await this.loadUserTags();
       } catch (error) {
         this.error = error.message;
         console.error('Failed to load images:', error);
       }
+    },
+
+    async loadUserTags() {
+      const userStore = useUserStore();
+      if (!userStore.userId) return;
+      try {
+        const tags = await tagsService.list(userStore.userId);
+        this.availableTags = tags.map(t => t.tag);
+      } catch (error) {
+        // Non-fatal — fall back to empty list. Filter UI will hide itself.
+        this.availableTags = [];
+        console.warn('Failed to load tags:', error);
+      }
+    },
+
+    toggleTagFilter(tag) {
+      const key = tag.toLowerCase();
+      const i = this.selectedTagFilters.indexOf(key);
+      if (i === -1) this.selectedTagFilters.push(key);
+      else this.selectedTagFilters.splice(i, 1);
+    },
+
+    clearTagFilters() {
+      this.selectedTagFilters = [];
     },
 
     async uploadImage(file) {

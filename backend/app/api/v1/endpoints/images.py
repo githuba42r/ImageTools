@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import zipfile
 import os
 from app.core.database import get_db
 from app.core.config import settings
-from app.schemas.schemas import ImageResponse, RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse
+from app.schemas.schemas import ImageResponse, ImageTagsUpdate, RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse
 from app.services.image_service import ImageService
 from app.services.user_service import UserService, ANONYMOUS_USER_ID
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/images", tags=["images"])
 async def upload_image(
     user_id: str = Form(...),
     file: UploadFile = File(...),
+    tag: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
     """Upload a new image."""
@@ -36,7 +37,7 @@ async def upload_image(
 
     # Save image
     image = await ImageService.save_uploaded_image(
-        db, user_id, filename, file.file
+        db, user_id, filename, file.file, tag=tag
     )
 
     # Build response
@@ -52,17 +53,19 @@ async def upload_image(
         thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
         image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
         created_at=image.created_at,
-        updated_at=image.updated_at
+        updated_at=image.updated_at,
+        tags=ImageService.get_tags(image),
     )
 
 
 @router.get("/user/{user_id}", response_model=List[ImageResponse])
 async def get_user_images(
     user_id: str,
+    tag: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """Get all images for a user."""
-    images = await ImageService.get_user_images(db, user_id)
+    images = await ImageService.get_user_images(db, user_id, tag=tag)
 
     return [
         ImageResponse(
@@ -77,7 +80,8 @@ async def get_user_images(
             thumbnail_url=f"{settings.API_PREFIX}/images/{img.id}/thumbnail",
             image_url=f"{settings.API_PREFIX}/images/{img.id}/current",
             created_at=img.created_at,
-            updated_at=img.updated_at
+            updated_at=img.updated_at,
+            tags=ImageService.get_tags(img),
         )
         for img in images
     ]
@@ -105,7 +109,8 @@ async def get_image(
         thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
         image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
         created_at=image.created_at,
-        updated_at=image.updated_at
+        updated_at=image.updated_at,
+        tags=ImageService.get_tags(image),
     )
 
 
@@ -289,7 +294,38 @@ async def save_edited_image(
         thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail?t={int(image.updated_at.timestamp() * 1000)}",
         image_url=f"{settings.API_PREFIX}/images/{image.id}/current?t={int(image.updated_at.timestamp() * 1000)}",
         created_at=image.created_at,
-        updated_at=image.updated_at
+        updated_at=image.updated_at,
+        tags=ImageService.get_tags(image),
+    )
+
+
+@router.put("/{image_id}/tags", response_model=ImageResponse)
+async def update_image_tags(
+    image_id: str,
+    payload: ImageTagsUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update tags for an image."""
+    image = await ImageService.get_image(db, image_id)
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    ImageService.set_tags(image, payload.tags)
+    await db.commit()
+    await db.refresh(image)
+    return ImageResponse(
+        id=image.id,
+        user_id=image.user_id,
+        original_filename=image.original_filename,
+        original_size=image.original_size,
+        current_size=image.current_size,
+        width=image.width,
+        height=image.height,
+        format=image.format,
+        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
+        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
+        created_at=image.created_at,
+        updated_at=image.updated_at,
+        tags=ImageService.get_tags(image),
     )
 
 

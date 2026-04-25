@@ -4,7 +4,16 @@ import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.onFocusEvent
+import kotlinx.coroutines.delay
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,12 +31,14 @@ import com.imagetools.mobile.data.models.ValidateAuthRequest
 import com.imagetools.mobile.data.models.ValidateSecretRequest
 import com.imagetools.mobile.data.network.RetrofitClient
 import com.imagetools.mobile.utils.PairingPreferences
+import com.imagetools.mobile.utils.TagPreferences
 import com.imagetools.mobile.utils.DeviceInfo
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val TAG = "HomeScreen"
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     pairingPrefs: PairingPreferences,
@@ -42,6 +53,10 @@ fun HomeScreen(
     var showUnpairDialog by remember { mutableStateOf(false) }
     var isProcessingIntent by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    val tagPrefs = remember { TagPreferences(context) }
+    var tagInput by remember { mutableStateOf("") }
+    var tagSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     
     // Function to validate pairing status
     val validatePairingStatus = {
@@ -188,6 +203,21 @@ fun HomeScreen(
         }
     }
     
+    // Load persisted tag and fetch suggestions when paired state changes
+    LaunchedEffect(isPaired) {
+        if (isPaired) {
+            tagInput = tagPrefs.getCurrentTag().orEmpty()
+            try {
+                val resp = RetrofitClient.getApi().listUserTags(sessionId.orEmpty())
+                if (resp.isSuccessful) {
+                    tagSuggestions = resp.body().orEmpty().map { it.tag }
+                }
+            } catch (_: Exception) {
+                // Network errors leave suggestions empty
+            }
+        }
+    }
+
     // Unpair confirmation dialog
     if (showUnpairDialog) {
         AlertDialog(
@@ -263,20 +293,24 @@ fun HomeScreen(
             onCancel = { showScanner = false }
         )
     } else {
+        val tagInputBringIntoView = remember { BringIntoViewRequester() }
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(24.dp)
+                .imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // Top spacer to push content to center
             Spacer(modifier = Modifier.weight(1f))
-            
-            // Main content
+
+            // Main content — vertically scrollable so the tag input can be
+            // brought into view when the keyboard pops up.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.imagetools_logo),
@@ -338,6 +372,76 @@ fun HomeScreen(
                         )
                     ) {
                         Text("Unpair Device")
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Tag uploads as", style = MaterialTheme.typography.titleMedium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Plain text field — always editable, always shows the keyboard,
+                            // accepts arbitrary new tag text. Suggestions render inline
+                            // below as chips; tapping a chip fills the field.
+                            OutlinedTextField(
+                                value = tagInput,
+                                onValueChange = {
+                                    tagInput = it
+                                    scope.launch { tagPrefs.setCurrentTag(it) }
+                                },
+                                placeholder = { Text("(none)") },
+                                singleLine = true,
+                                trailingIcon = {
+                                    if (tagInput.isNotEmpty()) {
+                                        IconButton(onClick = {
+                                            tagInput = ""
+                                            scope.launch { tagPrefs.setCurrentTag(null) }
+                                        }) {
+                                            Icon(Icons.Default.Close, contentDescription = "Clear tag")
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .bringIntoViewRequester(tagInputBringIntoView)
+                                    .onFocusEvent { state ->
+                                        if (state.isFocused) {
+                                            scope.launch {
+                                                // Wait for the IME to start animating in.
+                                                delay(300)
+                                                tagInputBringIntoView.bringIntoView()
+                                            }
+                                        }
+                                    },
+                            )
+                            val suggestionMatches = tagSuggestions.filter {
+                                it.contains(tagInput, ignoreCase = true) &&
+                                    !it.equals(tagInput, ignoreCase = true)
+                            }
+                            if (suggestionMatches.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Existing tags",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    suggestionMatches.forEach { suggestion ->
+                                        AssistChip(
+                                            onClick = {
+                                                tagInput = suggestion
+                                                scope.launch { tagPrefs.setCurrentTag(suggestion) }
+                                            },
+                                            label = { Text(suggestion) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 } else {
                     Text(

@@ -37,9 +37,14 @@ class ImageResponse(BaseModel):
     image_url: str
     created_at: datetime
     updated_at: datetime
+    tags: list[str] = []
 
     class Config:
         from_attributes = True
+
+
+class ImageTagsUpdate(BaseModel):
+    tags: list[str]
 
 
 class CompressionProfileCreate(BaseModel):

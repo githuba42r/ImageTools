@@ -181,9 +181,10 @@ async function exchangeAuthCode(authorizationCode, instanceUrl) {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
       accessExpiresAt: data.access_expires_at,
-      refreshExpiresAt: data.refresh_expires_at
+      refreshExpiresAt: data.refresh_expires_at,
+      userId: data.user_id
     };
-    
+
     await saveAuthState(authState);
     console.log('[ImageTools] Successfully authenticated');
     return true;
@@ -364,9 +365,16 @@ async function uploadScreenshot(blob, filename) {
       authState = await getAuthState();
     }
     
+    // Read current tag (set in popup, persisted in storage)
+    const tagState = await chrome.storage.local.get(['imagetools_current_tag']);
+    const currentTag = tagState.imagetools_current_tag;
+
     const formData = new FormData();
     formData.append('file', blob, filename);
-    
+    if (currentTag) {
+      formData.append('tag', currentTag);
+    }
+
     const response = await fetch(`${authState.instanceUrl}${API_ENDPOINTS.upload}`, {
       method: 'POST',
       headers: {

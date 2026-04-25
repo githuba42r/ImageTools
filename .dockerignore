@@ -47,3 +47,15 @@ docs/
 # CI/CD
 .github
 .gitlab-ci.yml
+
+# MCP server
+mcp-server/**/__pycache__
+mcp-server/**/*.pyc
+mcp-server/**/*.pyo
+mcp-server/**/*.pyd
+mcp-server/.pytest_cache
+mcp-server/**/.pytest_cache
+mcp-server/.venv
+mcp-server/**/*.egg-info
+mcp-server/build
+mcp-server/dist

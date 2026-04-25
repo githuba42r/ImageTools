@@ -502,6 +502,18 @@ async def migrate_database():
         #  existed — meaning this migration ran before but sessions wasn't
         #  cleaned up. Skip silently.)
 
+        # ------------------------------------------------------------------ #
+        # BLOCK: add images.tags column for tag-based MCP retrieval          #
+        # ------------------------------------------------------------------ #
+        result = await conn.execute(text("PRAGMA table_info(images)"))
+        cols = [row[1] for row in result.fetchall()]
+        if "tags" not in cols:
+            logger.info("Adding tags column to images table...")
+            await conn.execute(
+                text("ALTER TABLE images ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'")
+            )
+            migrations_applied.append("images.tags")
+
         if migrations_applied:
             logger.info(f"Applied {len(migrations_applied)} migrations:")
             for migration in migrations_applied:

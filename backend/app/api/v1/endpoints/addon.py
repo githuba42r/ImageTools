@@ -2,8 +2,8 @@
 Browser addon authorization and screenshot upload endpoints
 """
 from datetime import datetime
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header, Request
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -172,6 +172,7 @@ async def validate_token(
 async def upload_screenshot(
     request: Request,
     file: UploadFile = File(...),
+    tag: Optional[str] = Form(None),
     authorization: str = Header(..., description="Bearer token"),
     db: AsyncSession = Depends(get_db)
 ):
@@ -205,7 +206,8 @@ async def upload_screenshot(
             db=db,
             user_id=auth.user_id,
             filename=file.filename or "screenshot.png",
-            file=file.file
+            file=file.file,
+            tag=tag,
         )
 
         # Broadcast new_image event to all WebSocket clients for this user

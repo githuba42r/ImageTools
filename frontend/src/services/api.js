@@ -83,7 +83,32 @@ export const userService = {
   },
 };
 
+// MCP Token API
+export const mcpTokenService = {
+  async list(userId) {
+    const res = await api.get(`/users/${userId}/mcp-tokens`);
+    return res.data;
+  },
+
+  async create(userId, label) {
+    const res = await api.post(`/users/${userId}/mcp-tokens`, { label });
+    return res.data; // { id, label, token, created_at }
+  },
+
+  async revoke(userId, tokenId) {
+    const res = await api.delete(`/users/${userId}/mcp-tokens/${tokenId}`);
+    return res.data;
+  },
+};
+
 // Image API
+export const tagsService = {
+  async list(userId) {
+    const response = await api.get(`/users/${userId}/tags`);
+    return response.data;  // [{ tag, last_used_at }]
+  },
+};
+
 export const imageService = {
   async uploadImage(userId, file) {
     const formData = new FormData();

@@ -41,6 +41,8 @@ class Image(Base):
     gps_latitude = Column(Float, nullable=True)
     gps_longitude = Column(Float, nullable=True)
     gps_altitude = Column(Float, nullable=True)
+    # Free-text tags for MCP retrieval. JSON array stored as TEXT; default '[]'.
+    tags = Column(Text, nullable=False, server_default="[]")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -213,3 +215,27 @@ class BrowserAddonAuthorization(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_used_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class McpAuthorization(Base):
+    """
+    Personal access tokens for MCP clients (e.g. Claude Code).
+
+    Long-lived tokens minted from the web UI, presented as Bearer tokens
+    to the MCP server. The plaintext token is shown once at creation;
+    only the sha256 hash is persisted.
+    """
+    __tablename__ = "mcp_authorizations"
+
+    id = Column(String, primary_key=True, index=True)  # UUID
+    user_id = Column(
+        String,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    label = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)

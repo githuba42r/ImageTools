@@ -173,6 +173,7 @@ async def upload_image_from_mobile(
     request: Request,
     long_term_secret: str = Form(...),
     file: UploadFile = File(...),
+    tag: Optional[str] = Form(None),
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
     altitude: Optional[float] = Form(None),
@@ -208,6 +209,7 @@ async def upload_image_from_mobile(
             user_id=pairing.user_id,
             filename=file.filename or "image.jpg",
             file=file.file,
+            tag=tag,
             gps_latitude=latitude,
             gps_longitude=longitude,
             gps_altitude=altitude

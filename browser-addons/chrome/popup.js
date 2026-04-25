@@ -1,7 +1,89 @@
 // ImageTools Popup Script (Chrome)
 
 // Get build date from manifest (injected at build time)
-const BUILD_DATE = '2026-04-23T10:43:33.115Z';  // Will be updated by build script
+const BUILD_DATE = '2026-04-25T13:31:44.351Z';  // Will be updated by build script
+
+const TAG_KEY = 'imagetools_current_tag';
+
+async function loadCurrentTag() {
+  const got = await chrome.storage.local.get([TAG_KEY]);
+  const input = document.getElementById('current-tag');
+  if (input) input.value = got[TAG_KEY] || '';
+}
+
+async function persistCurrentTag(tag) {
+  if (tag) {
+    await chrome.storage.local.set({ [TAG_KEY]: tag });
+  } else {
+    await chrome.storage.local.remove(TAG_KEY);
+  }
+}
+
+async function ensureUserId(authState) {
+  if (!authState || !authState.accessToken || !authState.instanceUrl) return null;
+  if (authState.userId) return authState.userId;
+  // Backfill for addons paired before user_id was stashed: hit /validate.
+  try {
+    const r = await fetch(
+      `${authState.instanceUrl}/api/v1/addon/validate`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authState.accessToken}`,
+        },
+        body: JSON.stringify({ access_token: authState.accessToken }),
+      }
+    );
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!data.valid || !data.user_id) return null;
+    authState.userId = data.user_id;
+    await chrome.storage.local.set({ authState });
+    return data.user_id;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function refreshTagSuggestions(authState) {
+  if (!authState || !authState.instanceUrl) return;
+  const userId = await ensureUserId(authState);
+  if (!userId) return;
+  try {
+    const r = await fetch(
+      `${authState.instanceUrl}/api/v1/users/${userId}/tags`,
+      { headers: { 'Authorization': `Bearer ${authState.accessToken}` } }
+    );
+    if (!r.ok) return;
+    const tags = await r.json();
+    const dl = document.getElementById('tag-suggestions');
+    if (!dl) return;
+    dl.innerHTML = '';
+    for (const { tag } of tags) {
+      const opt = document.createElement('option');
+      opt.value = tag;
+      dl.appendChild(opt);
+    }
+  } catch (e) {
+    console.warn('[ImageTools] tag suggestions fetch failed', e);
+  }
+}
+
+function attachTagHandlers() {
+  const input = document.getElementById('current-tag');
+  const clearBtn = document.getElementById('clear-tag');
+  if (input) {
+    input.addEventListener('change', e => persistCurrentTag(e.target.value.trim()));
+    input.addEventListener('blur', e => persistCurrentTag(e.target.value.trim()));
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      if (input) input.value = '';
+      persistCurrentTag('');
+    });
+  }
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Display version information
@@ -22,7 +104,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Check auth state on load
   await updateUI();
-  
+
+  // Attach tag handlers once — safe regardless of auth state
+  attachTagHandlers();
+
   // Show connect form button
   showConnectBtn.addEventListener('click', () => {
     initialSection.style.display = 'none';
@@ -134,6 +219,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         applyCurrentTabCheck();
         validateTokenInBackground(authState);
+        loadCurrentTag();
+        refreshTagSuggestions(authState);
       } else {
         // Not connected - show initial screen
         initialSection.style.display = 'block';

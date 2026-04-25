@@ -36,7 +36,33 @@
             </span>
           </div>
         </div>
-        
+
+        <!-- Tag filter sits in the centre of the top bar -->
+        <div
+          v-if="imageCount > 0 && imageStore.availableTags.length > 0"
+          class="header-center"
+        >
+          <div class="tag-filter-bar header-filter">
+            <span class="tag-filter-label">Filter by tag:</span>
+            <button
+              v-for="t in imageStore.availableTags"
+              :key="t"
+              class="tag-filter-chip"
+              :class="{ active: imageStore.selectedTagFilters.includes(t.toLowerCase()) }"
+              @click="imageStore.toggleTagFilter(t)"
+            >{{ t }}</button>
+            <button
+              v-if="imageStore.hasTagFilter"
+              class="tag-filter-clear"
+              @click="imageStore.clearTagFilters()"
+              title="Clear tag filter"
+            >✕ clear</button>
+            <span v-if="imageStore.hasTagFilter" class="tag-filter-count">
+              {{ imageStore.filteredImageCount }} of {{ imageCount }}
+            </span>
+          </div>
+        </div>
+
         <!-- Settings button - always visible -->
         <div class="settings-menu-container">
           <button 
@@ -74,6 +100,14 @@
               </div>
             </button>
             
+            <button class="settings-menu-item" @click="openMcpTokens">
+              <span class="menu-icon">🔑</span>
+              <div class="menu-text">
+                <span class="menu-title">MCP Access Tokens</span>
+                <span class="menu-desc">Tokens for Claude Code and other MCP clients</span>
+              </div>
+            </button>
+
             <button class="settings-menu-item" @click="openAbout">
               <span class="menu-icon">ℹ️</span>
               <div class="menu-text">
@@ -158,7 +192,7 @@
           </div>
           
           <div class="header-spacer"></div>
-          
+
           <UploadArea @upload-complete="handleUploadComplete" :compact="true" :inline="true" />
         </div>
       </div>
@@ -183,7 +217,7 @@
             <div class="main-content">
               <div class="image-gallery">
                 <ImageCard
-                  v-for="image in imageStore.images"
+                  v-for="image in imageStore.filteredImages"
                   :key="image.id"
                   :image="image"
                   :presets="presets"
@@ -258,6 +292,17 @@
       @save="handleEditorSave"
       @close="handleEditorClose"
     />
+
+    <!-- MCP Access Tokens Modal -->
+    <div v-if="showMcpTokenModal" class="modal-overlay" @click="showMcpTokenModal = false">
+      <div class="modal-content" @click.stop>
+        <button class="modal-close-btn" @click="showMcpTokenModal = false">✕</button>
+        <div class="modal-header">
+          <h2>🔑 MCP Access Tokens</h2>
+        </div>
+        <McpTokenManager />
+      </div>
+    </div>
 
     <!-- AI Settings Modal -->
     <div v-if="showAISettingsModal" class="modal-overlay" @click="showAISettingsModal = false">
@@ -1412,6 +1457,7 @@ import ImageEditor from './components/ImageEditor.vue';
 import OfflineModal from './components/OfflineModal.vue';
 import ToastNotification from './components/ToastNotification.vue';
 import ProfileManager from './components/ProfileManager.vue';
+import McpTokenManager from './components/McpTokenManager.vue';
 
 const userStore = useUserStore();
 const imageStore = useImageStore();
@@ -1440,6 +1486,7 @@ const showAboutModal = ref(false);
 const showImageCardSettingsModal = ref(false);
 const showMobileQRModal = ref(false);
 const showAddonModal = ref(false);
+const showMcpTokenModal = ref(false);
 
 // Addon authorization state
 const addonRegistrationUrl = ref(null);
@@ -2037,6 +2084,11 @@ const closeMobileQRAndAbout = () => {
 const openImageCardSettings = () => {
   showSettingsMenu.value = false;
   showImageCardSettingsModal.value = true;
+};
+
+const openMcpTokens = () => {
+  showMcpTokenModal.value = true;
+  showSettingsMenu.value = false;
 };
 
 // Mobile app pairing / QR code generation
@@ -2882,6 +2934,10 @@ const handleKeyboardShortcuts = (event) => {
       showAboutModal.value = false;
       return;
     }
+    if (showMcpTokenModal.value) {
+      showMcpTokenModal.value = false;
+      return;
+    }
     if (showSettingsMenu.value) {
       showSettingsMenu.value = false;
       return;
@@ -3154,9 +3210,21 @@ body {
 
 .header-left {
   text-align: left;
-  flex: 1;
+  flex: 0 1 auto;
   overflow: visible;
   position: relative;
+}
+
+/* Center cell of the top bar — holds the tag filter chip row.
+   Grows to fill the space between header-left and the right-side
+   controls; chips are horizontally centered inside it. */
+.header-center {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 1rem;
+  overflow: hidden;
 }
 
 .title-container {
@@ -3561,6 +3629,68 @@ body {
   gap: 1rem;
   padding-top: 0.5rem;
   overflow: visible;
+}
+
+/* Tag filter chip row — sits in the centre of the top bar. Stays on a
+   single line and overflows horizontally if there are too many tags
+   to keep the header height stable. */
+.tag-filter-bar.header-filter {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.tag-filter-bar.header-filter::-webkit-scrollbar { height: 4px; }
+.tag-filter-bar.header-filter::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+.tag-filter-bar.header-filter > * { flex: 0 0 auto; }
+.tag-filter-label {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-right: 0.25rem;
+}
+.tag-filter-chip {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.7rem;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.tag-filter-chip:hover { background: rgba(255, 255, 255, 0.22); }
+.tag-filter-chip.active {
+  background: white;
+  color: #4338ca;
+  border-color: white;
+  font-weight: 600;
+}
+.tag-filter-clear {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.tag-filter-clear:hover {
+  color: #fecaca;
+  border-color: #fecaca;
+}
+.tag-filter-count {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-left: auto;
 }
 
 /* Adjust grid columns based on card size */

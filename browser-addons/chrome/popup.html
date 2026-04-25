@@ -132,6 +132,32 @@
       border-top: 1px solid #e5e7eb;
       margin-top: 15px;
     }
+    .tag-row { display: flex; gap: 6px; align-items: center; margin: 8px 0 12px; }
+    .tag-row label { white-space: nowrap; font-size: 0.9em; margin: 0; font-weight: 500; color: #374151; }
+    .tag-row input {
+      flex: 1 1 auto;
+      min-width: 0;
+      padding: 8px 10px;
+      border: 2px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+    .tag-row input:focus { outline: none; border-color: #6366f1; }
+    /* Override the global `button { width: 100% }` rule so the X clear
+       button shrinks to its content instead of consuming the row. */
+    .tag-row button#clear-tag {
+      flex: 0 0 auto;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      font-size: 18px;
+      line-height: 1;
+      background: #e5e7eb;
+      color: #4b5563;
+      border-radius: 6px;
+    }
+    .tag-row button#clear-tag:hover { background: #d1d5db; }
   </style>
 </head>
 <body>
@@ -176,6 +202,13 @@
     
     <!-- Connected State -->
     <div id="captureSection" style="display: none;">
+      <div class="tag-row">
+        <label for="current-tag">Tag uploads as:</label>
+        <input id="current-tag" type="text" list="tag-suggestions"
+               placeholder="(none)" maxlength="64" autocomplete="off" />
+        <button id="clear-tag" type="button" title="Clear current tag">&#x00D7;</button>
+        <datalist id="tag-suggestions"></datalist>
+      </div>
       <div class="capture-buttons">
         <button id="captureVisibleBtn">📸 Capture Visible Area</button>
         <button id="captureFullBtn">📄 Capture Full Page</button>

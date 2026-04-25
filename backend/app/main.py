@@ -21,7 +21,9 @@ from app.core.websocket_manager import manager as ws_manager
 from app.core.scheduler import start_scheduler, stop_scheduler
 from app.middleware import InternalAuthMiddleware
 from app.services.user_service import UserService
-from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing
+from app.services.mcp_token_service import McpTokenService
+from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens, tags
+from mcp_server.http_app import build_backend_mcp
 
 # Configure logging
 logging.basicConfig(
@@ -51,27 +53,46 @@ VERSION_INFO = load_version_info()
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("Starting Image Tools API...")
-    
+
     # Initialize database
     await init_db()
     logger.info("Database initialized")
-    
+
     # Ensure the anonymous user exists (upsert — safe to call every startup)
     async with AsyncSessionLocal() as db:
         anon_user = await UserService.get_or_create_user(db)
         logger.info(f"Anonymous user ready: {anon_user.id}")
-    
-    # Start background scheduler for cleanup tasks
-    start_scheduler()
-    logger.info("Background scheduler started")
-    
-    yield
-    
+
+    # Build and mount the MCP server. Done before the scheduler so the
+    # scheduler's immediate "startup cleanup" job doesn't race with MCP
+    # session-manager entry — apscheduler runs that job as a top-level task,
+    # and starting it mid-await on session_manager.run() caused the in-flight
+    # aiosqlite query to surface a CancelledError.
+    async def _verify_token(token: str):
+        async with AsyncSessionLocal() as db:
+            return await McpTokenService.validate(db, token)
+
+    mcp = build_backend_mcp(session_factory=AsyncSessionLocal, verify_token=_verify_token)
+    # Set streamable_http_path to "/" before building the ASGI app so that
+    # mounting at "/mcp" yields the real endpoint at "/mcp" (not "/mcp/mcp").
+    mcp.settings.streamable_http_path = "/"
+    mcp_http_app = mcp.streamable_http_app()
+    app.mount("/mcp", mcp_http_app)
+    logger.info("MCP server mounted at /mcp")
+
+    async with mcp.session_manager.run():
+        logger.info("MCP session manager started")
+
+        # Start the background scheduler now that MCP is fully up.
+        start_scheduler()
+        logger.info("Background scheduler started")
+        try:
+            yield
+        finally:
+            stop_scheduler()
+            logger.info("Background scheduler stopped")
+
     logger.info("Shutting down Image Tools API...")
-    
-    # Stop background scheduler
-    stop_scheduler()
-    logger.info("Background scheduler stopped")
 
 
 # Create FastAPI app
@@ -112,6 +133,9 @@ app.include_router(chat.router, prefix=f"{settings.API_PREFIX}/chat", tags=["cha
 app.include_router(settings_router.router, prefix=settings.API_PREFIX)
 app.include_router(mobile.router, prefix=f"{settings.API_PREFIX}/mobile", tags=["mobile"])
 app.include_router(addon.router, prefix=f"{settings.API_PREFIX}/addon", tags=["addon"])
+app.include_router(mcp_tokens.router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
+app.include_router(mcp_tokens.whoami_router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
+app.include_router(tags.router, prefix=settings.API_PREFIX, tags=["tags"])
 app.include_router(sharing.router, prefix=settings.API_PREFIX)
 
 # Serve frontend static files (if they exist)
