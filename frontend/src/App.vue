@@ -166,9 +166,33 @@
           </div>
           
           <div class="header-spacer"></div>
-          
+
           <UploadArea @upload-complete="handleUploadComplete" :compact="true" :inline="true" />
         </div>
+      </div>
+
+      <!-- Tag filter row inside the top bar; visible only when there are tagged images -->
+      <div
+        v-if="imageCount > 0 && imageStore.availableTags.length > 0"
+        class="tag-filter-bar header-filter"
+      >
+        <span class="tag-filter-label">Filter by tag:</span>
+        <button
+          v-for="t in imageStore.availableTags"
+          :key="t"
+          class="tag-filter-chip"
+          :class="{ active: imageStore.selectedTagFilters.includes(t.toLowerCase()) }"
+          @click="imageStore.toggleTagFilter(t)"
+        >{{ t }}</button>
+        <button
+          v-if="imageStore.hasTagFilter"
+          class="tag-filter-clear"
+          @click="imageStore.clearTagFilters()"
+          title="Clear tag filter"
+        >✕ clear</button>
+        <span v-if="imageStore.hasTagFilter" class="tag-filter-count">
+          {{ imageStore.filteredImageCount }} of {{ imageCount }}
+        </span>
       </div>
     </header>
 
@@ -189,26 +213,6 @@
         <div v-else>
           <div v-if="imageCount > 0" class="content-with-images">
             <div class="main-content">
-              <!-- Tag filter row: visible only when the user has tagged images -->
-              <div v-if="imageStore.availableTags.length > 0" class="tag-filter-bar">
-                <span class="tag-filter-label">Filter by tag:</span>
-                <button
-                  v-for="t in imageStore.availableTags"
-                  :key="t"
-                  class="tag-filter-chip"
-                  :class="{ active: imageStore.selectedTagFilters.includes(t.toLowerCase()) }"
-                  @click="imageStore.toggleTagFilter(t)"
-                >{{ t }}</button>
-                <button
-                  v-if="imageStore.hasTagFilter"
-                  class="tag-filter-clear"
-                  @click="imageStore.clearTagFilters()"
-                  title="Clear tag filter"
-                >✕ clear</button>
-                <span v-if="imageStore.hasTagFilter" class="tag-filter-count">
-                  {{ imageStore.filteredImageCount }} of {{ imageCount }}
-                </span>
-              </div>
               <div class="image-gallery">
                 <ImageCard
                   v-for="image in imageStore.filteredImages"
@@ -3613,50 +3617,55 @@ body {
   overflow: visible;
 }
 
-/* Tag filter bar above the gallery */
-.tag-filter-bar {
+/* Tag filter bar — sits inside the dark .app-header so the colour
+   palette matches the surrounding bar. */
+.tag-filter-bar.header-filter {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.5rem 0.25rem 0.75rem;
-  margin-bottom: 0.25rem;
-  border-bottom: 1px solid #eef0f5;
+  padding: 0.5rem 1rem 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .tag-filter-label {
   font-size: 0.85rem;
-  color: #4b5563;
+  color: rgba(255, 255, 255, 0.85);
   margin-right: 0.25rem;
 }
 .tag-filter-chip {
   font-size: 0.8rem;
   padding: 0.25rem 0.7rem;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.tag-filter-chip:hover { background: #e5e7eb; }
+.tag-filter-chip:hover { background: rgba(255, 255, 255, 0.22); }
 .tag-filter-chip.active {
-  background: #6366f1;
-  color: white;
-  border-color: #6366f1;
+  background: white;
+  color: #4338ca;
+  border-color: white;
+  font-weight: 600;
 }
 .tag-filter-clear {
   font-size: 0.75rem;
   padding: 0.2rem 0.55rem;
   background: transparent;
-  color: #6b7280;
-  border: 1px dashed #d1d5db;
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px dashed rgba(255, 255, 255, 0.4);
   border-radius: 999px;
   cursor: pointer;
 }
-.tag-filter-clear:hover { color: #ef4444; border-color: #ef4444; }
+.tag-filter-clear:hover {
+  color: #fecaca;
+  border-color: #fecaca;
+}
 .tag-filter-count {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.7);
   margin-left: auto;
 }
 
