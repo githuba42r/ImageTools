@@ -1,8 +1,12 @@
-"""FastMCP server wiring: tools + token verification."""
-from __future__ import annotations
+"""FastMCP server wiring: tools + token verification.
+
+NB: deliberately no `from __future__ import annotations`. mcp 1.12.x
+introspects tool parameters with `issubclass(param.annotation, Context)`
+which TypeErrors on string annotations.
+"""
 
 import base64
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from mcp.server.fastmcp import FastMCP, Image
 from mcp.server.auth.provider import AccessToken, TokenVerifier

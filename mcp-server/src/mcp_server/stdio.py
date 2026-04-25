@@ -3,8 +3,10 @@
 Usage:
   IMAGETOOLS_URL=http://localhost:8082 IMAGETOOLS_TOKEN=imt_... \\
     python -m mcp_server.stdio
+
+NB: no `from __future__ import annotations` — mcp 1.12.x's tool
+introspection TypeErrors on string parameter annotations.
 """
-from __future__ import annotations
 
 import asyncio
 import os
