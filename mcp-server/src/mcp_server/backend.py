@@ -21,6 +21,7 @@ class ImageMeta:
     height: int
     format: str            # e.g. "PNG", "JPEG"
     current_size: int
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -31,8 +32,9 @@ class ImageBytes:
 
 
 class BackendClient(Protocol):
-    async def list_user_images(self, user_id: str, limit: int) -> list[ImageMeta]:
-        ...
+    async def list_user_images(
+        self, user_id: str, limit: int, tag: str | None = None
+    ) -> list[ImageMeta]: ...
 
     async def get_image(self, user_id: str, image_id: str) -> ImageBytes | None:
         """Return bytes + metadata, or None if not found / not owned by user."""

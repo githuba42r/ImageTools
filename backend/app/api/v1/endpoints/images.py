@@ -61,10 +61,11 @@ async def upload_image(
 @router.get("/user/{user_id}", response_model=List[ImageResponse])
 async def get_user_images(
     user_id: str,
+    tag: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """Get all images for a user."""
-    images = await ImageService.get_user_images(db, user_id)
+    images = await ImageService.get_user_images(db, user_id, tag=tag)
 
     return [
         ImageResponse(

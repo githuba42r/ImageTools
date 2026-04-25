@@ -32,9 +32,11 @@ class LocalBackendClient:
     def __init__(self, session_factory: Callable[[], AsyncContextManager[AsyncSession]]):
         self._session_factory = session_factory
 
-    async def list_user_images(self, user_id: str, limit: int) -> list[ImageMeta]:
+    async def list_user_images(
+        self, user_id: str, limit: int, tag: str | None = None,
+    ) -> list[ImageMeta]:
         async with self._session_factory() as db:
-            images = await ImageService.get_user_images(db, user_id)
+            images = await ImageService.get_user_images(db, user_id, tag=tag)
         # ImageService returns newest-first via created_at desc; take limit.
         images = images[:limit]
         return [
@@ -46,6 +48,7 @@ class LocalBackendClient:
                 height=img.height,
                 format=img.format,
                 current_size=img.current_size,
+                tags=tuple(ImageService.get_tags(img)),
             )
             for img in images
         ]
@@ -67,5 +70,6 @@ class LocalBackendClient:
                 height=img.height,
                 format=img.format,
                 current_size=img.current_size,
+                tags=tuple(ImageService.get_tags(img)),
             )
             return ImageBytes(meta=meta, data=data, mime_type=_mime_for(img.format))

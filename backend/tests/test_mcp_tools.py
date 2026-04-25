@@ -14,7 +14,7 @@ class FakeBackend:
         self._images = images
         self._bytes = bytes_map
 
-    async def list_user_images(self, user_id, limit):
+    async def list_user_images(self, user_id, limit, tag=None):
         return self._images[:limit]
 
     async def get_image(self, user_id, image_id):

@@ -8,7 +8,7 @@ from typing import BinaryIO, Optional
 from PIL import Image as PILImage, ImageOps
 from PIL.ExifTags import TAGS, GPSTAGS
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from app.models.models import Image, History
 from app.core.config import settings
 
@@ -238,14 +238,37 @@ class ImageService:
         return result.scalar_one_or_none()
     
     @staticmethod
-    async def get_user_images(db: AsyncSession, user_id: str) -> list[Image]:
-        """Get all images for a user."""
+    async def get_user_images(
+        db: AsyncSession, user_id: str, *, tag: Optional[str] = None,
+    ) -> list[Image]:
+        """Get all images for a user, optionally filtered by tag."""
+        if tag is None:
+            result = await db.execute(
+                select(Image)
+                .where(Image.user_id == user_id)
+                .order_by(Image.created_at.desc())
+            )
+            return list(result.scalars().all())
+        # Tag filter via SQLite json_each on the tags JSON-array column.
         result = await db.execute(
-            select(Image)
-            .where(Image.user_id == user_id)
-            .order_by(Image.created_at.desc())
+            text(
+                """
+                SELECT i.id FROM images i, json_each(i.tags) je
+                WHERE i.user_id = :user_id
+                  AND lower(je.value) = lower(:tag)
+                GROUP BY i.id
+                ORDER BY MAX(i.created_at) DESC
+                """
+            ),
+            {"user_id": user_id, "tag": tag},
         )
-        return result.scalars().all()
+        ids = [row[0] for row in result.fetchall()]
+        if not ids:
+            return []
+        # Re-fetch as Image ORM objects, preserving order
+        rows = await db.execute(select(Image).where(Image.id.in_(ids)))
+        by_id = {img.id: img for img in rows.scalars().all()}
+        return [by_id[i] for i in ids if i in by_id]
     
     @staticmethod
     async def delete_image(db: AsyncSession, image_id: str) -> bool:

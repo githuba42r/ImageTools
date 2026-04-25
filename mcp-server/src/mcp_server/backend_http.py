@@ -22,9 +22,13 @@ class HttpBackendClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def list_user_images(self, user_id: str, limit: int) -> list[ImageMeta]:
+    async def list_user_images(
+        self, user_id: str, limit: int, tag: str | None = None,
+    ) -> list[ImageMeta]:
+        params = {"tag": tag} if tag is not None else {}
         r = await self._client.get(
-            f"{self._base_url}/api/v1/images/user/{user_id}"
+            f"{self._base_url}/api/v1/images/user/{user_id}",
+            params=params,
         )
         r.raise_for_status()
         images = r.json()[:limit]
@@ -37,6 +41,7 @@ class HttpBackendClient:
                 height=img["height"],
                 format=img["format"],
                 current_size=img["current_size"],
+                tags=tuple(img.get("tags", [])),
             )
             for img in images
         ]
@@ -65,6 +70,7 @@ class HttpBackendClient:
             height=meta_json["height"],
             format=meta_json["format"],
             current_size=meta_json["current_size"],
+            tags=tuple(meta_json.get("tags", [])),
         )
         return ImageBytes(
             meta=meta,
