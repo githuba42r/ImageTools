@@ -514,6 +514,34 @@ async def migrate_database():
             )
             migrations_applied.append("images.tags")
 
+        # ------------------------------------------------------------------ #
+        # BLOCK: add images.pin_expires_at for MCP image pinning             #
+        # ------------------------------------------------------------------ #
+        result = await conn.execute(text("PRAGMA table_info(images)"))
+        cols = [row[1] for row in result.fetchall()]
+        if "pin_expires_at" not in cols:
+            logger.info("Adding pin_expires_at column to images table...")
+            await conn.execute(text("ALTER TABLE images ADD COLUMN pin_expires_at DATETIME"))
+            migrations_applied.append("images.pin_expires_at")
+
+        # ------------------------------------------------------------------ #
+        # BLOCK: add images.url_pepper for per-image presigned-URL revocation #
+        # ------------------------------------------------------------------ #
+        result = await conn.execute(text("PRAGMA table_info(images)"))
+        cols = [row[1] for row in result.fetchall()]
+        if "url_pepper" not in cols:
+            logger.info("Adding url_pepper column to images table and backfilling...")
+            # SQLite ALTER TABLE ADD COLUMN with NOT NULL requires a default.
+            # Empty string is the placeholder; we backfill below with random hex.
+            await conn.execute(
+                text("ALTER TABLE images ADD COLUMN url_pepper VARCHAR NOT NULL DEFAULT ''")
+            )
+            # randomblob(16) is evaluated per-row, so each image gets a unique pepper.
+            await conn.execute(
+                text("UPDATE images SET url_pepper = lower(hex(randomblob(16))) WHERE url_pepper = ''")
+            )
+            migrations_applied.append("images.url_pepper (with backfill)")
+
         if migrations_applied:
             logger.info(f"Applied {len(migrations_applied)} migrations:")
             for migration in migrations_applied:
