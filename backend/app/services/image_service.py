@@ -3,6 +3,8 @@ import os
 import shutil
 import json
 import base64
+import secrets
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import BinaryIO, Optional
 from PIL import Image as PILImage, ImageOps
@@ -743,6 +745,73 @@ class ImageService:
             seen_lower.add(key)
             unique.append(normalized)
         image.tags = json.dumps(unique)
+
+    @staticmethod
+    async def pin_image(db, image_id: str, duration_days: int):
+        """Pin or extend a pin. Sets pin_expires_at = max(existing, now + duration_days).
+
+        Re-pinning never shortens an existing longer pin. Returns the image
+        instance, or None if not found. Uses naive UTC to match how SQLite
+        round-trips DateTime values (the codebase convention).
+        """
+        if duration_days < 1 or duration_days > settings.PIN_MAX_DURATION_DAYS:
+            raise ValueError(
+                f"duration_days must be between 1 and {settings.PIN_MAX_DURATION_DAYS}"
+            )
+        image = await ImageService.get_image(db, image_id)
+        if image is None:
+            return None
+        target = datetime.utcnow() + timedelta(days=duration_days)
+        existing = image.pin_expires_at
+        # Strip tzinfo from existing if SQLAlchemy returned an aware datetime.
+        if existing is not None and existing.tzinfo is not None:
+            existing = existing.replace(tzinfo=None)
+        if existing is None or existing < target:
+            image.pin_expires_at = target
+            await db.commit()
+            await db.refresh(image)
+        return image
+
+    @staticmethod
+    async def unpin_image(db, image_id: str):
+        """Clear pin_expires_at. Returns the image instance, or None if not found."""
+        image = await ImageService.get_image(db, image_id)
+        if image is None:
+            return None
+        image.pin_expires_at = None
+        await db.commit()
+        await db.refresh(image)
+        return image
+
+    @staticmethod
+    async def rotate_url_pepper(db, image_id: str):
+        """Rotate this image's url_pepper. Invalidates every presigned URL for the image."""
+        image = await ImageService.get_image(db, image_id)
+        if image is None:
+            return None
+        image.url_pepper = secrets.token_hex(16)
+        await db.commit()
+        await db.refresh(image)
+        return image
+
+    @staticmethod
+    def effective_expires_at(created_at, pin_expires_at, retention_days: int):
+        """Return the effective deletion timestamp.
+
+        - Unpinned: created_at + retention_days
+        - Pinned with future pin_expires_at: pin_expires_at + retention_days
+        - Pinned with past pin_expires_at: treat as unpinned (created_at + retention_days)
+
+        All inputs and outputs are naive UTC (codebase convention).
+        """
+        now = datetime.utcnow()
+        # Normalise inputs to naive UTC (drop tzinfo if present).
+        ca = created_at.replace(tzinfo=None) if created_at and created_at.tzinfo else created_at
+        pe = pin_expires_at.replace(tzinfo=None) if pin_expires_at and pin_expires_at.tzinfo else pin_expires_at
+        anchor = ca
+        if pe is not None and pe > now:
+            anchor = pe
+        return anchor + timedelta(days=retention_days)
 
     @staticmethod
     async def _get_next_sequence(db: AsyncSession, image_id: str) -> int:
