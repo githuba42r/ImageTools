@@ -399,3 +399,20 @@ async def create_presigned_url_endpoint(
         image_id=image.id,
         pin_expires_at=refreshed.pin_expires_at,
     )
+
+
+@router.delete("/{image_id}/presigned-urls", status_code=200)
+async def revoke_presigned_urls_endpoint(
+    image_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke ALL outstanding presigned URLs for this image by rotating its pepper.
+
+    Used when a draft document referencing the screenshot is finalized, when a
+    screenshot is replaced, or whenever an embedded URL must stop resolving
+    without changing the image bytes themselves.
+    """
+    image = await ImageService.rotate_url_pepper(db, image_id)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return {"image_id": image.id, "revoked": True}

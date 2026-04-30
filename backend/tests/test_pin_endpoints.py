@@ -113,3 +113,46 @@ async def test_get_i_serves_bytes(
 async def test_get_i_404_for_invalid_token(client: AsyncClient):
     r = await client.get("/i/not-a-real-token")
     assert r.status_code == 404
+
+
+# --- Pepper rotation: revoke all presigned URLs for an image -------------- #
+
+@pytest.mark.asyncio
+async def test_rotate_pepper_invalidates_existing_url(
+    client: AsyncClient, seeded_image, db_session, tmp_path, monkeypatch,
+):
+    monkeypatch.setattr("app.services.presigned_url.settings.PRESIGNED_URL_SECRET", "test-secret")
+    real = tmp_path / "x.png"
+    real.write_bytes(b"\x89PNG\r\n\x1a\nFAKE")
+    import sqlalchemy
+    await db_session.execute(
+        sqlalchemy.text("UPDATE images SET current_path = :p WHERE id = :i"),
+        {"p": str(real), "i": seeded_image["id"]},
+    )
+    await db_session.commit()
+
+    # Mint a URL — confirm it works.
+    mint = await client.post(
+        f"/api/v1/images/{seeded_image['id']}/presigned-url", json={"ttl_days": 30},
+    )
+    url = mint.json()["url"]
+    path = url.split("://", 1)[1].split("/", 1)[1]
+    assert (await client.get(f"/{path}")).status_code == 200
+
+    # Revoke. The previously-minted URL must now 404.
+    rev = await client.delete(f"/api/v1/images/{seeded_image['id']}/presigned-urls")
+    assert rev.status_code == 200
+    assert (await client.get(f"/{path}")).status_code == 404
+
+    # And a freshly-minted URL must work again.
+    mint2 = await client.post(
+        f"/api/v1/images/{seeded_image['id']}/presigned-url", json={"ttl_days": 30},
+    )
+    path2 = mint2.json()["url"].split("://", 1)[1].split("/", 1)[1]
+    assert (await client.get(f"/{path2}")).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_rotate_pepper_404_for_unknown(client: AsyncClient):
+    r = await client.delete("/api/v1/images/missing/presigned-urls")
+    assert r.status_code == 404
