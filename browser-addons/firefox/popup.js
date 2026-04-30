@@ -1,7 +1,7 @@
 // ImageTools Popup Script
 
 // Get build date from manifest (injected at build time)
-const BUILD_DATE = '2026-04-30T14:11:40.273Z';  // Will be updated by build script
+const BUILD_DATE = '2026-04-30T23:47:22.983Z';  // Will be updated by build script
 
 const TAG_KEY = 'imagetools_current_tag';
 
