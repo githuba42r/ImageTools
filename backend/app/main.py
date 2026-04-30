@@ -23,7 +23,7 @@ from app.middleware import InternalAuthMiddleware
 from app.services.user_service import UserService
 from app.services.mcp_token_service import McpTokenService
 from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens, tags
-from app.api.endpoints import presigned
+from app.api.endpoints import presigned, share_view
 from mcp_server.http_app import build_backend_mcp
 
 # Configure logging
@@ -153,6 +153,9 @@ app.include_router(sharing.router, prefix=settings.API_PREFIX)
 # Presigned image URLs are deliberately at the root (no /api/v1) — short URLs
 # the agent embeds in documents.
 app.include_router(presigned.router)
+# /s/{token} HTML viewer + /s/{token}/raw bytes (replaces the old inline
+# FileResponse handler).
+app.include_router(share_view.router)
 
 # Serve frontend static files (if they exist)
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
@@ -180,20 +183,8 @@ async def get_version():
     }
 
 
-@app.get("/s/{token}")
-async def serve_shared_image(token: str):
-    """Serve a temporarily shared image. No authentication required."""
-    from app.services.share_service import get_shared_image
-
-    entry = get_shared_image(token)
-    if entry is None:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    return FileResponse(
-        entry.image_path,
-        media_type=entry.media_type,
-        filename=entry.original_filename,
-    )
+# /s/{token} (HTML viewer) and /s/{token}/raw (bytes) are registered via
+# app.api.endpoints.share_view below — see app.include_router(share_view.router).
 
 
 @app.websocket("/ws")
