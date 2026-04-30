@@ -23,6 +23,7 @@ from app.middleware import InternalAuthMiddleware
 from app.services.user_service import UserService
 from app.services.mcp_token_service import McpTokenService
 from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens, tags
+from app.api.endpoints import presigned
 from mcp_server.http_app import build_backend_mcp
 
 # Configure logging
@@ -149,6 +150,9 @@ app.include_router(mcp_tokens.router, prefix=settings.API_PREFIX, tags=["mcp-tok
 app.include_router(mcp_tokens.whoami_router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
 app.include_router(tags.router, prefix=settings.API_PREFIX, tags=["tags"])
 app.include_router(sharing.router, prefix=settings.API_PREFIX)
+# Presigned image URLs are deliberately at the root (no /api/v1) — short URLs
+# the agent embeds in documents.
+app.include_router(presigned.router)
 
 # Serve frontend static files (if they exist)
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"

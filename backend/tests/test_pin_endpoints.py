@@ -1,6 +1,6 @@
 """HTTP-level tests for pin/unpin/presigned-url endpoints."""
 import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from httpx import AsyncClient
 
 
@@ -54,4 +54,62 @@ async def test_delete_pin_clears(client: AsyncClient, seeded_image):
 @pytest.mark.asyncio
 async def test_delete_pin_404_for_unknown(client: AsyncClient):
     r = await client.delete("/api/v1/images/missing/pin")
+    assert r.status_code == 404
+
+
+# --- Presigned URL mint + serve ------------------------------------------- #
+
+@pytest.mark.asyncio
+async def test_mint_url_returns_absolute_with_request_host_and_bumps_pin(
+    client: AsyncClient, seeded_image, monkeypatch,
+):
+    monkeypatch.setattr("app.services.presigned_url.settings.PRESIGNED_URL_SECRET", "test-secret")
+    r = await client.post(
+        f"/api/v1/images/{seeded_image['id']}/presigned-url",
+        json={"ttl_days": 30},
+        headers={"x-forwarded-host": "imagetools.example.com", "x-forwarded-proto": "https"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["url"].startswith("https://imagetools.example.com/i/")
+    pin = datetime.fromisoformat(body["pin_expires_at"].rstrip("Z"))
+    delta = pin - datetime.utcnow()
+    assert timedelta(days=29, hours=23) < delta < timedelta(days=30, hours=1)
+
+
+@pytest.mark.asyncio
+async def test_mint_url_404_for_unknown(client: AsyncClient):
+    r = await client.post("/api/v1/images/missing/presigned-url", json={"ttl_days": 7})
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_i_serves_bytes(
+    client: AsyncClient, seeded_image, db_session, tmp_path, monkeypatch,
+):
+    monkeypatch.setattr("app.services.presigned_url.settings.PRESIGNED_URL_SECRET", "test-secret")
+    real = tmp_path / "x.png"
+    real.write_bytes(b"\x89PNG\r\n\x1a\nFAKE")
+    # Update the seeded image to point at the real file we just wrote.
+    import sqlalchemy
+    await db_session.execute(
+        sqlalchemy.text("UPDATE images SET current_path = :p WHERE id = :i"),
+        {"p": str(real), "i": seeded_image["id"]},
+    )
+    await db_session.commit()
+    mint = await client.post(
+        f"/api/v1/images/{seeded_image['id']}/presigned-url",
+        json={"ttl_days": 30},
+    )
+    url = mint.json()["url"]
+    # Strip the host part — AsyncClient is bound to base_url=http://test
+    path = url.split("://", 1)[1].split("/", 1)[1]
+    r = await client.get(f"/{path}")
+    assert r.status_code == 200
+    assert r.content.startswith(b"\x89PNG")
+
+
+@pytest.mark.asyncio
+async def test_get_i_404_for_invalid_token(client: AsyncClient):
+    r = await client.get("/i/not-a-real-token")
     assert r.status_code == 404

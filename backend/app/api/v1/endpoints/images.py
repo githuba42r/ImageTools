@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import zipfile
 import os
+import time as _time
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.url_utils import get_instance_url
+from app.services.presigned_url import build_token
 from app.schemas.schemas import (
     ImageResponse, ImageTagsUpdate, PinRequest, PresignedUrlRequest, PresignedUrlResponse,
     RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse,
@@ -359,3 +362,40 @@ async def unpin_image_endpoint(
     if image is None:
         raise HTTPException(status_code=404, detail="Image not found")
     return ImageService.to_response(image)
+
+
+@router.post("/{image_id}/presigned-url", response_model=PresignedUrlResponse)
+async def create_presigned_url_endpoint(
+    image_id: str,
+    payload: PresignedUrlRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Mint a long-lived HMAC-signed URL for embedding in agent-generated documents.
+
+    HMAC includes the image's url_pepper, so revoke_presigned_urls (rotates the
+    pepper) invalidates this URL. Side effect: bumps pin_expires_at to >= URL
+    expiry so the link stays alive.
+    """
+    image = await ImageService.get_image(db, image_id)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    ttl_days = settings.PIN_DEFAULT_DURATION_DAYS if payload.ttl_days is None else payload.ttl_days
+    try:
+        await ImageService.pin_image(db, image.id, duration_days=ttl_days)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    refreshed = await ImageService.get_image(db, image.id)
+
+    exp = int(_time.time()) + ttl_days * 86400
+    token = build_token(
+        image_id=image.id, expires_at_epoch=exp, pepper=refreshed.url_pepper,
+    )
+    base = get_instance_url(request).rstrip("/")
+    return PresignedUrlResponse(
+        url=f"{base}/i/{token}",
+        token=token,
+        expires_at=datetime.fromtimestamp(exp, tz=timezone.utc),
+        image_id=image.id,
+        pin_expires_at=refreshed.pin_expires_at,
+    )
