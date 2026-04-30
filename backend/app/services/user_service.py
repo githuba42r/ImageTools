@@ -108,12 +108,18 @@ class UserService:
         """
         import os
         from pathlib import Path
+        from sqlalchemy import or_
 
         cutoff = datetime.utcnow() - timedelta(days=days)
+        # Eligible for cleanup iff created_at < cutoff AND
+        # (pin_expires_at IS NULL OR pin_expires_at < cutoff). The latter
+        # means "image's pin expired more than `days` days ago" — so the
+        # effective expiration (pin_expires_at + days) is now in the past.
         result = await db.execute(
             select(Image)
             .where(Image.user_id == ANONYMOUS_USER_ID)
             .where(Image.created_at < cutoff)
+            .where(or_(Image.pin_expires_at.is_(None), Image.pin_expires_at < cutoff))
         )
         old_images = result.scalars().all()
 
