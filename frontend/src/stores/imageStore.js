@@ -155,10 +155,27 @@ export const useImageStore = defineStore('image', {
         await imageService.deleteImage(imageId);
         this.images = this.images.filter(img => img.id !== imageId);
         this.selectedImages = this.selectedImages.filter(id => id !== imageId);
+        // Reload tags — the deleted image may have been the last carrier of
+        // one or more tags. The /tags endpoint already excludes orphans
+        // server-side, so this just resyncs the frontend cache.
+        await this.loadUserTags();
         console.log('Image deleted:', imageId);
       } catch (error) {
         this.error = error.message;
         console.error('Failed to delete image:', error);
+        throw error;
+      }
+    },
+
+    async unpinImage(imageId) {
+      try {
+        const updated = await imageService.unpinImage(imageId);
+        const index = this.images.findIndex(img => img.id === imageId);
+        if (index !== -1) this.images[index] = updated;
+        return updated;
+      } catch (error) {
+        this.error = error.response?.data?.detail || error.message;
+        console.error('Failed to unpin image:', error);
         throw error;
       }
     },

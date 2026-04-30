@@ -9,7 +9,10 @@
   >
     <div class="image-preview" @click.stop="handleImageClick">
       <img :src="thumbnailUrl" :alt="image.original_filename" :title="image.original_filename" />
-      
+      <div v-if="isPinned" class="pin-badge" :title="pinTooltip">
+        <span class="pin-icon">📌</span>
+      </div>
+
       <!-- Processing Overlay -->
       <div v-if="isProcessing" class="processing-overlay">
         <div class="processing-modal">
@@ -44,7 +47,7 @@
     </div>
 
     <div class="card-actions" @click.stop>
-      <div class="icon-buttons" v-if="!showDeleteConfirm">
+      <div class="icon-buttons" v-if="!showDeleteConfirm && !showUnpinConfirm && !showInvalidateLinksConfirm">
           <!-- Compress Preset Button -->
           <div class="preset-selector-wrapper">
             <button 
@@ -113,6 +116,24 @@
                 <span class="menu-icon">🔗</span>
                 <span class="menu-label">Copy Share Link</span>
               </button>
+
+              <button
+                @click="handleShareAction(handleCopyDocumentLink)"
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">🔖</span>
+                <span class="menu-label">Copy Document Link</span>
+              </button>
+
+              <button
+                @click="handleShareAction(() => showInvalidateLinksConfirm = true)"
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">⛔</span>
+                <span class="menu-label">Invalidate Document Links</span>
+              </button>
             </div>
           </div>
 
@@ -151,8 +172,18 @@
             </button>
             
             <div v-if="showMoreActionsMenu" class="more-actions-menu" @click.stop>
-              <button 
-                @click="handleMenuAction(openResizeModal)" 
+              <button
+                v-if="isPinned"
+                @click="handleMenuAction(() => showUnpinConfirm = true)"
+                class="menu-action"
+                :disabled="isProcessing"
+              >
+                <span class="menu-icon">📌</span>
+                <span class="menu-label">Unpin image</span>
+              </button>
+
+              <button
+                @click="handleMenuAction(openResizeModal)"
                 class="menu-action"
                 :disabled="isProcessing"
               >
@@ -218,21 +249,47 @@
         </div>
       
         <!-- Remove confirmation -->
-        <div v-else class="delete-confirm">
+        <div v-else-if="showDeleteConfirm" class="delete-confirm">
           <span class="delete-message">Remove {{ image.original_filename }}?</span>
           <div class="delete-actions">
-            <button 
-              @click="confirmDelete" 
+            <button
+              @click="confirmDelete"
               class="btn-confirm btn-danger"
               :disabled="isProcessing"
             >
               {{ isProcessing ? '⏳' : '✓' }} Remove
             </button>
-            <button 
-              @click="showDeleteConfirm = false" 
+            <button
+              @click="showDeleteConfirm = false"
               class="btn-confirm btn-cancel"
               :disabled="isProcessing"
             >
+              ✕ Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Unpin confirmation -->
+        <div v-else-if="showUnpinConfirm" class="delete-confirm">
+          <span class="delete-message">Unpin {{ image.original_filename }}? It will return to the normal retention schedule.</span>
+          <div class="delete-actions">
+            <button @click="confirmUnpin" class="btn-confirm btn-danger" :disabled="isProcessing">
+              {{ isProcessing ? '⏳' : '✓' }} Unpin
+            </button>
+            <button @click="showUnpinConfirm = false" class="btn-confirm btn-cancel" :disabled="isProcessing">
+              ✕ Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Invalidate Document Links confirmation -->
+        <div v-else-if="showInvalidateLinksConfirm" class="delete-confirm">
+          <span class="delete-message">Invalidate every existing Document Link for {{ image.original_filename }}? Anyone holding an old link will see a 404.</span>
+          <div class="delete-actions">
+            <button @click="confirmInvalidateLinks" class="btn-confirm btn-danger" :disabled="isProcessing">
+              {{ isProcessing ? '⏳' : '✓' }} Invalidate
+            </button>
+            <button @click="showInvalidateLinksConfirm = false" class="btn-confirm btn-cancel" :disabled="isProcessing">
               ✕ Cancel
             </button>
           </div>
@@ -355,7 +412,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { useImageStore } from '../stores/imageStore';
-import { historyService, shareService } from '../services/api';
+import { historyService, shareService, imageService } from '../services/api';
 import ChatInterface from './ChatInterface.vue';
 import { useToast } from '../composables/useToast';
 
@@ -400,6 +457,8 @@ const showMoreActionsMenu = ref(false);
 const showShareMenu = ref(false);
 const imageRefreshKey = ref(Date.now());
 const showDeleteConfirm = ref(false);
+const showUnpinConfirm = ref(false);
+const showInvalidateLinksConfirm = ref(false);
 const showChatInterface = ref(false);
 
 // Resize modal state
@@ -425,15 +484,31 @@ const compressionRatio = computed(() => {
   return Math.round(ratio);
 });
 
-// Upload date tooltip
+const isPinned = computed(() => {
+  if (!props.image.pin_expires_at) return false;
+  return new Date(props.image.pin_expires_at) > new Date();
+});
+
+const pinTooltip = computed(() => {
+  if (!isPinned.value) return '';
+  return `Pinned by AI agent until ${new Date(props.image.pin_expires_at).toLocaleString()}`;
+});
+
+// Upload date + auto-delete + pin tooltip
 const expirationTooltip = computed(() => {
-  if (!props.image.created_at) return 'Uploaded: unknown';
-  let createdDateStr = props.image.created_at;
-  if (!createdDateStr.endsWith('Z') && !createdDateStr.includes('+')) {
-    createdDateStr += 'Z';
+  const lines = [];
+  if (props.image.created_at) {
+    let s = props.image.created_at;
+    if (!s.endsWith('Z') && !s.includes('+')) s += 'Z';
+    lines.push(`Uploaded: ${new Date(s).toLocaleString()}`);
   }
-  const created = new Date(createdDateStr);
-  return `Uploaded: ${created.toLocaleString()}`;
+  if (props.image.effective_expires_at) {
+    lines.push(`Auto-deletes: ${new Date(props.image.effective_expires_at).toLocaleString()}`);
+  }
+  if (isPinned.value) {
+    lines.push(`Pinned until: ${new Date(props.image.pin_expires_at).toLocaleString()}`);
+  }
+  return lines.join('\n') || 'Uploaded: unknown';
 });
 
 // Resize computed properties
@@ -753,6 +828,52 @@ const confirmDelete = async () => {
     showDeleteConfirm.value = false;
   } finally {
     isProcessing.value = false;
+  }
+};
+
+const confirmUnpin = async () => {
+  isProcessing.value = true;
+  processingMessage.value = 'Unpinning...';
+  try {
+    await imageStore.unpinImage(props.image.id);
+    showUnpinConfirm.value = false;
+    showToast('Image unpinned', 'success', 2000);
+  } catch (e) {
+    showToast('Failed to unpin image', 'error', 3000);
+  } finally {
+    isProcessing.value = false;
+    processingMessage.value = '';
+  }
+};
+
+const handleCopyDocumentLink = async () => {
+  try {
+    const data = await imageService.createDocumentLink(props.image.id);  // default TTL = 90d
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(data.url);
+      const days = Math.round((new Date(data.expires_at) - new Date()) / 86400000);
+      showToast(`Document link copied! Valid for ~${days} days.`, 'success', 3000);
+    } else {
+      showToast(`Document URL: ${data.url}`, 'info', 8000);
+    }
+  } catch (error) {
+    console.error('Failed to create document link:', error);
+    showToast('Failed to create document link.', 'error', 3000);
+  }
+};
+
+const confirmInvalidateLinks = async () => {
+  isProcessing.value = true;
+  processingMessage.value = 'Revoking links...';
+  try {
+    await imageService.revokeDocumentLinks(props.image.id);
+    showInvalidateLinksConfirm.value = false;
+    showToast('All document links for this image revoked.', 'success', 3000);
+  } catch (e) {
+    showToast('Failed to revoke document links.', 'error', 3000);
+  } finally {
+    isProcessing.value = false;
+    processingMessage.value = '';
   }
 };
 
@@ -1099,6 +1220,23 @@ onBeforeUnmount(() => {
 }
 
 
+
+.pin-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(255, 235, 59, 0.95);
+  color: #5d4037;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 0.85rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  z-index: 5;
+}
+.pin-icon {
+  display: inline-block;
+  transform: rotate(-15deg);
+}
 
 .image-preview {
   width: 100%;
