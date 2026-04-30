@@ -41,21 +41,7 @@ async def upload_image(
     )
 
     # Build response
-    return ImageResponse(
-        id=image.id,
-        user_id=image.user_id,
-        original_filename=image.original_filename,
-        original_size=image.original_size,
-        current_size=image.current_size,
-        width=image.width,
-        height=image.height,
-        format=image.format,
-        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
-        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
-        created_at=image.created_at,
-        updated_at=image.updated_at,
-        tags=ImageService.get_tags(image),
-    )
+    return ImageService.to_response(image)
 
 
 @router.get("/user/{user_id}", response_model=List[ImageResponse])
@@ -66,25 +52,7 @@ async def get_user_images(
 ):
     """Get all images for a user."""
     images = await ImageService.get_user_images(db, user_id, tag=tag)
-
-    return [
-        ImageResponse(
-            id=img.id,
-            user_id=img.user_id,
-            original_filename=img.original_filename,
-            original_size=img.original_size,
-            current_size=img.current_size,
-            width=img.width,
-            height=img.height,
-            format=img.format,
-            thumbnail_url=f"{settings.API_PREFIX}/images/{img.id}/thumbnail",
-            image_url=f"{settings.API_PREFIX}/images/{img.id}/current",
-            created_at=img.created_at,
-            updated_at=img.updated_at,
-            tags=ImageService.get_tags(img),
-        )
-        for img in images
-    ]
+    return [ImageService.to_response(img) for img in images]
 
 
 @router.get("/{image_id}", response_model=ImageResponse)
@@ -96,22 +64,7 @@ async def get_image(
     image = await ImageService.get_image(db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-
-    return ImageResponse(
-        id=image.id,
-        user_id=image.user_id,
-        original_filename=image.original_filename,
-        original_size=image.original_size,
-        current_size=image.current_size,
-        width=image.width,
-        height=image.height,
-        format=image.format,
-        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
-        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
-        created_at=image.created_at,
-        updated_at=image.updated_at,
-        tags=ImageService.get_tags(image),
-    )
+    return ImageService.to_response(image)
 
 
 @router.get("/{image_id}/current")
@@ -282,21 +235,13 @@ async def save_edited_image(
 
     print(f"[EDIT] Returning response with dimensions: {image.width}x{image.height}")
 
-    return ImageResponse(
-        id=image.id,
-        user_id=image.user_id,
-        original_filename=image.original_filename,
-        original_size=image.original_size,
-        current_size=image.current_size,
-        width=image.width,
-        height=image.height,
-        format=image.format,
-        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail?t={int(image.updated_at.timestamp() * 1000)}",
-        image_url=f"{settings.API_PREFIX}/images/{image.id}/current?t={int(image.updated_at.timestamp() * 1000)}",
-        created_at=image.created_at,
-        updated_at=image.updated_at,
-        tags=ImageService.get_tags(image),
-    )
+    # Preserve cache-busting query strings on URLs after a content edit so
+    # browsers fetch the new bytes; everything else comes from the helper.
+    response = ImageService.to_response(image)
+    bust = int(image.updated_at.timestamp() * 1000)
+    response.thumbnail_url = f"{settings.API_PREFIX}/images/{image.id}/thumbnail?t={bust}"
+    response.image_url = f"{settings.API_PREFIX}/images/{image.id}/current?t={bust}"
+    return response
 
 
 @router.put("/{image_id}/tags", response_model=ImageResponse)
@@ -312,21 +257,7 @@ async def update_image_tags(
     ImageService.set_tags(image, payload.tags)
     await db.commit()
     await db.refresh(image)
-    return ImageResponse(
-        id=image.id,
-        user_id=image.user_id,
-        original_filename=image.original_filename,
-        original_size=image.original_size,
-        current_size=image.current_size,
-        width=image.width,
-        height=image.height,
-        format=image.format,
-        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
-        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
-        created_at=image.created_at,
-        updated_at=image.updated_at,
-        tags=ImageService.get_tags(image),
-    )
+    return ImageService.to_response(image)
 
 
 @router.get("/{image_id}/exif")

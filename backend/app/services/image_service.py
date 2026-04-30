@@ -795,6 +795,42 @@ class ImageService:
         return image
 
     @staticmethod
+    def to_response(image, *, settings_obj=None):
+        """Build the canonical ImageResponse from an Image ORM instance.
+
+        Centralises construction so new fields land in every endpoint at once.
+        """
+        from app.schemas.schemas import ImageResponse
+        from app.core.config import settings as default_settings
+        from app.services.user_service import ANONYMOUS_USER_ID
+
+        s = settings_obj or default_settings
+        eff = None
+        if image.user_id == ANONYMOUS_USER_ID:
+            eff = ImageService.effective_expires_at(
+                created_at=image.created_at,
+                pin_expires_at=image.pin_expires_at,
+                retention_days=s.ANONYMOUS_IMAGE_RETENTION_DAYS,
+            )
+        return ImageResponse(
+            id=image.id,
+            user_id=image.user_id,
+            original_filename=image.original_filename,
+            original_size=image.original_size,
+            current_size=image.current_size,
+            width=image.width,
+            height=image.height,
+            format=image.format,
+            thumbnail_url=f"{s.API_PREFIX}/images/{image.id}/thumbnail",
+            image_url=f"{s.API_PREFIX}/images/{image.id}/current",
+            created_at=image.created_at,
+            updated_at=image.updated_at,
+            tags=ImageService.get_tags(image),
+            pin_expires_at=image.pin_expires_at,
+            effective_expires_at=eff,
+        )
+
+    @staticmethod
     def effective_expires_at(created_at, pin_expires_at, retention_days: int):
         """Return the effective deletion timestamp.
 
