@@ -7,7 +7,10 @@ import zipfile
 import os
 from app.core.database import get_db
 from app.core.config import settings
-from app.schemas.schemas import ImageResponse, ImageTagsUpdate, RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse
+from app.schemas.schemas import (
+    ImageResponse, ImageTagsUpdate, PinRequest, PresignedUrlRequest, PresignedUrlResponse,
+    RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse,
+)
 from app.services.image_service import ImageService
 from app.services.user_service import UserService, ANONYMOUS_USER_ID
 
@@ -324,3 +327,35 @@ async def download_images_as_zip(
         filename=zip_filename,
         background=lambda: os.remove(zip_path) if os.path.exists(zip_path) else None
     )
+
+
+@router.put("/{image_id}/pin", response_model=ImageResponse)
+async def pin_image_endpoint(
+    image_id: str,
+    payload: PinRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Pin or extend a pin (MCP-only entrypoint).
+
+    Re-pinning never shortens an existing longer pin.
+    """
+    duration = settings.PIN_DEFAULT_DURATION_DAYS if payload.duration_days is None else payload.duration_days
+    try:
+        image = await ImageService.pin_image(db, image_id, duration_days=duration)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return ImageService.to_response(image)
+
+
+@router.delete("/{image_id}/pin", response_model=ImageResponse)
+async def unpin_image_endpoint(
+    image_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Unpin an image. Used by both the MCP unpin tool and the web UI."""
+    image = await ImageService.unpin_image(db, image_id)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return ImageService.to_response(image)
