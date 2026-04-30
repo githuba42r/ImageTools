@@ -1,3 +1,5 @@
+import secrets
+
 from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, Float, Boolean
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -43,6 +45,14 @@ class Image(Base):
     gps_altitude = Column(Float, nullable=True)
     # Free-text tags for MCP retrieval. JSON array stored as TEXT; default '[]'.
     tags = Column(Text, nullable=False, server_default="[]")
+    # MCP-only pinning. When non-null and in the future, the image is
+    # exempt from auto-cleanup until pin_expires_at + retention_days.
+    pin_expires_at = Column(DateTime(timezone=True), nullable=True)
+    # Per-image pepper folded into the HMAC of presigned URLs. Rotating this
+    # value invalidates every outstanding /i/{token} URL for THIS image only,
+    # without affecting any other image. Random 16-byte hex; never appears in
+    # the URL itself; never returned in API responses.
+    url_pepper = Column(String, nullable=False, default=lambda: secrets.token_hex(16))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
