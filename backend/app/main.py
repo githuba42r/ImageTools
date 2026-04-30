@@ -54,6 +54,18 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("Starting Image Tools API...")
 
+    # Bootstrap PRESIGNED_URL_SECRET if unset. Stable secret should be in .env;
+    # an ephemeral fallback keeps the app functional but invalidates outstanding
+    # presigned URLs on restart, which we surface as a warning.
+    if not settings.PRESIGNED_URL_SECRET:
+        import secrets as _secrets
+        settings.PRESIGNED_URL_SECRET = _secrets.token_hex(32)
+        logger.warning(
+            "PRESIGNED_URL_SECRET is not set. Generated an ephemeral secret; "
+            "previously-minted presigned URLs will be invalidated on restart. "
+            "Set PRESIGNED_URL_SECRET in .env for stable URLs."
+        )
+
     # Initialize database
     await init_db()
     logger.info("Database initialized")

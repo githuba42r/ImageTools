@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     SESSION_SECRET_KEY: str = "change-this-secret-key-in-production"
     ANONYMOUS_IMAGE_RETENTION_DAYS: int = 30
     SHARE_LINK_EXPIRY_SECONDS: int = 300  # TTL for temporary share links (default 5 minutes)
+    PIN_DEFAULT_DURATION_DAYS: int = 90      # Default duration for MCP-issued pins
+    PIN_MAX_DURATION_DAYS: int = 3650        # Hard cap on pin duration (~10 years)
+    # HMAC secret for presigned image URLs. If blank, the backend generates an
+    # ephemeral random secret at startup and logs a warning — URLs invalidate
+    # across restarts. Production must set this in .env.
+    PRESIGNED_URL_SECRET: str = ""
+    # Per-IP rate limit applied to /i/{token}, /s/{token}, /s/{token}/raw.
+    # slowapi syntax: "<count>/<period>" (e.g. "60/minute", "10/second").
+    RATE_LIMIT_IMAGE_ACCESS: str = "60/minute"
 
     # Upload
     MAX_UPLOAD_SIZE_MB: int = 20
