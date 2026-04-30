@@ -39,7 +39,18 @@ async def client(db_session: AsyncSession):
     from app.api.v1.endpoints import images, sharing
     from app.core.config import settings
 
+    # Reset slowapi state so tests that change RATE_LIMIT_IMAGE_ACCESS via
+    # monkeypatch start with a clean per-IP counter.
+    from app.core.rate_limit import get_limiter, reset_for_tests
+    from slowapi import _rate_limit_exceeded_handler
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.middleware import SlowAPIMiddleware
+    reset_for_tests()
+
     test_app = FastAPI()
+    test_app.state.limiter = get_limiter()
+    test_app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    test_app.add_middleware(SlowAPIMiddleware)
     test_app.include_router(images.router, prefix=settings.API_PREFIX)
     test_app.include_router(sharing.router, prefix=settings.API_PREFIX)
 

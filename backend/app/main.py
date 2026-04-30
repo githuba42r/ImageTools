@@ -24,6 +24,10 @@ from app.services.user_service import UserService
 from app.services.mcp_token_service import McpTokenService
 from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens, tags
 from app.api.endpoints import presigned, share_view
+from app.core.rate_limit import get_limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from mcp_server.http_app import build_backend_mcp
 
 # Configure logging
@@ -118,6 +122,13 @@ app = FastAPI(
     openapi_url=f"{settings.API_PREFIX}/openapi.json",
     lifespan=lifespan
 )
+
+# Rate limiting (per-IP) for the public image-serve routes /i/{token},
+# /s/{token}, /s/{token}/raw. Decorators on those handlers reference the
+# same limiter via app.core.rate_limit.get_limiter().
+app.state.limiter = get_limiter()
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # Add Internal Authentication Middleware (must be added before CORS)
 # This provides defense-in-depth security for Hardened (B) deployments

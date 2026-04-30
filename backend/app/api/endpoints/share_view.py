@@ -6,12 +6,13 @@ GET /s/{token}/raw  → image bytes (referenced by the page's <img> tag).
 """
 import os
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.rate_limit import get_limiter, image_access_limit
 from app.services.share_service import get_shared_image
 from app.services.image_service import ImageService
 from app.services.user_service import ANONYMOUS_USER_ID
@@ -78,7 +79,8 @@ def _render_viewer(*, token: str, image, link_expires_at, eff, is_pinned, tags) 
 
 
 @router.get("/{token}", response_class=HTMLResponse)
-async def view_share(token: str, db: AsyncSession = Depends(get_db)):
+@get_limiter().limit(image_access_limit)
+async def view_share(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     entry = get_shared_image(token)  # in-memory, synchronous
     if entry is None:
         raise HTTPException(status_code=404, detail="Invalid or expired link")
@@ -104,7 +106,8 @@ async def view_share(token: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{token}/raw")
-async def serve_share_raw(token: str, db: AsyncSession = Depends(get_db)):
+@get_limiter().limit(image_access_limit)
+async def serve_share_raw(request: Request, token: str, db: AsyncSession = Depends(get_db)):
     entry = get_shared_image(token)  # in-memory, synchronous
     if entry is None:
         raise HTTPException(status_code=404, detail="Invalid or expired link")
