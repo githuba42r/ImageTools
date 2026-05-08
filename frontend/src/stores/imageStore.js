@@ -167,6 +167,27 @@ export const useImageStore = defineStore('image', {
       }
     },
 
+    // Sequential delete for bulk operations. Avoids SQLite write contention
+    // from parallel DELETEs and only refreshes tags once at the end.
+    // Returns { succeeded, failed: [{id, error}] }.
+    async bulkDeleteImages(imageIds) {
+      const failed = [];
+      for (const id of imageIds) {
+        try {
+          await imageService.deleteImage(id);
+          this.images = this.images.filter(img => img.id !== id);
+          this.selectedImages = this.selectedImages.filter(s => s !== id);
+        } catch (error) {
+          failed.push({
+            id,
+            error: error.response?.data?.detail || error.message,
+          });
+        }
+      }
+      await this.loadUserTags();
+      return { succeeded: imageIds.length - failed.length, failed };
+    },
+
     async unpinImage(imageId) {
       try {
         const updated = await imageService.unpinImage(imageId);
