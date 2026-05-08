@@ -65,7 +65,25 @@ services:
       - "traefik.http.routers.imagetools-api-addon.service=imagetools-svc"
       - "traefik.http.routers.imagetools-api-addon.priority=100"
       # No middleware = bypasses all auth
-      
+
+      # High priority: Share viewer + raw bytes - bypasses all auth (5-min ephemeral tokens)
+      - "traefik.http.routers.imagetools-share.rule=Host(`imagetools.yourdomain.com`) && PathPrefix(`/s`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-share.entrypoints=https"
+      - "traefik.http.routers.imagetools-share.tls=true"
+      - "traefik.http.routers.imagetools-share.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-share.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-share.priority=100"
+      # No middleware = bypasses all auth (Basic Auth + Internal Auth header)
+
+      # High priority: Presigned image URLs - bypasses all auth (HMAC-signed, per-image pepper)
+      - "traefik.http.routers.imagetools-presigned.rule=Host(`imagetools.yourdomain.com`) && PathPrefix(`/i`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-presigned.entrypoints=https"
+      - "traefik.http.routers.imagetools-presigned.tls=true"
+      - "traefik.http.routers.imagetools-presigned.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-presigned.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-presigned.priority=100"
+      # No middleware = bypasses all auth (Basic Auth + Internal Auth header)
+
       # High priority: Health check - bypasses all auth
       - "traefik.http.routers.imagetools-health.rule=Host(`imagetools.yourdomain.com`) && Path(`/health`)"  # ← Replace domain
       - "traefik.http.routers.imagetools-health.entrypoints=https"

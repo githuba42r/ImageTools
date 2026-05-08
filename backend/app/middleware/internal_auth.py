@@ -57,6 +57,7 @@ class InternalAuthMiddleware(BaseHTTPMiddleware):
         "/api/v1/mcp-tokens/",      # MCP whoami uses bearer token (for stdio transport)
         "/mcp",                     # MCP Streamable HTTP uses bearer token (FastMCP TokenVerifier)
         "/s/",                      # Temporary share links (public, ephemeral)
+        "/i/",                      # Presigned image URLs (HMAC-signed, public)
     ]
     
     def __init__(self, app):
