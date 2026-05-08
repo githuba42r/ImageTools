@@ -182,6 +182,22 @@ export const imageService = {
     });
     return response.data;
   },
+
+  async unpinImage(imageId) {
+    const response = await api.delete(`/images/${imageId}/pin`);
+    return response.data;
+  },
+
+  async createDocumentLink(imageId, ttlDays) {
+    const body = ttlDays != null ? { ttl_days: ttlDays } : {};
+    const response = await api.post(`/images/${imageId}/presigned-url`, body);
+    return response.data;
+  },
+
+  async revokeDocumentLinks(imageId) {
+    const response = await api.delete(`/images/${imageId}/presigned-urls`);
+    return response.data;
+  },
 };
 
 // Compression API

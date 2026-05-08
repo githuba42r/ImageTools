@@ -38,6 +38,8 @@ class ImageResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     tags: list[str] = []
+    pin_expires_at: Optional[datetime] = None
+    effective_expires_at: Optional[datetime] = None  # null for users not subject to retention
 
     class Config:
         from_attributes = True
@@ -45,6 +47,22 @@ class ImageResponse(BaseModel):
 
 class ImageTagsUpdate(BaseModel):
     tags: list[str]
+
+
+class PinRequest(BaseModel):
+    duration_days: Optional[int] = None  # None = use server default
+
+
+class PresignedUrlRequest(BaseModel):
+    ttl_days: Optional[int] = None  # None = use server default; bumps pin if shorter
+
+
+class PresignedUrlResponse(BaseModel):
+    url: str                     # absolute URL with the web-UI hostname
+    token: str                   # the {payload}.{sig} portion (informational)
+    expires_at: datetime         # URL expiry
+    image_id: str
+    pin_expires_at: datetime     # the resulting pin expiry (>= expires_at)
 
 
 class CompressionProfileCreate(BaseModel):

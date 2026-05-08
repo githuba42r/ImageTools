@@ -23,6 +23,11 @@ from app.middleware import InternalAuthMiddleware
 from app.services.user_service import UserService
 from app.services.mcp_token_service import McpTokenService
 from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens, tags
+from app.api.endpoints import presigned, share_view
+from app.core.rate_limit import get_limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from mcp_server.http_app import build_backend_mcp
 
 # Configure logging
@@ -53,6 +58,18 @@ VERSION_INFO = load_version_info()
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("Starting Image Tools API...")
+
+    # Bootstrap PRESIGNED_URL_SECRET if unset. Stable secret should be in .env;
+    # an ephemeral fallback keeps the app functional but invalidates outstanding
+    # presigned URLs on restart, which we surface as a warning.
+    if not settings.PRESIGNED_URL_SECRET:
+        import secrets as _secrets
+        settings.PRESIGNED_URL_SECRET = _secrets.token_hex(32)
+        logger.warning(
+            "PRESIGNED_URL_SECRET is not set. Generated an ephemeral secret; "
+            "previously-minted presigned URLs will be invalidated on restart. "
+            "Set PRESIGNED_URL_SECRET in .env for stable URLs."
+        )
 
     # Initialize database
     await init_db()
@@ -106,6 +123,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Rate limiting (per-IP) for the public image-serve routes /i/{token},
+# /s/{token}, /s/{token}/raw. Decorators on those handlers reference the
+# same limiter via app.core.rate_limit.get_limiter().
+app.state.limiter = get_limiter()
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
 # Add Internal Authentication Middleware (must be added before CORS)
 # This provides defense-in-depth security for Hardened (B) deployments
 app.add_middleware(InternalAuthMiddleware)
@@ -137,6 +161,12 @@ app.include_router(mcp_tokens.router, prefix=settings.API_PREFIX, tags=["mcp-tok
 app.include_router(mcp_tokens.whoami_router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
 app.include_router(tags.router, prefix=settings.API_PREFIX, tags=["tags"])
 app.include_router(sharing.router, prefix=settings.API_PREFIX)
+# Presigned image URLs are deliberately at the root (no /api/v1) — short URLs
+# the agent embeds in documents.
+app.include_router(presigned.router)
+# /s/{token} HTML viewer + /s/{token}/raw bytes (replaces the old inline
+# FileResponse handler).
+app.include_router(share_view.router)
 
 # Serve frontend static files (if they exist)
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
@@ -164,20 +194,8 @@ async def get_version():
     }
 
 
-@app.get("/s/{token}")
-async def serve_shared_image(token: str):
-    """Serve a temporarily shared image. No authentication required."""
-    from app.services.share_service import get_shared_image
-
-    entry = get_shared_image(token)
-    if entry is None:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    return FileResponse(
-        entry.image_path,
-        media_type=entry.media_type,
-        filename=entry.original_filename,
-    )
+# /s/{token} (HTML viewer) and /s/{token}/raw (bytes) are registered via
+# app.api.endpoints.share_view below — see app.include_router(share_view.router).
 
 
 @app.websocket("/ws")

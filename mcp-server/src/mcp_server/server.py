@@ -95,6 +95,39 @@ def build_server(backend: BackendClient, verify_token, *, name: str = "imagetool
             out.extend(_to_mcp_content(img["data"], img["mime_type"], img["meta"]))
         return out
 
+    @mcp.tool()
+    async def pin_image(image_id: str, duration_days: Optional[int] = None) -> dict[str, Any]:
+        """Pin an image to delay its auto-deletion. Re-pinning extends an existing
+        pin (never shortens). Use BEFORE referencing an image_id from a generated
+        document if you do NOT also call get_presigned_url (which already pins)."""
+        return await tool_fns.pin_image(backend, _user_id(), image_id, duration_days)
+
+    @mcp.tool()
+    async def unpin_image(image_id: str) -> dict[str, Any]:
+        """Unpin an image (return it to the normal retention schedule)."""
+        return await tool_fns.unpin_image(backend, _user_id(), image_id)
+
+    @mcp.tool()
+    async def get_presigned_url(image_id: str, ttl_days: Optional[int] = None) -> dict[str, Any]:
+        """Mint a long-lived URL for embedding in a generated document. The URL
+        is HMAC-signed (no DB token storage); the host is the web UI's hostname.
+        Side effect: bumps pin_expires_at >= URL expiry so the link stays alive."""
+        return await tool_fns.get_presigned_url(backend, _user_id(), image_id, ttl_days)
+
+    @mcp.tool()
+    async def download_image(image_id: str) -> list:
+        """Download image bytes + metadata. Alias of get_image — use whichever
+        verb reads more clearly in the agent's plan."""
+        result = await tool_fns.download_image(backend, _user_id(), image_id)
+        return _to_mcp_content(result["data"], result["mime_type"], result["meta"])
+
+    @mcp.tool()
+    async def revoke_presigned_urls(image_id: str) -> dict[str, Any]:
+        """Revoke all outstanding presigned URLs for this image (rotates the
+        per-image url_pepper). Use when a draft document is finalized or when a
+        screenshot is replaced and old links must stop resolving."""
+        return await tool_fns.revoke_presigned_urls(backend, _user_id(), image_id)
+
     return mcp
 
 

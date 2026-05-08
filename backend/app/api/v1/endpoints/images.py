@@ -1,13 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Body, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import zipfile
 import os
+import time as _time
 from app.core.database import get_db
 from app.core.config import settings
-from app.schemas.schemas import ImageResponse, ImageTagsUpdate, RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse
+from app.core.url_utils import get_instance_url
+from app.services.presigned_url import build_token
+from app.schemas.schemas import (
+    ImageResponse, ImageTagsUpdate, PinRequest, PresignedUrlRequest, PresignedUrlResponse,
+    RotateRequest, RotateResponse, FlipRequest, FlipResponse, ResizeRequest, ResizeResponse,
+)
 from app.services.image_service import ImageService
 from app.services.user_service import UserService, ANONYMOUS_USER_ID
 
@@ -41,21 +47,7 @@ async def upload_image(
     )
 
     # Build response
-    return ImageResponse(
-        id=image.id,
-        user_id=image.user_id,
-        original_filename=image.original_filename,
-        original_size=image.original_size,
-        current_size=image.current_size,
-        width=image.width,
-        height=image.height,
-        format=image.format,
-        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
-        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
-        created_at=image.created_at,
-        updated_at=image.updated_at,
-        tags=ImageService.get_tags(image),
-    )
+    return ImageService.to_response(image)
 
 
 @router.get("/user/{user_id}", response_model=List[ImageResponse])
@@ -66,25 +58,7 @@ async def get_user_images(
 ):
     """Get all images for a user."""
     images = await ImageService.get_user_images(db, user_id, tag=tag)
-
-    return [
-        ImageResponse(
-            id=img.id,
-            user_id=img.user_id,
-            original_filename=img.original_filename,
-            original_size=img.original_size,
-            current_size=img.current_size,
-            width=img.width,
-            height=img.height,
-            format=img.format,
-            thumbnail_url=f"{settings.API_PREFIX}/images/{img.id}/thumbnail",
-            image_url=f"{settings.API_PREFIX}/images/{img.id}/current",
-            created_at=img.created_at,
-            updated_at=img.updated_at,
-            tags=ImageService.get_tags(img),
-        )
-        for img in images
-    ]
+    return [ImageService.to_response(img) for img in images]
 
 
 @router.get("/{image_id}", response_model=ImageResponse)
@@ -96,22 +70,7 @@ async def get_image(
     image = await ImageService.get_image(db, image_id)
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
-
-    return ImageResponse(
-        id=image.id,
-        user_id=image.user_id,
-        original_filename=image.original_filename,
-        original_size=image.original_size,
-        current_size=image.current_size,
-        width=image.width,
-        height=image.height,
-        format=image.format,
-        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
-        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
-        created_at=image.created_at,
-        updated_at=image.updated_at,
-        tags=ImageService.get_tags(image),
-    )
+    return ImageService.to_response(image)
 
 
 @router.get("/{image_id}/current")
@@ -282,21 +241,13 @@ async def save_edited_image(
 
     print(f"[EDIT] Returning response with dimensions: {image.width}x{image.height}")
 
-    return ImageResponse(
-        id=image.id,
-        user_id=image.user_id,
-        original_filename=image.original_filename,
-        original_size=image.original_size,
-        current_size=image.current_size,
-        width=image.width,
-        height=image.height,
-        format=image.format,
-        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail?t={int(image.updated_at.timestamp() * 1000)}",
-        image_url=f"{settings.API_PREFIX}/images/{image.id}/current?t={int(image.updated_at.timestamp() * 1000)}",
-        created_at=image.created_at,
-        updated_at=image.updated_at,
-        tags=ImageService.get_tags(image),
-    )
+    # Preserve cache-busting query strings on URLs after a content edit so
+    # browsers fetch the new bytes; everything else comes from the helper.
+    response = ImageService.to_response(image)
+    bust = int(image.updated_at.timestamp() * 1000)
+    response.thumbnail_url = f"{settings.API_PREFIX}/images/{image.id}/thumbnail?t={bust}"
+    response.image_url = f"{settings.API_PREFIX}/images/{image.id}/current?t={bust}"
+    return response
 
 
 @router.put("/{image_id}/tags", response_model=ImageResponse)
@@ -312,21 +263,7 @@ async def update_image_tags(
     ImageService.set_tags(image, payload.tags)
     await db.commit()
     await db.refresh(image)
-    return ImageResponse(
-        id=image.id,
-        user_id=image.user_id,
-        original_filename=image.original_filename,
-        original_size=image.original_size,
-        current_size=image.current_size,
-        width=image.width,
-        height=image.height,
-        format=image.format,
-        thumbnail_url=f"{settings.API_PREFIX}/images/{image.id}/thumbnail",
-        image_url=f"{settings.API_PREFIX}/images/{image.id}/current",
-        created_at=image.created_at,
-        updated_at=image.updated_at,
-        tags=ImageService.get_tags(image),
-    )
+    return ImageService.to_response(image)
 
 
 @router.get("/{image_id}/exif")
@@ -393,3 +330,89 @@ async def download_images_as_zip(
         filename=zip_filename,
         background=lambda: os.remove(zip_path) if os.path.exists(zip_path) else None
     )
+
+
+@router.put("/{image_id}/pin", response_model=ImageResponse)
+async def pin_image_endpoint(
+    image_id: str,
+    payload: PinRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Pin or extend a pin (MCP-only entrypoint).
+
+    Re-pinning never shortens an existing longer pin.
+    """
+    duration = settings.PIN_DEFAULT_DURATION_DAYS if payload.duration_days is None else payload.duration_days
+    try:
+        image = await ImageService.pin_image(db, image_id, duration_days=duration)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return ImageService.to_response(image)
+
+
+@router.delete("/{image_id}/pin", response_model=ImageResponse)
+async def unpin_image_endpoint(
+    image_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Unpin an image. Used by both the MCP unpin tool and the web UI."""
+    image = await ImageService.unpin_image(db, image_id)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return ImageService.to_response(image)
+
+
+@router.post("/{image_id}/presigned-url", response_model=PresignedUrlResponse)
+async def create_presigned_url_endpoint(
+    image_id: str,
+    payload: PresignedUrlRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Mint a long-lived HMAC-signed URL for embedding in agent-generated documents.
+
+    HMAC includes the image's url_pepper, so revoke_presigned_urls (rotates the
+    pepper) invalidates this URL. Side effect: bumps pin_expires_at to >= URL
+    expiry so the link stays alive.
+    """
+    image = await ImageService.get_image(db, image_id)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    ttl_days = settings.PIN_DEFAULT_DURATION_DAYS if payload.ttl_days is None else payload.ttl_days
+    try:
+        await ImageService.pin_image(db, image.id, duration_days=ttl_days)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    refreshed = await ImageService.get_image(db, image.id)
+
+    exp = int(_time.time()) + ttl_days * 86400
+    token = build_token(
+        image_id=image.id, expires_at_epoch=exp, pepper=refreshed.url_pepper,
+    )
+    base = get_instance_url(request).rstrip("/")
+    return PresignedUrlResponse(
+        url=f"{base}/i/{token}",
+        token=token,
+        expires_at=datetime.fromtimestamp(exp, tz=timezone.utc),
+        image_id=image.id,
+        pin_expires_at=refreshed.pin_expires_at,
+    )
+
+
+@router.delete("/{image_id}/presigned-urls", status_code=200)
+async def revoke_presigned_urls_endpoint(
+    image_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke ALL outstanding presigned URLs for this image by rotating its pepper.
+
+    Used when a draft document referencing the screenshot is finalized, when a
+    screenshot is replaced, or whenever an embedded URL must stop resolving
+    without changing the image bytes themselves.
+    """
+    image = await ImageService.rotate_url_pepper(db, image_id)
+    if image is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return {"image_id": image.id, "revoked": True}
