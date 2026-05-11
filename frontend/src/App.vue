@@ -180,8 +180,8 @@
               <span class="tooltip">Download ZIP</span>
             </button>
 
-            <button 
-              @click="showClearAllConfirm = true" 
+            <button
+              @click="openClearAllConfirm"
               class="btn-icon btn-header btn-danger-header"
               :disabled="imageCount === 0"
               :title="selectedCount > 0 ? `Delete ${selectedCount} selected image${selectedCount !== 1 ? 's' : ''}` : 'Clear all images'"
@@ -249,25 +249,48 @@
         </div>
         <div class="modal-body">
           <p v-if="selectedCount > 0">
-            Are you sure you want to remove <strong>{{ selectedCount }}</strong> selected image{{ selectedCount !== 1 ? 's' : '' }}?
+            Are you sure you want to remove
+            <strong>{{ includePinned ? selectedCount : (selectedCount - clearScopePinnedCount) }}</strong>
+            selected image{{ (includePinned ? selectedCount : (selectedCount - clearScopePinnedCount)) !== 1 ? 's' : '' }}?
           </p>
           <p v-else>
-            Are you sure you want to remove all <strong>{{ imageCount }}</strong> image{{ imageCount !== 1 ? 's' : '' }}?
+            Are you sure you want to remove
+            <strong>{{ includePinned ? imageCount : (imageCount - clearScopePinnedCount) }}</strong>
+            image{{ (includePinned ? imageCount : (imageCount - clearScopePinnedCount)) !== 1 ? 's' : '' }}?
           </p>
+
+          <p v-if="clearScopePinnedCount > 0 && !includePinned" class="modal-info">
+            📌 <strong>{{ clearScopePinnedCount }}</strong> pinned image{{ clearScopePinnedCount !== 1 ? 's' : '' }} will be skipped.
+          </p>
+
+          <label v-if="clearScopePinnedCount > 0" class="modal-checkbox">
+            <input
+              type="checkbox"
+              v-model="includePinned"
+              :disabled="isClearingAll"
+            />
+            Include pinned images
+            ({{ clearScopePinnedCount }})
+          </label>
+
+          <p v-if="clearScopePinnedCount > 0 && includePinned" class="modal-warning">
+            ⚠ Pinned images are referenced by AI agents. Deleting them will invalidate any active share links and presigned URLs in use.
+          </p>
+
           <p class="modal-warning">This action cannot be undone.</p>
         </div>
         <div class="modal-footer">
-          <button 
-            @click="showClearAllConfirm = false" 
+          <button
+            @click="showClearAllConfirm = false"
             class="btn-modal btn-cancel"
             :disabled="isClearingAll"
           >
             Cancel
           </button>
-          <button 
-            @click="confirmClearAll" 
+          <button
+            @click="confirmClearAll"
             class="btn-modal btn-danger"
-            :disabled="isClearingAll"
+            :disabled="isClearingAll || clearScopeEffectiveCount === 0"
           >
             {{ isClearingAll ? '⏳ Removing...' : (selectedCount > 0 ? '🗑 Remove Selected' : '🗑 Remove All') }}
           </button>
@@ -1472,6 +1495,37 @@ const bulkSelectedPreset = ref('');
 const isBulkProcessing = ref(false);
 const showClearAllConfirm = ref(false);
 const isClearingAll = ref(false);
+const includePinned = ref(false);
+
+// True if the image has a pin_expires_at in the future.
+const isImagePinned = (img) => {
+  if (!img || !img.pin_expires_at) return false;
+  return new Date(img.pin_expires_at) > new Date();
+};
+
+// Images currently in scope for the clear-all/delete-selected confirmation,
+// without applying the pinned filter. Selected images take priority over all.
+const clearScopeImages = computed(() => {
+  if (selectedCount.value > 0) {
+    return images.value.filter(img => imageStore.selectedImages.includes(img.id));
+  }
+  return images.value;
+});
+
+const clearScopePinnedCount = computed(
+  () => clearScopeImages.value.filter(isImagePinned).length,
+);
+
+// Effective number that will actually be deleted given includePinned.
+const clearScopeEffectiveCount = computed(() => {
+  if (includePinned.value) return clearScopeImages.value.length;
+  return clearScopeImages.value.length - clearScopePinnedCount.value;
+});
+
+const openClearAllConfirm = () => {
+  includePinned.value = false;
+  showClearAllConfirm.value = true;
+};
 const viewerImage = ref(null);
 const editingImage = ref(null);
 const isSavingEdit = ref(false);
@@ -2891,22 +2945,30 @@ const handleClickOutside = () => {
 const confirmClearAll = async () => {
   isClearingAll.value = true;
   try {
-    // If images are selected, delete only selected images
-    // Otherwise, delete all images
-    const imagesToDelete = selectedCount.value > 0
-      ? images.value.filter(img => imageStore.selectedImages.includes(img.id))
-      : images.value;
-    
-    const deletePromises = imagesToDelete.map(image => imageStore.deleteImage(image.id));
-    await Promise.all(deletePromises);
-    
-    showClearAllConfirm.value = false;
-    
-    if (selectedCount.value > 0) {
-      console.log(`Removed ${deletePromises.length} selected image(s)`);
-    } else {
-      console.log(`Removed all ${deletePromises.length} images`);
+    // Filter out pinned images unless the user opted in.
+    const targets = includePinned.value
+      ? clearScopeImages.value
+      : clearScopeImages.value.filter(img => !isImagePinned(img));
+    const ids = targets.map(img => img.id);
+
+    if (ids.length === 0) {
+      showClearAllConfirm.value = false;
+      return;
     }
+
+    // Sequential delete (avoids SQLite write contention) + single tag refresh.
+    const result = await imageStore.bulkDeleteImages(ids);
+
+    if (result.failed.length > 0) {
+      console.error(
+        `Bulk delete: ${result.succeeded} succeeded, ${result.failed.length} failed.`,
+        result.failed,
+      );
+    } else {
+      console.log(`Bulk delete: removed ${result.succeeded} image(s).`);
+    }
+
+    showClearAllConfirm.value = false;
   } catch (error) {
     console.error('Failed to delete images:', error);
   } finally {
@@ -3811,6 +3873,36 @@ body {
   color: #f57c00;
   font-weight: 600;
   font-size: 0.95rem;
+}
+
+.modal-info {
+  color: #2c5282;
+  background: #ebf4ff;
+  border-left: 3px solid #4299e1;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.modal-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #555;
+  cursor: pointer;
+  user-select: none;
+  padding: 0.25rem 0;
+}
+
+.modal-checkbox input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.modal-checkbox input[type="checkbox"]:disabled {
+  cursor: not-allowed;
 }
 
 .modal-footer {
