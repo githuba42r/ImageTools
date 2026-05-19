@@ -42,6 +42,9 @@ function initSelectionCapture() {
     background: rgba(0,0,0,0.3);
     z-index: 999999;
     cursor: crosshair;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
   `;
   
   const selectionBox = document.createElement('div');
@@ -141,16 +144,30 @@ function initSelectionCapture() {
   let isDrawing = false;
   let currentRect = null;
 
-  // Mouse down - start selection
-  overlay.addEventListener('mousedown', (e) => {
+  // Clamp selection coordinates to the viewport so dragging the pointer
+  // past the window edge still produces a valid selection rectangle.
+  const clampX = (v) => Math.max(0, Math.min(v, window.innerWidth - 1));
+  const clampY = (v) => Math.max(0, Math.min(v, window.innerHeight - 1));
+
+  // Pointer down - start selection.
+  //
+  // Pointer Events + setPointerCapture guarantee that pointermove/pointerup
+  // are still delivered to the overlay even when the pointer leaves the
+  // browser viewport (released off the edge of the screen). preventDefault()
+  // plus user-select:none on the overlay suppress the browser's native
+  // text/content selection that otherwise highlights the whole page.
+  overlay.addEventListener('pointerdown', (e) => {
     if (actionsContainer.style.display === 'flex') {
       // Already have a selection, ignore
       return;
     }
 
+    e.preventDefault();
+    try { overlay.setPointerCapture(e.pointerId); } catch (_) { /* not supported */ }
+
     isDrawing = true;
-    startX = e.clientX;
-    startY = e.clientY;
+    startX = clampX(e.clientX);
+    startY = clampY(e.clientY);
     selectionBox.style.left = startX + 'px';
     selectionBox.style.top = startY + 'px';
     selectionBox.style.width = '0px';
@@ -158,12 +175,12 @@ function initSelectionCapture() {
     selectionBox.style.display = 'block';
   });
 
-  // Mouse move - draw selection
-  overlay.addEventListener('mousemove', (e) => {
+  // Pointer move - draw selection
+  overlay.addEventListener('pointermove', (e) => {
     if (!isDrawing || startX === null) return;
 
-    const currentX = e.clientX;
-    const currentY = e.clientY;
+    const currentX = clampX(e.clientX);
+    const currentY = clampY(e.clientY);
     const width = Math.abs(currentX - startX);
     const height = Math.abs(currentY - startY);
     const left = Math.min(startX, currentX);
@@ -175,12 +192,13 @@ function initSelectionCapture() {
     selectionBox.style.height = height + 'px';
   });
 
-  // Mouse up - finish selection and show actions
-  overlay.addEventListener('mouseup', (e) => {
+  // Pointer up - finish selection and show actions
+  overlay.addEventListener('pointerup', (e) => {
     if (!isDrawing) return;
 
     isDrawing = false;
-    
+    try { overlay.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+
     const width = parseInt(selectionBox.style.width);
     const height = parseInt(selectionBox.style.height);
     
@@ -317,20 +335,32 @@ async function captureSelection(rect) {
     
     // Load captured image
     const img = await loadImage(dataUrl);
-    
-    // Account for device pixel ratio
-    const dpr = window.devicePixelRatio || 1;
-    
+
+    // Derive the real scale between CSS pixels (the selection rect, which is
+    // in clientX/Y units) and the captured bitmap. Measuring from the actual
+    // image is correct under normal DPR, browser zoom AND DevTools device
+    // emulation - in device-toolbar mode window.devicePixelRatio reports the
+    // *emulated* device ratio while captureVisibleTab renders at the host
+    // scale, so the old `* devicePixelRatio` math cropped the wrong region.
+    const scaleX = img.naturalWidth / window.innerWidth;
+    const scaleY = img.naturalHeight / window.innerHeight;
+
+    console.log('[ImageTools] selection capture scale diag:', {
+      imgW: img.naturalWidth, imgH: img.naturalHeight,
+      innerW: window.innerWidth, innerH: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio, scaleX, scaleY, rect
+    });
+
     // Draw the selected portion
     ctx.drawImage(
       img,
-      rect.x * dpr, 
-      rect.y * dpr, 
-      rect.width * dpr, 
-      rect.height * dpr,
-      0, 
-      0, 
-      rect.width, 
+      rect.x * scaleX,
+      rect.y * scaleY,
+      rect.width * scaleX,
+      rect.height * scaleY,
+      0,
+      0,
+      rect.width,
       rect.height
     );
     
@@ -375,12 +405,15 @@ async function captureFullPageCanvas() {
     
     console.log('[ImageTools Content] Viewport dimensions:', viewportWidth, 'x', viewportHeight);
     
-    // Create canvas for full page
+    // Create canvas for full page. Its pixel size depends on the real
+    // capture scale, which we only learn from the first captured tile
+    // (see the device-emulation note in captureSelection). Sized lazily.
     const canvas = document.createElement('canvas');
-    canvas.width = fullWidth;
-    canvas.height = fullHeight;
-    const ctx = canvas.getContext('2d');
-    
+    let ctx = null;
+    let scaleX = 1;
+    let scaleY = 1;
+    let scaleResolved = false;
+
     // Calculate number of screenshots needed
     const cols = Math.ceil(fullWidth / viewportWidth);
     const rows = Math.ceil(fullHeight / viewportHeight);
@@ -430,7 +463,27 @@ async function captureFullPageCanvas() {
         
         // Load image and draw to canvas
         const img = await loadImage(dataUrl);
-        ctx.drawImage(img, x, y);
+
+        // Resolve the capture scale once from the first tile and reuse it
+        // for every tile and for the canvas size. Measuring per-tile would
+        // break on the last (partial) row/col where dimensions differ.
+        if (!scaleResolved) {
+          scaleX = img.naturalWidth / viewportWidth;
+          scaleY = img.naturalHeight / viewportHeight;
+          canvas.width = Math.round(fullWidth * scaleX);
+          canvas.height = Math.round(fullHeight * scaleY);
+          ctx = canvas.getContext('2d');
+          scaleResolved = true;
+          console.log('[ImageTools] full-page capture scale diag:', {
+            imgW: img.naturalWidth, imgH: img.naturalHeight,
+            viewportWidth, viewportHeight,
+            devicePixelRatio: window.devicePixelRatio,
+            scaleX, scaleY,
+            canvasW: canvas.width, canvasH: canvas.height
+          });
+        }
+
+        ctx.drawImage(img, Math.round(x * scaleX), Math.round(y * scaleY));
       }
     }
     
