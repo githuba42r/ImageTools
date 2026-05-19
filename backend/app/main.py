@@ -80,24 +80,15 @@ async def lifespan(app: FastAPI):
         anon_user = await UserService.get_or_create_user(db)
         logger.info(f"Anonymous user ready: {anon_user.id}")
 
-    # Build and mount the MCP server. Done before the scheduler so the
-    # scheduler's immediate "startup cleanup" job doesn't race with MCP
+    # The MCP server is built and mounted at import time (further down, before
+    # the SPA catch-all route) so that its "/mcp" Mount is matched ahead of
+    # the "/{full_path:path}" frontend catch-all. Here we only *run* its
+    # session manager. This is still done before start_scheduler() so the
+    # scheduler's immediate "startup cleanup" job doesn't race MCP
     # session-manager entry — apscheduler runs that job as a top-level task,
     # and starting it mid-await on session_manager.run() caused the in-flight
     # aiosqlite query to surface a CancelledError.
-    async def _verify_token(token: str):
-        async with AsyncSessionLocal() as db:
-            return await McpTokenService.validate(db, token)
-
-    mcp = build_backend_mcp(session_factory=AsyncSessionLocal, verify_token=_verify_token)
-    # Set streamable_http_path to "/" before building the ASGI app so that
-    # mounting at "/mcp" yields the real endpoint at "/mcp" (not "/mcp/mcp").
-    mcp.settings.streamable_http_path = "/"
-    mcp_http_app = mcp.streamable_http_app()
-    app.mount("/mcp", mcp_http_app)
-    logger.info("MCP server mounted at /mcp")
-
-    async with mcp.session_manager.run():
+    async with _mcp_server.session_manager.run():
         logger.info("MCP session manager started")
 
         # Start the background scheduler now that MCP is fully up.
@@ -228,6 +219,28 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...)):
             pass
 
 
+# Build and mount the MCP server at IMPORT TIME, before the SPA catch-all
+# route below. Starlette matches routes in registration order; mounting this
+# inside the lifespan (which runs after import) placed "/mcp" *after* the
+# "/{full_path:path}" catch-all, so every /mcp request was served the SPA
+# index.html (200 text/html) instead of the MCP stream. Streamable-HTTP MCP
+# clients (e.g. Claude Code) then failed to establish the event stream and
+# reconnected in a tight loop. session_manager.run() stays in the lifespan.
+async def _verify_mcp_token(token: str):
+    async with AsyncSessionLocal() as db:
+        return await McpTokenService.validate(db, token)
+
+
+_mcp_server = build_backend_mcp(
+    session_factory=AsyncSessionLocal, verify_token=_verify_mcp_token
+)
+# streamable_http_path="/" so mounting at "/mcp" yields the real endpoint at
+# "/mcp" (not "/mcp/mcp").
+_mcp_server.settings.streamable_http_path = "/"
+app.mount("/mcp", _mcp_server.streamable_http_app())
+logger.info("MCP server mounted at /mcp (import-time, before SPA catch-all)")
+
+
 if frontend_dist.exists():
     # Mount static files for assets
     app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
@@ -236,8 +249,18 @@ if frontend_dist.exists():
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         """Serve frontend application for non-API routes."""
-        # If it's an API route or health check, let it fall through to 404
-        if full_path.startswith("api/") or full_path.startswith("uploads/") or full_path == "health":
+        # If it's an API route, health check, or the MCP mount, let it fall
+        # through to 404 rather than silently serving the SPA. The "/mcp"
+        # Mount is registered before this catch-all so it normally wins;
+        # this guard is defense-in-depth against a future ordering regression
+        # (returning HTML here is what broke streamable-HTTP MCP clients).
+        if (
+            full_path.startswith("api/")
+            or full_path.startswith("uploads/")
+            or full_path == "health"
+            or full_path == "mcp"
+            or full_path.startswith("mcp/")
+        ):
             return {"detail": "Not Found"}
         
         # Check if requesting a specific file
