@@ -10,6 +10,10 @@ export const api = axios.create({
   timeout: 10000, // 10 second timeout
 });
 
+// Send cookies (including the OAuth2 session cookie) on cross-origin requests.
+// The backend uses HttpOnly cookies; the SPA never reads or writes them directly.
+api.defaults.withCredentials = true
+
 // Track if we're currently showing offline modal
 let isOffline = false;
 let offlineCallback = null;
@@ -55,6 +59,22 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// 401 + WWW-Authenticate: OAuth2 → SPA enters login state.
+// Lazy-import the user store to avoid a circular module load at startup.
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const status = error?.response?.status
+    const wwwAuth = error?.response?.headers?.['www-authenticate'] || ''
+    if (status === 401 && /^OAuth2\b/i.test(wwwAuth)) {
+      const { useUserStore } = await import('../stores/userStore.js')
+      const store = useUserStore()
+      store.needsLogin = true
+    }
+    return Promise.reject(error)
+  }
+)
 
 // Call this when connection is restored
 export const markOnline = () => {

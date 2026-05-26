@@ -22,6 +22,8 @@ pydantic-settings==2.12.0
 cryptography==44.0.0
 APScheduler==3.10.4
 slowapi>=0.1.9
+PyJWT[crypto]>=2.8,<3.0  # RS256 JWT verification — crypto extra pulls in cryptography (already pinned)
+itsdangerous>=2.1,<3.0   # signed cookies for OAuth2 session + state
 
 # Testing
 pytest==8.0.0

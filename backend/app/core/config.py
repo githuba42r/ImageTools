@@ -99,7 +99,20 @@ class Settings(BaseSettings):
     # - Remote-Name header: Display name from Authelia user profile
     # These headers are automatically captured by the middleware and stored in the user record.
     # No additional configuration required - just ensure your reverse proxy forwards these headers.
-    
+
+    # OAuth2 (optional) — feature is implicitly active when AUTH_HOST + CLIENT_ID + CLIENT_SECRET are all set.
+    # Backend proxies the entire flow; client_secret and JWT never reach the browser.
+    OAUTH2_AUTH_HOST: str = ""
+    OAUTH2_CLIENT_ID: str = ""
+    OAUTH2_CLIENT_SECRET: str = ""
+    OAUTH2_SCOPE: str = "auth"
+    OAUTH2_PUBLIC_KEY_CACHE_SECONDS: int = 3600
+    OAUTH2_STATE_TTL_SECONDS: int = 300
+
+    @property
+    def oauth2_enabled(self) -> bool:
+        return bool(self.OAUTH2_AUTH_HOST and self.OAUTH2_CLIENT_ID and self.OAUTH2_CLIENT_SECRET)
+
     @property
     def allowed_extensions_list(self) -> List[str]:
         return [ext.strip() for ext in self.ALLOWED_EXTENSIONS.split(",")]

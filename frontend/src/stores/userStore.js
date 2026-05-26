@@ -1,10 +1,12 @@
 import { defineStore } from 'pinia';
-import { userService } from '../services/api';
+import { api, userService } from '../services/api';
 
 export const useUserStore = defineStore('user', {
   state: () => ({
     userId: null,
     userData: null,
+    displayName: null,
+    needsLogin: false,
     isLoading: false,
     error: null,
   }),
@@ -65,6 +67,7 @@ export const useUserStore = defineStore('user', {
         const user = await userService.getOrCreateUser(resolvedHintId);
         this.userId = user.id;
         this.userData = user;
+        this.displayName = user.display_name || user.username || null;
 
         // Always persist the canonical user ID returned by the server.
         // In authenticated mode this overwrites any stale browser-local ID
@@ -88,6 +91,19 @@ export const useUserStore = defineStore('user', {
       this.userData = null;
       localStorage.removeItem('imagetools_user_id');
       console.log('User cleared');
+    },
+
+    async logout() {
+      try {
+        await api.post('/oauth2/logout')
+      } catch (_) {
+        // Idempotent; ignore failures
+      }
+      this.userId = null
+      this.userData = null
+      this.displayName = null
+      localStorage.removeItem('imagetools_user_id')
+      this.needsLogin = true
     },
   },
 });

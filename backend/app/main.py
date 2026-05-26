@@ -19,10 +19,10 @@ from app.core.config import settings
 from app.core.database import init_db, AsyncSessionLocal
 from app.core.websocket_manager import manager as ws_manager
 from app.core.scheduler import start_scheduler, stop_scheduler
-from app.middleware import InternalAuthMiddleware
+from app.middleware import InternalAuthMiddleware, OAuth2SessionMiddleware
 from app.services.user_service import UserService
 from app.services.mcp_token_service import McpTokenService
-from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens, tags
+from app.api.v1.endpoints import users, images, compression, history, background, chat, openrouter_oauth, settings as settings_router, mobile, addon, profiles, sharing, mcp_tokens, tags, oauth2
 from app.api.endpoints import presigned, share_view
 from app.core.rate_limit import get_limiter
 from slowapi import _rate_limit_exceeded_handler
@@ -124,6 +124,25 @@ app.add_middleware(SlowAPIMiddleware)
 # Add Internal Authentication Middleware (must be added before CORS)
 # This provides defense-in-depth security for Hardened (B) deployments
 app.add_middleware(InternalAuthMiddleware)
+# OAuth2 session middleware must run OUTERMOST (so it resolves the session and
+# sets request.state.user BEFORE InternalAuthMiddleware). Starlette's
+# add_middleware prepends to user_middleware, so add this LAST to make it run
+# first on the request way in.
+if settings.oauth2_enabled:
+    # OAuth2 mode requires a strong SESSION_SECRET_KEY because it signs
+    # the imagetools_session and imagetools_oauth_state cookies.
+    _default_secret = "change-this-secret-key-in-production"
+    if (
+        not settings.SESSION_SECRET_KEY
+        or settings.SESSION_SECRET_KEY == _default_secret
+        or len(settings.SESSION_SECRET_KEY) < 32
+    ):
+        raise RuntimeError(
+            "OAuth2 mode is enabled (OAUTH2_AUTH_HOST/CLIENT_ID/CLIENT_SECRET are set) "
+            "but SESSION_SECRET_KEY is missing, default, or shorter than 32 bytes. "
+            "Generate one with: openssl rand -hex 32"
+        )
+    app.add_middleware(OAuth2SessionMiddleware)
 
 # Configure CORS
 if settings.CORS_ENABLED:
@@ -152,6 +171,8 @@ app.include_router(mcp_tokens.router, prefix=settings.API_PREFIX, tags=["mcp-tok
 app.include_router(mcp_tokens.whoami_router, prefix=settings.API_PREFIX, tags=["mcp-tokens"])
 app.include_router(tags.router, prefix=settings.API_PREFIX, tags=["tags"])
 app.include_router(sharing.router, prefix=settings.API_PREFIX)
+if settings.oauth2_enabled:
+    app.include_router(oauth2.router, prefix=settings.API_PREFIX, tags=["oauth2"])
 # Presigned image URLs are deliberately at the root (no /api/v1) — short URLs
 # the agent embeds in documents.
 app.include_router(presigned.router)

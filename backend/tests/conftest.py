@@ -87,3 +87,87 @@ async def seeded_image(db_session: AsyncSession, seeded_user) -> dict:
     db_session.add(img)
     await db_session.commit()
     return {"id": img.id, "user_id": img.user_id}
+
+
+# --- OAuth2 test fixtures -------------------------------------------------
+import json
+import time
+from email.utils import format_datetime
+from datetime import datetime, timezone, timedelta
+
+import httpx
+import jwt as _jwt
+import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+
+
+@pytest.fixture(scope="session")
+def oauth2_keypair():
+    """Generate an RSA-2048 keypair once per test session."""
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    public_pem = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    return {"private_pem": private_pem, "public_pem": public_pem}
+
+
+@pytest.fixture
+def make_jwt(oauth2_keypair):
+    """Factory: build an RS256-signed JWT with vinCreative-shaped claims."""
+    def _make(
+        email="philg@aspedia.net",
+        fullname="Phil G",
+        expires_in_seconds=3600,
+        extra=None,
+    ):
+        exp_dt = datetime.now(timezone.utc) + timedelta(seconds=expires_in_seconds)
+        claims = {
+            "user_id": "1",
+            "email": email,
+            "name": {"fullname": fullname} if fullname else {},
+            "siteid": "test.example",
+            "timestamp": format_datetime(datetime.now(timezone.utc)),
+            "expires": format_datetime(exp_dt),
+        }
+        if extra:
+            claims.update(extra)
+        return _jwt.encode(claims, oauth2_keypair["private_pem"], algorithm="RS256")
+    return _make
+
+
+@pytest.fixture
+def idp_mock_transport(oauth2_keypair):
+    """httpx.MockTransport that stands in for the OAuth2 IdP.
+
+    State is mutable via the returned dict so tests can stage a specific
+    JWT or simulate provider errors.
+    """
+    state = {
+        "next_jwt": None,                       # set per-test
+        "key_pem": oauth2_keypair["public_pem"],
+        "key_calls": 0,
+        "token_calls": 0,
+        "force_token_status": None,             # e.g. 500 to simulate IdP failure
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/auth/get-key"):
+            state["key_calls"] += 1
+            return httpx.Response(200, text=state["key_pem"])
+        if request.url.path.endswith("/oauth2/jwttoken"):
+            state["token_calls"] += 1
+            if state["force_token_status"]:
+                return httpx.Response(state["force_token_status"], text="forced")
+            if not state["next_jwt"]:
+                return httpx.Response(400, json={"error": "no jwt staged"})
+            return httpx.Response(200, json={"access_token": state["next_jwt"]})
+        return httpx.Response(404)
+
+    return {"transport": httpx.MockTransport(handler), "state": state}

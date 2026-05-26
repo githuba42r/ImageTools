@@ -1,4 +1,6 @@
 <template>
+  <LoginView v-if="userStore.needsLogin" />
+  <template v-else>
   <div id="app">
     <header class="app-header" :class="{ 'compact': imageCount > 0 }">
       <div class="header-content">
@@ -21,6 +23,12 @@
             <div v-if="username" class="username-display">
               <span class="user-icon">👤</span>
               <span class="username-text">{{ username }}</span>
+            </div>
+
+            <!-- OAuth2 logged-in badge with sign-out -->
+            <div v-if="userStore.displayName" class="user-badge">
+              Logged in as <strong>{{ userStore.displayName }}</strong>
+              <button class="logout-link" @click="userStore.logout">Sign out</button>
             </div>
           </div>
           
@@ -1442,6 +1450,7 @@
     <ToastNotification />
 
   </div>
+  </template>
 </template>
 
 <script setup>
@@ -1481,6 +1490,7 @@ import OfflineModal from './components/OfflineModal.vue';
 import ToastNotification from './components/ToastNotification.vue';
 import ProfileManager from './components/ProfileManager.vue';
 import McpTokenManager from './components/McpTokenManager.vue';
+import LoginView from './views/LoginView.vue';
 
 const userStore = useUserStore();
 const imageStore = useImageStore();
@@ -5567,4 +5577,22 @@ details[open] summary {
   margin-bottom: 10px;
   background: #f3f4f6;
 }
+
+.user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+.logout-link {
+  background: none;
+  border: 1px solid #888;
+  color: inherit;
+  padding: 0.1rem 0.5rem;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.logout-link:hover { background: rgba(255,255,255,0.06); }
 </style>

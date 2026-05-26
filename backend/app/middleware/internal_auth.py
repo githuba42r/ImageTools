@@ -55,6 +55,7 @@ class InternalAuthMiddleware(BaseHTTPMiddleware):
         "/api/v1/mobile/",          # Mobile API uses long-term secrets
         "/api/v1/addon/",           # Addon API uses OAuth tokens
         "/api/v1/mcp-tokens/",      # MCP whoami uses bearer token (for stdio transport)
+        "/api/v1/oauth2/",          # browser-initiated OAuth2 flow; carries its own state + session-cookie auth
         "/mcp",                     # MCP Streamable HTTP uses bearer token (FastMCP TokenVerifier)
         "/s/",                      # Temporary share links (public, ephemeral)
         "/i/",                      # Presigned image URLs (HMAC-signed, public)
@@ -89,17 +90,17 @@ class InternalAuthMiddleware(BaseHTTPMiddleware):
             Response from next middleware/endpoint, or 403 Forbidden
         """
         
-        # Extract Authelia user information from headers (always, regardless of internal auth)
-        remote_user = request.headers.get("Remote-User")
-        remote_name = request.headers.get("Remote-Name")
-        
-        # Store user information in request state for endpoints to access
-        request.state.remote_user = remote_user
-        request.state.remote_name = remote_name
-        
-        # Log user information if available
-        if remote_user:
-            logger.debug(f"Authelia user detected: {remote_user} ({remote_name or 'no display name'})")
+        # Identity resolution: when OAuth2 mode is on, OAuth2SessionMiddleware has already
+        # populated request.state.remote_user/remote_name from the session cookie. In that
+        # case we MUST NOT overwrite — Authelia isn't in front of the backend, and reading
+        # incoming Remote-User/Remote-Name headers would let a client spoof identity.
+        if not settings.oauth2_enabled:
+            remote_user = request.headers.get("Remote-User")
+            remote_name = request.headers.get("Remote-Name")
+            request.state.remote_user = remote_user
+            request.state.remote_name = remote_name
+            if remote_user:
+                logger.debug(f"Authelia user detected: {remote_user} ({remote_name or 'no display name'})")
         
         # Skip validation if internal auth is disabled
         if not settings.REQUIRE_INTERNAL_AUTH:
