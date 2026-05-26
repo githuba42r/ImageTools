@@ -74,6 +74,15 @@ services:
       - "traefik.http.routers.imagetools-presigned.priority=100"
       # No middleware = bypasses Authelia
 
+      # Privacy policy - bypasses Authelia (public document required by browser-extension store listings)
+      - "traefik.http.routers.imagetools-privacy.rule=Host(`imagetools.yourdomain.com`) && Path(`/privacy.html`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-privacy.entrypoints=https"
+      - "traefik.http.routers.imagetools-privacy.tls=true"
+      - "traefik.http.routers.imagetools-privacy.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-privacy.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-privacy.priority=100"
+      # No middleware = bypasses Authelia
+
       # Service definition
       - "traefik.http.services.imagetools-svc.loadbalancer.server.port=8081"
 

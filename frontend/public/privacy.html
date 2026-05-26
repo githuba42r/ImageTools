@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Privacy Policy &middot; ImageTools</title>
+<title>Privacy &middot; ImageTools</title>
 <style>
   :root {
     --fg: #1c1c1c;
@@ -11,6 +11,8 @@
     --bg: #fff;
     --accent: #2563eb;
     --rule: #e5e7eb;
+    --callout: #fef3c7;
+    --callout-fg: #78350f;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -19,6 +21,8 @@
       --bg: #111827;
       --accent: #60a5fa;
       --rule: #374151;
+      --callout: #3b2d10;
+      --callout-fg: #fde68a;
     }
   }
   body {
@@ -37,90 +41,136 @@
   code { background: rgba(127,127,127,0.15); padding: 0.05rem 0.3rem; border-radius: 3px; font-size: 0.9em; }
   ul { padding-left: 1.25rem; }
   li { margin: 0.25rem 0; }
+  .callout {
+    background: var(--callout);
+    color: var(--callout-fg);
+    padding: 1rem 1.25rem;
+    border-radius: 6px;
+    margin: 1.5rem 0;
+  }
+  .callout p { margin: 0.25rem 0; }
   footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.85rem; }
 </style>
 </head>
 <body>
 
-<h1>ImageTools Privacy Policy</h1>
-<p class="meta">Effective date: 2026&#8209;05&#8209;27</p>
+<h1>ImageTools Privacy</h1>
+<p class="meta">Last updated: 2026&#8209;05&#8209;27</p>
 
 <p>
-  This policy explains what data ImageTools collects, why we collect it, how it is
-  stored, and your rights. ImageTools is operated by Aspedia Pty Ltd. Contact:
-  <a href="mailto:philg@aspedia.net">philg@aspedia.net</a>.
+  ImageTools is open&#8209;source software that can be installed and run by anyone on
+  their own infrastructure. This page describes what the software does with data
+  by design. <strong>Responsibility for the privacy and handling of any data
+  uploaded to a specific deployment rests with the operator who runs that
+  deployment</strong> &mdash; not with the ImageTools project.
 </p>
 
-<h2>What we collect</h2>
-<ul>
-  <li><strong>Images you upload</strong> &mdash; via the web interface, mobile companion app, or the <em>ImageTools Screenshot Capture</em> browser extension. We store these against your user account so you can edit, compress, and share them.</li>
-  <li><strong>Image metadata (EXIF)</strong> &mdash; extracted from uploaded images. Used for organisation and editing features (e.g. capture date, GPS, camera).</li>
-  <li><strong>Account information</strong> &mdash; username, display name, and email address obtained from your authenticated session (OAuth2 with vinCreative, or Authelia&nbsp;/&nbsp;Remote&#8209;User headers, depending on deployment).</li>
-  <li><strong>Service logs</strong> &mdash; request paths, IP address, and timestamps for security, rate&#8209;limiting, and debugging. Retained up to 90 days.</li>
-</ul>
+<div class="callout">
+  <p><strong>About this instance.</strong> This deployment of ImageTools is hosted
+  by the operator of this domain. The ImageTools project does not host,
+  control, or have visibility into data stored on this instance and cannot make
+  any assertion about how the operator handles, retains, secures, or shares
+  uploaded data.</p>
+  <p>For privacy questions about <em>this</em> deployment specifically &mdash; including
+  where your images are stored, how long they are kept, who has access, and
+  how to delete them &mdash; please contact the operator of this domain. If you
+  cannot identify the operator, you should not upload personal or sensitive
+  material to this instance.</p>
+</div>
 
-<h2>What we don&rsquo;t collect</h2>
-<ul>
-  <li>We do not collect your browsing history.</li>
-  <li>We do not collect search terms.</li>
-  <li>The browser extension only captures images when you explicitly invoke it (popup button, context menu, or keyboard shortcut). It does not run in the background and does not collect telemetry.</li>
-  <li>We do not sell your data, and we do not share it with advertising or analytics third parties.</li>
-</ul>
-
-<h2>How long we keep data</h2>
-<ul>
-  <li>Images uploaded by authenticated users are kept until you delete them or your account is deactivated.</li>
-  <li>Images uploaded anonymously (no signed&#8209;in account) are deleted after 30&nbsp;days.</li>
-  <li>Service logs are retained for up to 90 days.</li>
-</ul>
-
-<h2>Where data is stored</h2>
+<h2>What the software is capable of handling</h2>
 <p>
-  All images, metadata, and account records are stored on infrastructure operated by Aspedia
-  Pty Ltd. Your browser extension stores its authentication token in
-  <code>browser.storage</code> on your device; that token is sent only to the
-  ImageTools backend you connected it to, over HTTPS.
+  When you use ImageTools, the software running on this server may process and
+  store:
 </p>
-
-<h2>Third&#8209;party processors</h2>
-<p>
-  ImageTools optionally integrates with <a href="https://openrouter.ai">OpenRouter</a>
-  when its AI features are enabled. When you explicitly invoke an AI action,
-  the relevant image and prompt are sent to OpenRouter, which forwards them to
-  the underlying model provider you selected. No data is sent to AI providers
-  unless you initiate an AI feature.
-</p>
-
-<h2>Your rights</h2>
 <ul>
-  <li>You can delete any image at any time from the web UI.</li>
-  <li>You can revoke OAuth2 sessions and connected browser extensions from the Settings panel.</li>
-  <li>To request account deletion or a copy of your data, email <a href="mailto:philg@aspedia.net">philg@aspedia.net</a>.</li>
+  <li><strong>Images you upload</strong> &mdash; via the web interface, the mobile companion app, or the <em>ImageTools Screenshot Capture</em> browser extension. Images are processed (resized, compressed, annotated, tagged) and stored against your user account on this server.</li>
+  <li><strong>Image metadata (EXIF)</strong> &mdash; extracted from uploads, including capture date, camera information, and GPS coordinates if they are present in the original file.</li>
+  <li><strong>Account information</strong> &mdash; depending on the authentication method the operator has configured (OAuth2 provider, Authelia or another reverse&#8209;proxy header, basic auth, or anonymous mode), the software may receive your username, display name, and email address from that identity provider.</li>
+  <li><strong>Service logs</strong> &mdash; request paths, IP address, and timestamps for security, rate limiting, and debugging.</li>
 </ul>
+
+<h2>Optional integrations</h2>
+<p>
+  ImageTools includes optional features that, when enabled by the operator, will
+  send some data to external services:
+</p>
+<ul>
+  <li><strong>AI features via OpenRouter.</strong> If the operator has enabled the AI integration, and you explicitly invoke an AI action, the relevant image and prompt are sent to <a href="https://openrouter.ai">OpenRouter</a>, which forwards them to the underlying model provider you select. AI features are never invoked unless you start them yourself.</li>
+  <li><strong>OAuth2 / single sign&#8209;on.</strong> If the operator has configured an external identity provider, your authentication request is sent to that provider as part of the sign&#8209;in flow. The ImageTools project does not operate any identity provider on your behalf.</li>
+</ul>
+<p>
+  Whether either of these is enabled, and which providers are used, is the
+  operator&rsquo;s decision. Check with the operator of this domain to find out
+  what is configured on this instance.
+</p>
 
 <h2>Browser extension specifics</h2>
 <p>
-  <em>ImageTools Screenshot Capture</em> captures images only when you explicitly
-  invoke a capture (visible area, full page, or selection). Captures are sent
-  over HTTPS to your authenticated ImageTools backend. No third party receives
-  these images.
+  The <em>ImageTools Screenshot Capture</em> browser extension only captures images
+  when you explicitly invoke a capture (popup button, right&#8209;click context menu,
+  or keyboard shortcut). It does not run captures in the background. Captures are
+  sent over HTTPS to whichever ImageTools server you connected the extension to;
+  no third party receives them.
 </p>
 <p>
-  The extension requests <code>activeTab</code>, <code>contextMenus</code>,
-  <code>storage</code>, <code>notifications</code>, <code>tabs</code>, and host
-  permission for <code>&lt;all_urls&gt;</code>. The host permission is required
-  so the capture works on every page; it does not cause the extension to read
-  or send page content automatically.
+  The extension stores its authentication token in <code>browser.storage</code>
+  on your device. The token is sent only to the ImageTools server you registered
+  with, and can be revoked from that server&rsquo;s Settings panel at any time.
+</p>
+<p>The extension requests the following permissions:</p>
+<ul>
+  <li><code>activeTab</code> and <code>tabs</code> &mdash; to capture the currently visible tab on your command.</li>
+  <li><code>contextMenus</code> &mdash; to add capture commands to the right&#8209;click menu.</li>
+  <li><code>storage</code> &mdash; to remember the authentication token across browser restarts.</li>
+  <li><code>notifications</code> &mdash; to show capture success or failure messages.</li>
+  <li><code>&lt;all_urls&gt;</code> &mdash; required so the capture works on any page. The extension does not read or send page content automatically; it only acts when you invoke a capture.</li>
+</ul>
+
+<h2>Data retention defaults</h2>
+<p>
+  By default the software:
+</p>
+<ul>
+  <li>Retains images uploaded by authenticated users until you delete them or your account is removed by the operator.</li>
+  <li>Deletes images uploaded in anonymous mode after 30 days.</li>
+  <li>Retains service logs for up to 90 days.</li>
+</ul>
+<p>
+  The operator of this instance may have configured different retention
+  windows, or may have additional backup, replication, or archival policies
+  the ImageTools project has no visibility into.
 </p>
 
-<h2>Changes to this policy</h2>
+<h2>Your rights and how to exercise them</h2>
+<p>Within the application you can:</p>
+<ul>
+  <li>Delete any image at any time from the web UI.</li>
+  <li>Revoke connected browser extensions and active sessions from the Settings panel.</li>
+</ul>
 <p>
-  We will update this page if we change how data is collected or used. The
-  <em>Effective date</em> at the top will reflect the most recent revision.
+  For account deletion, a copy of your data, correction of inaccurate information,
+  or any other formal privacy request under your local data&#8209;protection law,
+  contact the operator of this domain. The ImageTools project cannot fulfil
+  requests against individual deployments.
+</p>
+
+<h2>About this software</h2>
+<p>
+  ImageTools is open&#8209;source. The project source is available at
+  <a href="https://github.com/githuba42r/ImageTools">https://github.com/githuba42r/ImageTools</a>.
+</p>
+<p>
+  This page describes the software&rsquo;s default data&#8209;handling behaviour. Each
+  operator may configure or customise it. The current state of this specific
+  instance &mdash; including all of the above &mdash; is the responsibility of the operator
+  of this domain.
 </p>
 
 <footer>
-  Aspedia Pty Ltd &middot; <a href="mailto:philg@aspedia.net">philg@aspedia.net</a>
+  ImageTools is open&#8209;source self&#8209;hosted software. This privacy notice describes
+  the software&rsquo;s default behaviour and does not bind any specific operator.
+  Contact the operator of this domain for instance&#8209;specific privacy enquiries.
 </footer>
 
 </body>

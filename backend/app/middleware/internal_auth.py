@@ -48,6 +48,7 @@ class InternalAuthMiddleware(BaseHTTPMiddleware):
     BYPASS_PATHS = [
         "/health",  # Health check endpoint
         "/version",  # Version information endpoint
+        "/privacy.html",  # Public privacy policy (browser-extension store requirement)
     ]
     
     # Path prefixes that bypass internal auth (API endpoints with their own auth)

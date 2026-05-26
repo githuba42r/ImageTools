@@ -84,6 +84,15 @@ services:
       - "traefik.http.routers.imagetools-presigned.priority=100"
       # No middleware = bypasses all auth (Basic Auth + Internal Auth header)
 
+      # High priority: Privacy policy - bypasses all auth (public document required by browser-extension store listings)
+      - "traefik.http.routers.imagetools-privacy.rule=Host(`imagetools.yourdomain.com`) && Path(`/privacy.html`)"  # ← Replace domain
+      - "traefik.http.routers.imagetools-privacy.entrypoints=https"
+      - "traefik.http.routers.imagetools-privacy.tls=true"
+      - "traefik.http.routers.imagetools-privacy.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.imagetools-privacy.service=imagetools-svc"
+      - "traefik.http.routers.imagetools-privacy.priority=100"
+      # No middleware = bypasses all auth (Basic Auth + Internal Auth header)
+
       # High priority: Health check - bypasses all auth
       - "traefik.http.routers.imagetools-health.rule=Host(`imagetools.yourdomain.com`) && Path(`/health`)"  # ← Replace domain
       - "traefik.http.routers.imagetools-health.entrypoints=https"
