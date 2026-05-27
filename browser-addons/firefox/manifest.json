@@ -20,8 +20,7 @@
     "contextMenus",
     "storage",
     "notifications",
-    "tabs",
-    "<all_urls>"
+    "tabs"
   ],
   "background": {
     "scripts": [
