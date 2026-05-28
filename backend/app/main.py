@@ -184,13 +184,13 @@ app.include_router(share_view.router)
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
 
 
-@app.get("/version")
+@app.api_route("/version", methods=["GET", "HEAD"])
 async def get_version():
     """
     Get version information.
@@ -267,7 +267,10 @@ if frontend_dist.exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
     
     # Serve index.html for SPA routes (catch-all - must be last!)
-    @app.get("/{full_path:path}")
+    # GET + HEAD: external scanners (e.g. browser-extension store reviewers
+    # validating the privacy URL) probe with HEAD first; a GET-only route
+    # answers 405 and the URL is reported as unreachable.
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
     async def serve_frontend(full_path: str):
         """Serve frontend application for non-API routes."""
         # If it's an API route, health check, or the MCP mount, let it fall
