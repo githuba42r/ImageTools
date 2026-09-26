@@ -48,4 +48,25 @@ this fix addresses.
 
 | Case | Expected |
 |------|----------|
-| Capture Visible / Full Page / Selection on a normal desktop tab, DevTools closed | All work as before; full-page tiles aligned; selection crop accurate |
+| Capture Visible / Full Page / Selection on a normal desktop tab, DevTools closed | All work as before (Visible / Full Page now via the preview modal, see §4); full-page tiles aligned; selection crop accurate |
+
+## 4. Capture tagging and preview confirmation
+
+Pair the addon with an account that already has a few tagged images. Set a
+tag in the popup ("Tag uploads as") before starting.
+
+| Case | Steps | Expected |
+|------|-------|----------|
+| 4a | Capture Selection, draw a region | Action panel shows a **Tag** input pre-filled with the popup's current tag, and up to 8 recent-tag chips (most recent first) above ✓ Capture / Reselect / Cancel |
+| 4b | 4a → click a chip → ✓ Capture | Chip highlights and fills the input; uploaded image carries that tag; popup now shows it as the current tag |
+| 4c | 4a → type a brand-new tag → press **Enter** | Captures with the new tag; typing in the input does not trigger page keyboard shortcuts (e.g. `s`/`/` on GitHub) |
+| 4d | 4a → clear the tag (×) → Capture | Image uploaded untagged; popup's current tag is cleared |
+| 4e | Capture Visible Area (context menu **and** popup button) | Nothing uploads yet; a modal shows the captured image preview, tag picker, ✓ Upload / ✕ Discard. The modal itself is not in the captured image |
+| 4f | Capture Full Page on a tall page | Same modal; the preview scrolls to show the whole page |
+| 4g | 4e/4f → pick or type a tag → ✓ Upload (or **Enter**) | Button shows "Uploading…", modal closes, "Screenshot uploaded!" notification, image has the tag, popup current tag updated |
+| 4h | 4e/4f → ✕ Discard (or **Esc**) | Modal closes, nothing uploaded |
+| 4i | Stop the backend, 4e → ✓ Upload | Modal stays open with "Upload failed: …" and a Retry button; Discard still works |
+| 4j | Repeat any capture several times on the same tab without reloading | Only one overlay/modal at a time; each action handled once (no duplicate uploads) |
+| 4k | Addon paired before `user_id` was stored, or tags endpoint unreachable | Tag input still works; chips are simply absent |
+| 4l | Strict-CSP site (e.g. github.com) → 4e | Preview image renders |
+
