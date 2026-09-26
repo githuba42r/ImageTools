@@ -1,29 +1,42 @@
 // ImageTools Content Script (simplified for brevity)
 
-// Listen for messages from background script
-browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[ImageTools Content] Received message:', message.action);
-  
-  if (message.action === 'startSelectionCapture') {
-    initSelectionCapture();
-    sendResponse({ success: true });
-    return true;
-  } else if (message.action === 'captureFullPage') {
-    // Handle async operation
-    captureFullPageCanvas()
-      .then(result => {
-        console.log('[ImageTools Content] Sending response back to background');
-        sendResponse(result);
-      })
-      .catch(error => {
-        console.error('[ImageTools Content] Error in captureFullPageCanvas:', error);
-        sendResponse({ error: error.message });
-      });
-    return true; // Keep channel open for async response
-  }
-  
-  return false;
-});
+// Listen for messages from background script.
+// content.js is re-injected on every capture; the guard keeps a single
+// listener so a message isn't handled (and answered) once per injection.
+// No top-level const/let in this file for the same reason - re-declaring
+// them on re-injection throws.
+if (!window.__imagetoolsContentListener) {
+  window.__imagetoolsContentListener = true;
+  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('[ImageTools Content] Received message:', message.action);
+    
+    if (message.action === 'startSelectionCapture') {
+      initSelectionCapture();
+      sendResponse({ success: true });
+      return true;
+    } else if (message.action === 'showCapturePreview') {
+      showCapturePreview(message.dataUrl, message.filename, message.title);
+      sendResponse({ success: true });
+      return true;
+    } else if (message.action === 'captureFullPage') {
+      // Handle async operation. The preview is shown here rather than handing
+      // the (potentially huge) image back to the background and round-tripping it.
+      captureFullPageCanvas()
+        .then(result => {
+          showCapturePreview(result.dataUrl, `screenshot-full-${Date.now()}.png`, 'Full page captured');
+          console.log('[ImageTools Content] Full page preview shown');
+          sendResponse({ previewShown: true });
+        })
+        .catch(error => {
+          console.error('[ImageTools Content] Error in captureFullPageCanvas:', error);
+          sendResponse({ error: error.message });
+        });
+      return true; // Keep channel open for async response
+    }
+    
+    return false;
+  });
+}
 
 // Initialize selection capture overlay
 function initSelectionCapture() {
@@ -64,9 +77,19 @@ function initSelectionCapture() {
   actionsContainer.style.cssText = `
     position: fixed;
     display: none;
+    flex-direction: column;
     z-index: 1000001;
     gap: 10px;
+    padding: 10px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
+
+  const tagPicker = createTagPicker();
+  const buttonsRow = document.createElement('div');
+  buttonsRow.style.cssText = 'display: flex; gap: 10px;';
   
   // Create OK button
   const okButton = document.createElement('button');
@@ -122,9 +145,11 @@ function initSelectionCapture() {
   reselectButton.onmouseover = () => reselectButton.style.background = '#4f46e5';
   reselectButton.onmouseout = () => reselectButton.style.background = '#6366f1';
   
-  actionsContainer.appendChild(okButton);
-  actionsContainer.appendChild(reselectButton);
-  actionsContainer.appendChild(cancelButton);
+  buttonsRow.appendChild(okButton);
+  buttonsRow.appendChild(reselectButton);
+  buttonsRow.appendChild(cancelButton);
+  actionsContainer.appendChild(tagPicker.element);
+  actionsContainer.appendChild(buttonsRow);
   
   document.body.appendChild(overlay);
   document.body.appendChild(selectionBox);
@@ -226,11 +251,12 @@ function initSelectionCapture() {
   // OK button - capture and cleanup
   const confirmCapture = async () => {
     if (!currentRect) return;
+    const tag = tagPicker.getTag();
     actionsContainer.style.display = 'none';
     overlay.style.display = 'none';
     selectionBox.style.display = 'none';
     await new Promise(resolve => setTimeout(resolve, 100));
-    await captureSelection(currentRect);
+    await captureSelection(currentRect, tag);
     cleanupSelectionUI();
   };
   okButton.addEventListener('click', confirmCapture);
@@ -311,7 +337,7 @@ function cleanupSelectionUI() {
 }
 
 // Capture selected area
-async function captureSelection(rect) {
+async function captureSelection(rect, tag) {
   try {
     // First, temporarily hide the overlay elements
     const overlay = document.getElementById('imagetools-selection-overlay');
@@ -370,12 +396,308 @@ async function captureSelection(rect) {
     // Send to background script for upload
     await browser.runtime.sendMessage({ 
       action: 'uploadSelection', 
-      dataUrl: croppedDataUrl 
+      dataUrl: croppedDataUrl,
+      tag
     });
     
   } catch (error) {
     console.error('[ImageTools] Failed to capture selection:', error);
   }
+}
+
+// Maximum number of recently used tags offered as chips
+var IMAGETOOLS_RECENT_TAG_LIMIT = 8;
+
+// Build the tag picker shared by the selection overlay and the capture
+// preview: a free-text input plus chips for recently used tags. Recent tags
+// come from the background (which holds the access token); the input is
+// usable immediately and the chips appear once the lookup returns.
+function createTagPicker() {
+  const element = document.createElement('div');
+  element.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+    color: #374151;
+    text-align: left;
+  `;
+
+  const inputRow = document.createElement('div');
+  inputRow.style.cssText = 'display: flex; gap: 6px; align-items: center;';
+
+  const label = document.createElement('span');
+  label.textContent = 'Tag:';
+  label.style.cssText = 'font-weight: 500; white-space: nowrap;';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'New or recent tag (optional)';
+  input.style.cssText = `
+    flex: 1;
+    min-width: 180px;
+    padding: 6px 8px;
+    border: 2px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #111827;
+    background: white;
+    box-sizing: border-box;
+    outline: none;
+  `;
+  input.addEventListener('focus', () => input.style.borderColor = '#6366f1');
+  input.addEventListener('blur', () => input.style.borderColor = '#e5e7eb');
+
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.textContent = '×';
+  clearButton.title = 'Clear tag';
+  clearButton.style.cssText = `
+    padding: 4px 9px;
+    background: #e5e7eb;
+    color: #374151;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+  `;
+
+  const chips = document.createElement('div');
+  chips.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px; max-width: 420px;';
+
+  inputRow.appendChild(label);
+  inputRow.appendChild(input);
+  inputRow.appendChild(clearButton);
+  element.appendChild(inputRow);
+  element.appendChild(chips);
+
+  // Keep typing out of page-level keyboard shortcuts. Enter/Escape still
+  // bubble so the overlay's own key handler can confirm/cancel.
+  for (const evt of ['keydown', 'keyup', 'keypress']) {
+    input.addEventListener(evt, (e) => {
+      if (e.key !== 'Enter' && e.key !== 'Escape') e.stopPropagation();
+    });
+  }
+
+  const highlightChips = () => {
+    const value = input.value.trim();
+    for (const chip of chips.children) {
+      const active = chip.dataset.tag === value;
+      chip.style.background = active ? '#6366f1' : '#eef2ff';
+      chip.style.color = active ? 'white' : '#4338ca';
+    }
+  };
+
+  let touched = false;
+  input.addEventListener('input', () => { touched = true; highlightChips(); });
+  clearButton.addEventListener('click', () => {
+    touched = true;
+    input.value = '';
+    highlightChips();
+  });
+
+  browser.runtime.sendMessage({ action: 'getRecentTags' })
+    .then((response) => {
+      if (!response) return;
+      // Default to the current tag unless the user already started typing
+      if (!touched && response.currentTag) input.value = response.currentTag;
+      for (const tag of (response.tags || []).slice(0, IMAGETOOLS_RECENT_TAG_LIMIT)) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.dataset.tag = tag;
+        chip.textContent = tag;
+        chip.title = `Tag as "${tag}"`;
+        chip.style.cssText = `
+          padding: 3px 10px;
+          border: none;
+          border-radius: 999px;
+          font-size: 12px;
+          cursor: pointer;
+        `;
+        chip.addEventListener('click', () => {
+          touched = true;
+          input.value = tag;
+          highlightChips();
+        });
+        chips.appendChild(chip);
+      }
+      highlightChips();
+    })
+    .catch((error) => console.warn('[ImageTools] Recent tags lookup failed:', error));
+
+  return {
+    element,
+    getTag: () => input.value.trim()
+  };
+}
+
+// Show a modal with a preview of a captured image, a tag picker, and
+// Upload / Discard buttons. Nothing is uploaded until the user confirms.
+function showCapturePreview(dataUrl, filename, title) {
+  cleanupCapturePreview();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'imagetools-preview-backdrop';
+  backdrop.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.6);
+    z-index: 2147483647;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+
+  const panel = document.createElement('div');
+  panel.style.cssText = `
+    background: white;
+    border-radius: 10px;
+    padding: 16px;
+    max-width: min(900px, 90vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    box-sizing: border-box;
+  `;
+
+  const heading = document.createElement('div');
+  heading.style.cssText = 'font-size: 16px; font-weight: 600; color: #111827;';
+  heading.textContent = title || 'Screenshot captured';
+
+  // Scrollable so tall full-page captures can be inspected
+  const imageWrap = document.createElement('div');
+  imageWrap.style.cssText = `
+    overflow: auto;
+    max-height: 60vh;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: #f9fafb;
+  `;
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.alt = 'Captured screenshot preview';
+  img.style.cssText = 'display: block; width: 100%; height: auto;';
+  imageWrap.appendChild(img);
+
+  const tagPicker = createTagPicker();
+
+  const status = document.createElement('div');
+  status.style.cssText = 'font-size: 13px; color: #dc2626; display: none;';
+
+  const buttonsRow = document.createElement('div');
+  buttonsRow.style.cssText = 'display: flex; gap: 10px; justify-content: flex-end;';
+
+  const uploadButton = document.createElement('button');
+  uploadButton.textContent = '✓ Upload';
+  styleOverlayButton(uploadButton, '#10b981', '#059669');
+
+  const discardButton = document.createElement('button');
+  discardButton.textContent = '✕ Discard';
+  styleOverlayButton(discardButton, '#ef4444', '#dc2626');
+
+  buttonsRow.appendChild(uploadButton);
+  buttonsRow.appendChild(discardButton);
+
+  panel.appendChild(heading);
+  panel.appendChild(imageWrap);
+  panel.appendChild(tagPicker.element);
+  panel.appendChild(status);
+  panel.appendChild(buttonsRow);
+  backdrop.appendChild(panel);
+  document.body.appendChild(backdrop);
+
+  // Keep clicks inside the modal away from page-level handlers
+  const blockPropagation = (e) => e.stopPropagation();
+  for (const evt of ['mousedown', 'mouseup', 'click', 'pointerdown', 'pointerup']) {
+    backdrop.addEventListener(evt, blockPropagation);
+  }
+
+  let uploading = false;
+
+  const close = () => {
+    document.removeEventListener('keydown', keyHandler);
+    cleanupCapturePreview();
+  };
+
+  const upload = async () => {
+    if (uploading) return;
+    uploading = true;
+    uploadButton.disabled = true;
+    discardButton.disabled = true;
+    uploadButton.textContent = 'Uploading…';
+    status.style.display = 'none';
+
+    try {
+      const response = await browser.runtime.sendMessage({
+        action: 'uploadCapture',
+        dataUrl,
+        filename,
+        tag: tagPicker.getTag()
+      });
+      if (response && response.success) {
+        close();
+        return;
+      }
+      throw new Error((response && response.error) || 'Upload failed');
+    } catch (error) {
+      console.error('[ImageTools] Preview upload failed:', error);
+      status.textContent = `Upload failed: ${error.message}`;
+      status.style.display = 'block';
+      uploadButton.textContent = '✓ Retry upload';
+      uploadButton.disabled = false;
+      discardButton.disabled = false;
+      uploading = false;
+    }
+  };
+
+  const keyHandler = (e) => {
+    // A newer preview replaced this one - stop listening
+    if (!backdrop.isConnected) {
+      document.removeEventListener('keydown', keyHandler);
+      return;
+    }
+    if (e.key === 'Escape' && !uploading) {
+      e.preventDefault();
+      close();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      upload();
+    }
+  };
+
+  uploadButton.addEventListener('click', upload);
+  discardButton.addEventListener('click', close);
+  document.addEventListener('keydown', keyHandler);
+}
+
+// Apply the shared overlay button style with a hover colour
+function styleOverlayButton(button, background, hoverBackground) {
+  button.type = 'button';
+  button.style.cssText = `
+    padding: 10px 20px;
+    background: ${background};
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  `;
+  button.onmouseover = () => button.style.background = hoverBackground;
+  button.onmouseout = () => button.style.background = background;
+}
+
+// Remove the capture preview modal
+function cleanupCapturePreview() {
+  const backdrop = document.getElementById('imagetools-preview-backdrop');
+  if (backdrop) backdrop.remove();
 }
 
 // Capture full page

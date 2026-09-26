@@ -5,8 +5,12 @@ const API_ENDPOINTS = {
   token: '/api/v1/addon/token',
   refresh: '/api/v1/addon/refresh',
   upload: '/api/v1/addon/upload',
-  unpair: '/api/v1/addon/unpair'
+  unpair: '/api/v1/addon/unpair',
+  validate: '/api/v1/addon/validate'
 };
+
+// Storage key for the current upload tag (shared with the popup)
+const TAG_KEY = 'imagetools_current_tag';
 
 // Auth state
 let authState = {
@@ -294,11 +298,14 @@ async function captureVisibleArea(tab) {
     
     const dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
     
-    // Convert data URL to blob
-    const blob = await dataUrlToBlob(dataUrl);
-    
-    // Upload to ImageTools
-    await uploadScreenshot(blob, `screenshot-${Date.now()}.png`);
+    // Let the user preview, tag and confirm before uploading
+    await browser.tabs.executeScript(tab.id, { file: 'content.js' });
+    await browser.tabs.sendMessage(tab.id, {
+      action: 'showCapturePreview',
+      dataUrl,
+      filename: `screenshot-${Date.now()}.png`,
+      title: 'Visible area captured'
+    });
   } catch (error) {
     console.error('[ImageTools] Failed to capture visible area:', error);
     showNotification('Failed to capture screenshot', error.message);
@@ -323,16 +330,11 @@ async function captureFullPage(tab) {
     // Request full page capture from content script
     const response = await browser.tabs.sendMessage(tab.id, { action: 'captureFullPage' });
     
-    console.log('[ImageTools] Received response from content script:', response ? 'has data' : 'no data');
-    
-    if (response && response.dataUrl) {
-      console.log('[ImageTools] Converting dataUrl to blob');
-      const blob = await dataUrlToBlob(response.dataUrl);
-      console.log('[ImageTools] Blob size:', blob.size, 'bytes');
-      await uploadScreenshot(blob, `screenshot-full-${Date.now()}.png`);
-    } else {
-      console.error('[ImageTools] No dataUrl in response:', response);
-      showNotification('Full page capture failed', 'No image data received from content script');
+    // The content script shows the preview itself; the upload happens
+    // when the user confirms it (see 'uploadCapture').
+    if (!response || !response.previewShown) {
+      console.error('[ImageTools] Full page capture failed:', response);
+      showNotification('Full page capture failed', (response && response.error) || 'No image data received from content script');
     }
   } catch (error) {
     console.error('[ImageTools] Failed to capture full page:', error);
@@ -359,8 +361,73 @@ async function captureSelection(tab) {
   }
 }
 
-// Upload screenshot to ImageTools
-async function uploadScreenshot(blob, filename) {
+// Persist the tag chosen in a capture overlay as the current tag, so the
+// popup and the next capture default to it. An empty tag clears it.
+async function persistCurrentTag(tag) {
+  if (tag) {
+    await browser.storage.local.set({ [TAG_KEY]: tag });
+  } else {
+    await browser.storage.local.remove(TAG_KEY);
+  }
+}
+
+// Resolve the user id, backfilling it via /validate for addons paired
+// before user_id was stored in the auth state.
+async function ensureUserId() {
+  if (authState.userId) return authState.userId;
+  const response = await fetch(`${authState.instanceUrl}${API_ENDPOINTS.validate}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authState.accessToken}`
+    },
+    body: JSON.stringify({ access_token: authState.accessToken })
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (!data.valid || !data.user_id) return null;
+  authState.userId = data.user_id;
+  await saveAuthState();
+  return data.user_id;
+}
+
+// Current tag plus the user's tags ordered by most recent use, for the
+// capture overlays' tag picker. Tag lookup failures degrade to no chips.
+async function getRecentTags() {
+  const stored = await browser.storage.local.get([TAG_KEY]);
+  const currentTag = stored[TAG_KEY] || '';
+  let tags = [];
+
+  try {
+    if (!isAuthenticated()) {
+      await refreshAccessToken();
+    }
+    const userId = await ensureUserId();
+    if (userId) {
+      const response = await fetch(`${authState.instanceUrl}/api/v1/users/${userId}/tags`, {
+        headers: { 'Authorization': `Bearer ${authState.accessToken}` }
+      });
+      if (response.ok) {
+        tags = (await response.json()).map(({ tag }) => tag);
+      }
+    }
+  } catch (error) {
+    console.warn('[ImageTools] Failed to load recent tags:', error);
+  }
+
+  return { currentTag, tags };
+}
+
+// Upload a captured image with the tag chosen in the overlay
+async function uploadTaggedCapture(dataUrl, filename, tag) {
+  await persistCurrentTag(tag);
+  const blob = await dataUrlToBlob(dataUrl);
+  await uploadScreenshot(blob, filename, tag);
+}
+
+// Upload screenshot to ImageTools. When no tag is given the current tag
+// (set in the popup, persisted in storage) is used.
+async function uploadScreenshot(blob, filename, tag) {
   try {
     console.log('[ImageTools] Uploading screenshot:', filename);
     
@@ -369,9 +436,11 @@ async function uploadScreenshot(blob, filename) {
       await refreshAccessToken();
     }
     
-    // Read current tag (set in popup, persisted in storage)
-    const tagState = await browser.storage.local.get(['imagetools_current_tag']);
-    const currentTag = tagState.imagetools_current_tag;
+    let currentTag = tag;
+    if (currentTag === undefined) {
+      const tagState = await browser.storage.local.get([TAG_KEY]);
+      currentTag = tagState[TAG_KEY];
+    }
 
     const formData = new FormData();
     formData.append('file', blob, filename);
@@ -481,12 +550,20 @@ browser.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     return Promise.resolve({ success: true });
   } else if (message.action === 'uploadSelection') {
     try {
-      const blob = await dataUrlToBlob(message.dataUrl);
-      await uploadScreenshot(blob, `screenshot-selection-${Date.now()}.png`);
+      await uploadTaggedCapture(message.dataUrl, `screenshot-selection-${Date.now()}.png`, message.tag);
       return Promise.resolve({ success: true });
     } catch (error) {
       return Promise.resolve({ success: false, error: error.message });
     }
+  } else if (message.action === 'uploadCapture') {
+    try {
+      await uploadTaggedCapture(message.dataUrl, message.filename, message.tag);
+      return Promise.resolve({ success: true });
+    } catch (error) {
+      return Promise.resolve({ success: false, error: error.message });
+    }
+  } else if (message.action === 'getRecentTags') {
+    return getRecentTags();
   } else if (message.action === 'captureVisibleTab') {
     try {
       // Content script is requesting a capture of its own tab
