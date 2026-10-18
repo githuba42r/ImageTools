@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy — ImageTools</title>
+  <meta name="description" content="What the ImageTools software does with data by design: uploads, metadata, account information, optional integrations, browser-extension behaviour and data-retention defaults.">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt=""> ImageTools</a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle navigation">☰</button>
+      <nav class="site-nav" id="site-nav">
+        <ul>
+          <li><a href="index.html" data-nav="index.html">Home</a></li>
+          <li><a href="install.html" data-nav="install.html">Get started</a></li>
+          <li><a href="extensions.html" data-nav="extensions.html">Extensions</a></li>
+          <li><a href="mcp.html" data-nav="mcp.html">MCP server</a></li>
+          <li><a href="docker.html" data-nav="docker.html">Docker</a></li>
+          <li><a class="nav-cta" href="https://image-tools.a42r.com" rel="noopener">Open app ↗</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container doc-hero">
+      <h1>ImageTools <span class="grad-text">Privacy</span></h1>
+      <p>Last updated: 2026&#8209;05&#8209;27 · What the software does with data by design.</p>
+    </div>
+
+    <section>
+      <div class="container prose">
+        <p>
+          ImageTools is open&#8209;source software that can be installed and run by anyone on
+          their own infrastructure. This page describes what the software does with data
+          by design. <strong>Responsibility for the privacy and handling of any data
+          uploaded to a specific deployment rests with the operator who runs that
+          deployment</strong> &mdash; not with the ImageTools project.
+        </p>
+
+        <div class="note warn">
+          <p><strong>About this instance.</strong> This deployment of ImageTools is hosted
+          by the operator of this domain. The ImageTools project does not host,
+          control, or have visibility into data stored on this instance and cannot make
+          any assertion about how the operator handles, retains, secures, or shares
+          uploaded data.</p>
+          <p>For privacy questions about <em>this</em> deployment specifically &mdash; including
+          where your images are stored, how long they are kept, who has access, and
+          how to delete them &mdash; please contact the operator of this domain. If you
+          cannot identify the operator, you should not upload personal or sensitive
+          material to this instance.</p>
+        </div>
+
+        <h2>What the software is capable of handling</h2>
+        <p>
+          When you use ImageTools, the software running on this server may process and
+          store:
+        </p>
+        <ul>
+          <li><strong>Images you upload</strong> &mdash; via the web interface, the mobile companion app, or the <em>ImageTools Screenshot Capture</em> browser extension. Images are processed (resized, compressed, annotated, tagged) and stored against your user account on this server.</li>
+          <li><strong>Image metadata (EXIF)</strong> &mdash; extracted from uploads, including capture date, camera information, and GPS coordinates if they are present in the original file.</li>
+          <li><strong>Account information</strong> &mdash; depending on the authentication method the operator has configured (OAuth2 provider, Authelia or another reverse&#8209;proxy header, basic auth, or anonymous mode), the software may receive your username, display name, and email address from that identity provider.</li>
+          <li><strong>Service logs</strong> &mdash; request paths, IP address, and timestamps for security, rate limiting, and debugging.</li>
+        </ul>
+
+        <h2>Optional integrations</h2>
+        <p>
+          ImageTools includes optional features that, when enabled by the operator, will
+          send some data to external services:
+        </p>
+        <ul>
+          <li><strong>AI features via OpenRouter.</strong> If the operator has enabled the AI integration, and you explicitly invoke an AI action, the relevant image and prompt are sent to <a href="https://openrouter.ai" rel="noopener">OpenRouter</a>, which forwards them to the underlying model provider you select. AI features are never invoked unless you start them yourself.</li>
+          <li><strong>OAuth2 / single sign&#8209;on.</strong> If the operator has configured an external identity provider, your authentication request is sent to that provider as part of the sign&#8209;in flow. The ImageTools project does not operate any identity provider on your behalf.</li>
+        </ul>
+        <p>
+          Whether either of these is enabled, and which providers are used, is the
+          operator&rsquo;s decision. Check with the operator of this domain to find out
+          what is configured on this instance.
+        </p>
+
+        <h2>Browser extension specifics</h2>
+        <p>
+          The <em>ImageTools Screenshot Capture</em> browser extension only captures images
+          when you explicitly invoke a capture (popup button, right&#8209;click context menu,
+          or keyboard shortcut). It does not run captures in the background. Captures are
+          sent over HTTPS to whichever ImageTools server you connected the extension to;
+          no third party receives them.
+        </p>
+        <p>
+          The extension stores its authentication token in <code>browser.storage</code>
+          on your device. The token is sent only to the ImageTools server you registered
+          with, and can be revoked from that server&rsquo;s Settings panel at any time.
+        </p>
+        <p>The extension requests the following permissions:</p>
+        <ul>
+          <li><code>activeTab</code> and <code>tabs</code> &mdash; to capture the currently visible tab on your command.</li>
+          <li><code>contextMenus</code> &mdash; to add capture commands to the right&#8209;click menu.</li>
+          <li><code>storage</code> &mdash; to remember the authentication token across browser restarts.</li>
+          <li><code>notifications</code> &mdash; to show capture success or failure messages.</li>
+          <li><code>&lt;all_urls&gt;</code> &mdash; required so the capture works on any page. The extension does not read or send page content automatically; it only acts when you invoke a capture.</li>
+        </ul>
+
+        <h2>Data retention defaults</h2>
+        <p>
+          By default the software:
+        </p>
+        <ul>
+          <li>Retains images uploaded by authenticated users until you delete them or your account is removed by the operator.</li>
+          <li>Deletes images uploaded in anonymous mode after 30 days.</li>
+          <li>Retains service logs for up to 90 days.</li>
+        </ul>
+        <p>
+          The operator of this instance may have configured different retention
+          windows, or may have additional backup, replication, or archival policies
+          the ImageTools project has no visibility into.
+        </p>
+
+        <h2>Your rights and how to exercise them</h2>
+        <p>Within the application you can:</p>
+        <ul>
+          <li>Delete any image at any time from the web UI.</li>
+          <li>Revoke connected browser extensions and active sessions from the Settings panel.</li>
+        </ul>
+        <p>
+          For account deletion, a copy of your data, correction of inaccurate information,
+          or any other formal privacy request under your local data&#8209;protection law,
+          contact the operator of this domain. The ImageTools project cannot fulfil
+          requests against individual deployments.
+        </p>
+
+        <h2>About this software</h2>
+        <p>
+          ImageTools is open&#8209;source. The project source is available at
+          <a href="https://github.com/githuba42r/ImageTools" rel="noopener">https://github.com/githuba42r/ImageTools</a>.
+        </p>
+        <p>
+          This page describes the software&rsquo;s default data&#8209;handling behaviour. Each
+          operator may configure or customise it. The current state of this specific
+          instance &mdash; including all of the above &mdash; is the responsibility of the operator
+          of this domain.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><img src="assets/logo.svg" alt=""> ImageTools</div>
+          <p>Self-hosted image compression, editing and multi-platform capture. Vue 3 + FastAPI in a single Docker container.</p>
+        </div>
+        <div>
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="install.html">Get started</a></li>
+            <li><a href="docker.html">Docker deployment</a></li>
+            <li><a href="extensions.html">Browser extensions</a></li>
+            <li><a href="mcp.html">MCP server</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/githuba42r/ImageTools" rel="noopener">GitHub repository</a></li>
+            <li><a href="https://image-tools.a42r.com" rel="noopener">Live instance</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/USER_GUIDE.md" rel="noopener">User guide</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/LICENSE" rel="noopener">GPL-3.0 license</a></li>
+            <li><a href="privacy.html" data-nav="privacy.html">Privacy policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Version v1.12.0 · GPL-3.0</span>
+        <span>Self-hosted · No cloud lock-in</span>
+      </div>
+    </div>
+  </footer>
+  <script src="assets/site.js"></script>
+</body>
+</html>

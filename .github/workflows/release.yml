@@ -1,0 +1,321 @@
+name: release
+
+# Build every ImageTools artifact and cut one GitHub Release carrying them:
+#
+#   plan     -> resolve the tag, read version.json, verify tag == v<version>
+#   test     -> backend pytest suite gates the release
+#   android  -> release APK (debug-signed, same as ./build.sh), named
+#               imagetools-<version>-<versionCode>.apk
+#   docker   -> ghcr.io/<owner>/imagetools:<version> (+ :latest for stable
+#               versions) - the single image: frontend, backend and the HTTP
+#               MCP transport all ship inside it
+#   browser  -> imagetools-chrome-<version>.zip + imagetools-firefox-<version>.xpi
+#   mcp      -> imagetools_mcp_server wheel + sdist (stdio install path; there
+#               is no separate MCP Docker image)
+#   release  -> one GitHub Release with every artifact attached
+#
+# Normal flow (the version bump stays a manual, explicit act - same as always):
+#   node bump-version.js <major|minor|patch|prerelease>
+#   git commit -am "chore: bump version to X.Y.Z"
+#   git tag vX.Y.Z && git push && git push --tags
+#   (pushing the v* tag triggers this workflow)
+#
+# workflow_dispatch: pass `tag` to (re)release an existing tag, or leave it
+# empty for a build-only run. dry_run builds everything but publishes nothing
+# (no GHCR push, no release).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to release (e.g. v1.12.0). Leave empty for a build-only run."
+        required: false
+        type: string
+      dry_run:
+        description: "Build everything, but do not push images or create a release."
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+# One release at a time; never cancel a release that is mid-flight.
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      dry_run: ${{ steps.plan.outputs.dry_run }}
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+      code: ${{ steps.plan.outputs.code }}
+      build_date: ${{ steps.plan.outputs.build_date }}
+      sha: ${{ steps.plan.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - id: plan
+        name: Resolve version and tag
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r .version version.json)
+          CODE=$(jq -r .versionCode version.json)
+          BUILD_DATE=$(jq -r .buildDate version.json)
+
+          if [ -n "$TAG" ] && [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Tag $TAG does not match version.json (expected v$VERSION) - run node bump-version.js, commit and retag."
+            exit 1
+          fi
+
+          RELEASE=false
+          if [ -n "$TAG" ] && [ "$DRY_RUN" != "true" ]; then
+            RELEASE=true
+          fi
+
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "code=$CODE"
+            echo "build_date=$BUILD_DATE"
+            echo "release=$RELEASE"
+            echo "dry_run=$DRY_RUN"
+            echo "sha=$(git rev-parse HEAD)"
+          } >>"$GITHUB_OUTPUT"
+
+          {
+            echo "### Release plan"
+            echo "- version: \`$VERSION\` (code $CODE)"
+            echo "- tag: ${TAG:-(none - build only)}"
+            echo "- publish: \`$RELEASE\`"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  test:
+    needs: plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # cwd matters: Settings() reads .env relative to the working directory,
+        # and only backend/ (not the repo root) has a clean env for tests.
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            mcp-server/pyproject.toml
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install ../mcp-server
+      - name: Run the backend test suite
+        run: python -m pytest
+
+  android:
+    needs: [plan, test]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-app
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      VERSION_CODE: ${{ needs.plan.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v4
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Ensure a debug keystore exists (release builds are debug-signed)
+        run: |
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            mkdir -p "$HOME/.android"
+            keytool -genkey -v -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+      - name: Build the release APK
+        run: ./gradlew --no-daemon assembleRelease
+      - name: Name the APK for the release
+        run: |
+          set -euo pipefail
+          src=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          if [ -z "$src" ] || [ ! -f "$src" ]; then
+            echo "::error::No APK produced"
+            find app/build/outputs -name '*.apk' || true
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$src" "dist/imagetools-${VERSION}-${VERSION_CODE}.apk"
+          ls -l dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android-app/dist/*.apk
+          if-no-files-found: error
+
+  docker:
+    needs: [plan, test]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      BUILD_DATE: ${{ needs.plan.outputs.build_date }}
+      RELEASE: ${{ needs.plan.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - name: Lowercase the image owner (GHCR requires it)
+        id: owner
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >>"$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        if: env.RELEASE == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.owner.outputs.owner }}/imagetools
+          tags: |
+            type=raw,value=${{ env.VERSION }}
+            type=raw,value=latest,enable=${{ !contains(env.VERSION, '-') }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ env.RELEASE == 'true' }}
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=${{ env.BUILD_DATE }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Record the outcome
+        run: |
+          if [ "$RELEASE" = "true" ]; then
+            echo "Pushed \`${{ steps.meta.outputs.tags }}\` @ \`${{ steps.build.outputs.digest }}\`" >>"$GITHUB_STEP_SUMMARY"
+          else
+            echo "Image built but **not pushed** (build-only run)." >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+  browser:
+    needs: [plan, test]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      BUILD_DATE: ${{ needs.plan.outputs.build_date }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - name: Stamp BUILD_DATE into the popups (same as ./build.sh)
+        run: |
+          for browser in firefox chrome; do
+            f="browser-addons/$browser/popup.js"
+            sed -i "s/const BUILD_DATE = '.*';/const BUILD_DATE = '${BUILD_DATE}';/" "$f"
+          done
+      - name: Package the addons
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          (cd browser-addons/firefox && zip -q -r "../../dist/imagetools-firefox-${VERSION}.xpi" \
+            manifest.json popup.html popup.js background.js content.js icons)
+          (cd browser-addons/chrome && zip -q -r "../../dist/imagetools-chrome-${VERSION}.zip" \
+            manifest.json popup.html popup.js background.js content.js icons)
+          ls -l dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-addons
+          path: dist/*
+          if-no-files-found: error
+
+  mcp:
+    needs: [plan, test]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Stamp the package version (bump-version.js does not manage mcp-server)
+        run: |
+          sed -i "s/^version = \"[^\"]*\"/version = \"${VERSION}\"/" mcp-server/pyproject.toml
+          grep -n '^version' mcp-server/pyproject.toml
+      - name: Build the wheel and sdist
+        run: |
+          python -m pip install --quiet build
+          python -m build --outdir dist mcp-server
+          ls -l dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-server-pkg
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: [plan, test, android, docker, browser, mcp]
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      TAG: ${{ needs.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Collect the release assets
+        run: |
+          set -euo pipefail
+          test -n "$(find assets -mindepth 1 -print -quit)"
+          echo "Assets for ${TAG}:" >>"$GITHUB_STEP_SUMMARY"
+          find assets -mindepth 1 -maxdepth 1 -printf '* %f\n' >>"$GITHUB_STEP_SUMMARY"
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            args=(--verify-tag --title "ImageTools ${VERSION}" --generate-notes)
+            case "$VERSION" in
+              *-*) args+=(--prerelease) ;;  # rc/alpha: no docker :latest, no release-latest
+            esac
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" "${args[@]}"
+          fi
+          gh release upload "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --clobber

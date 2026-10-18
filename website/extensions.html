@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser extensions — ImageTools</title>
+  <meta name="description" content="ImageTools browser extensions for Chrome and Firefox: capture the visible area, full page or a selected region, tag it, then copy to clipboard or upload to your instance.">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt=""> ImageTools</a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle navigation">☰</button>
+      <nav class="site-nav" id="site-nav">
+        <ul>
+          <li><a href="index.html" data-nav="index.html">Home</a></li>
+          <li><a href="install.html" data-nav="install.html">Get started</a></li>
+          <li><a href="extensions.html" data-nav="extensions.html">Extensions</a></li>
+          <li><a href="mcp.html" data-nav="mcp.html">MCP server</a></li>
+          <li><a href="docker.html" data-nav="docker.html">Docker</a></li>
+          <li><a class="nav-cta" href="https://image-tools.a42r.com" rel="noopener">Open app ↗</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container doc-hero">
+      <h1>Browser extensions <span class="grad-text">for Chrome &amp; Firefox</span></h1>
+      <p>Capture screenshots from any page and send them straight to ImageTools — or just grab a region to your clipboard. Manifest V3 for Chrome, WebExtensions for Firefox, same capture UX in both.</p>
+      <div class="btn-row" style="margin-top:1.5rem">
+        <a class="btn btn-primary" href="#install">Install instructions</a>
+        <a class="btn btn-secondary" href="#pairing">Pairing flow</a>
+        <a class="btn btn-secondary" href="https://github.com/githuba42r/ImageTools/tree/master/browser-addons" rel="noopener">Source on GitHub ↗</a>
+      </div>
+    </div>
+
+    <section>
+      <div class="container prose">
+        <h2>Features</h2>
+        <div class="grid grid-3">
+          <div class="card">
+            <div class="icon">👁️</div>
+            <h3>Capture visible area</h3>
+            <p>Grabs exactly what's on screen right now. A preview modal opens before anything leaves your browser — copy it, upload it, or discard it.</p>
+          </div>
+          <div class="card">
+            <div class="icon">📜</div>
+            <h3>Capture full page</h3>
+            <p>Stitches the entire scrolling page into one tall image, correctly scaled even under DevTools device emulation and on HiDPI displays.</p>
+          </div>
+          <div class="card">
+            <div class="icon">✂️</div>
+            <h3>Capture selection</h3>
+            <p>Drag a region on the page. An action panel appears with tag picker and 📋 Copy / ✓ Capture / Reselect / Cancel. Esc cancels, Enter captures, Ctrl/Cmd+C copies.</p>
+          </div>
+          <div class="card">
+            <div class="icon">📋</div>
+            <h3>Copy vs. lodge</h3>
+            <p>Every capture can go one of two ways: <strong>📋 Copy</strong> puts the PNG on your system clipboard entirely client-side (nothing is uploaded), while <strong>✓ Capture / ✓ Upload</strong> lodges it with your ImageTools instance.</p>
+          </div>
+          <div class="card">
+            <div class="icon">🏷️</div>
+            <h3>Tag uploads</h3>
+            <p>Set a default tag in the popup ("Tag uploads as"), pick from up to 8 recent-tag chips in the capture overlay, or type a brand-new one. Untagged uploads are fine too — just clear the tag.</p>
+          </div>
+          <div class="card">
+            <div class="icon">🔐</div>
+            <h3>OAuth-style pairing</h3>
+            <p>A short-lived, single-use registration URL pairs the extension with your session. No passwords are typed into the extension; tokens are revocable from the web UI at any time.</p>
+          </div>
+        </div>
+
+        <div class="note">
+          <strong>Context menu too</strong>
+          Right-click anywhere on a page for capture actions, in addition to the extension popup. Only one overlay/modal is ever active — repeat captures never produce duplicate uploads.
+        </div>
+
+        <h2 id="pairing">Pairing flow (generate → paste → connect)</h2>
+        <p>Connecting an extension to your ImageTools instance takes about fifteen seconds:</p>
+        <ol class="steps">
+          <li><strong>Open the addon settings in the web UI</strong>Open ImageTools in your browser, go to Settings (About modal) → click <em>Browser Addon</em>.</li>
+          <li><strong>Generate a registration URL</strong>Click <em>Generate Registration URL</em>. The backend creates an authorization code with a <strong>5-minute expiry</strong>.</li>
+          <li><strong>Paste it into the extension</strong>Click the ImageTools extension icon, paste the registration URL into the field, and click <em>Connect</em>.</li>
+          <li><strong>Capture away</strong>The extension exchanges the code for an access token (30 days) and a refresh token (90 days), then uses the access token for all uploads — refreshing automatically when it expires.</li>
+        </ol>
+
+        <h3>What happens under the hood</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Step</th><th>Detail</th></tr></thead>
+            <tbody>
+              <tr><td>Authorization code</td><td>Single-use, expires after <strong>5 minutes</strong></td></tr>
+              <tr><td>Access token</td><td>Issued on exchange, valid <strong>30 days</strong>, used for screenshot uploads</td></tr>
+              <tr><td>Refresh token</td><td>Valid <strong>90 days</strong>; silently obtains a fresh access token</td></tr>
+              <tr><td>Storage</td><td>Tokens live in browser storage; never in the page DOM</td></tr>
+              <tr><td>Revocation</td><td>Revoke any connected addon from the ImageTools settings — effective immediately</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The addon talks to these backend endpoints: <code>POST /api/v1/addon/authorize</code>, <code>/token</code>, <code>/refresh</code>, <code>/upload</code>, plus list/revoke endpoints for managing authorizations.</p>
+
+        <h2 id="install">Install instructions</h2>
+        <p>Store publishing is on the roadmap; for now both extensions are installed manually from the repo.</p>
+
+        <h3>Chrome / Chromium</h3>
+        <ol>
+          <li>Get the extension folder: clone the repo (<code>browser-addons/chrome/</code>) or grab <code>dist/imagetools-chrome-1.12.0.zip</code> from a release build and unzip it.</li>
+          <li>Open <code>chrome://extensions/</code>.</li>
+          <li>Enable <strong>Developer mode</strong> (top-right toggle).</li>
+          <li>Click <strong>Load unpacked</strong> and select the <code>chrome</code> folder.</li>
+          <li>The ImageTools icon appears in the toolbar — pin it if you like.</li>
+        </ol>
+
+        <h3>Firefox</h3>
+        <ol>
+          <li>Get the extension folder: <code>browser-addons/firefox/</code> from the repo, or the packaged <code>dist/imagetools-firefox-1.12.0.zip</code>.</li>
+          <li>Open <code>about:debugging</code> in Firefox.</li>
+          <li>Click <strong>This Firefox</strong> → <strong>Load Temporary Add-on</strong>.</li>
+          <li>Select the <code>manifest.json</code> file inside the <code>firefox</code> folder.</li>
+          <li>Note: temporary add-ons are removed when Firefox closes — reload the same way after a restart (signed XPI packaging is on the roadmap).</li>
+        </ol>
+
+        <h2>Capture UX in detail</h2>
+        <ul>
+          <li><strong>Selection overlay:</strong> action panel shows a <em>Tag</em> input pre-filled with the popup's current tag, up to 8 recent-tag chips above the buttons, then 📋 Copy / ✓ Capture / Reselect / Cancel. Typing in the tag input never triggers page keyboard shortcuts.</li>
+          <li><strong>Preview modal (visible area &amp; full page):</strong> nothing uploads until you confirm. The modal shows the captured image, tag picker, and 📋 Copy / ✓ Upload / ✕ Discard — and the modal itself is not part of the capture. Full-page previews scroll so you can check the whole stitch.</li>
+          <li><strong>Clipboard copy:</strong> entirely client-side; pairing isn't required for the copy path, nothing is uploaded, and the popup's current tag is untouched. Paste into any image-capable target (editor, Slack, etc.).</li>
+          <li><strong>Failure handling:</strong> if the backend is down, the preview modal stays open with an error and a Retry button — Discard still works.</li>
+        </ul>
+
+        <figure class="shot" style="margin:1.5rem 0">
+          <div class="frame">
+            <img src="assets/logo.svg" alt="">
+            <span>Screenshot placeholder — selection overlay with tag chips &amp; Copy/Capture buttons</span>
+          </div>
+          <figcaption>Selection capture: tag chips, then copy to clipboard or lodge with ImageTools.</figcaption>
+        </figure>
+
+        <h2>Security notes</h2>
+        <ul>
+          <li><strong>No shared secrets:</strong> pairing uses a single-use authorization code that expires in 5 minutes — the extension never sees your password.</li>
+          <li><strong>Short-lived access tokens:</strong> access tokens last 30 days, refresh tokens 90 days; both are stored in browser storage only.</li>
+          <li><strong>Server-side control:</strong> every pairing is listed in ImageTools settings and can be revoked there at any time — subsequent uploads fail immediately.</li>
+          <li><strong>Copy is local:</strong> the 📋 Copy path performs no network upload at all; only ✓ Capture / ✓ Upload contacts your instance (with the bearer access token).</li>
+          <li><strong>Least privilege:</strong> the extensions request only the permissions needed for capture and API calls — review the manifests in <code>browser-addons/chrome/manifest.json</code> (MV3) and <code>browser-addons/firefox/manifest.json</code>.</li>
+        </ul>
+
+        <h2>Development</h2>
+        <p>Both builds share the same structure: <code>background.js</code> (service worker / background script for auth and capture), <code>popup.html/js</code>, <code>content.js</code> (selection overlay), and icons. Load them unpacked/temporarily as above for live testing — see <a href="https://github.com/githuba42r/ImageTools/blob/master/browser-addons/MANUAL_TEST.md" rel="noopener">MANUAL_TEST.md</a> for the manual test plan covering edge selections, device emulation, tagging and clipboard copy.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><img src="assets/logo.svg" alt=""> ImageTools</div>
+          <p>Self-hosted image compression, editing and multi-platform capture. Vue 3 + FastAPI in a single Docker container.</p>
+        </div>
+        <div>
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="install.html">Get started</a></li>
+            <li><a href="docker.html">Docker deployment</a></li>
+            <li><a href="extensions.html">Browser extensions</a></li>
+            <li><a href="mcp.html">MCP server</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/githuba42r/ImageTools" rel="noopener">GitHub repository</a></li>
+            <li><a href="https://image-tools.a42r.com" rel="noopener">Live instance</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/USER_GUIDE.md" rel="noopener">User guide</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/LICENSE" rel="noopener">GPL-3.0 license</a></li>
+            <li><a href="privacy.html" data-nav="privacy.html">Privacy policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Version v1.12.0 · GPL-3.0</span>
+        <span>Self-hosted · No cloud lock-in</span>
+      </div>
+    </div>
+  </footer>
+  <script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ImageTools — Self-hosted image compression &amp; editing</title>
+  <meta name="description" content="ImageTools is a self-hosted web app for quickly compressing, editing and preparing high-resolution images for email and web use — with Android, browser-extension and MCP integrations.">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt=""> ImageTools</a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle navigation">☰</button>
+      <nav class="site-nav" id="site-nav">
+        <ul>
+          <li><a href="index.html" data-nav="index.html">Home</a></li>
+          <li><a href="install.html" data-nav="install.html">Get started</a></li>
+          <li><a href="extensions.html" data-nav="extensions.html">Extensions</a></li>
+          <li><a href="mcp.html" data-nav="mcp.html">MCP server</a></li>
+          <li><a href="docker.html" data-nav="docker.html">Docker</a></li>
+          <li><a class="nav-cta" href="https://image-tools.a42r.com" rel="noopener">Open app ↗</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-inner">
+        <div>
+          <div class="badge-row">
+            <span class="badge">v1.12.0</span>
+            <span class="badge">Open source · GPL-3.0</span>
+            <span class="badge">Self-hosted</span>
+            <span class="badge">Single Docker container</span>
+          </div>
+          <h1>Shrink it down, <span class="grad-text">then send it on</span></h1>
+          <p class="lead">Take a multi&#8209;megabyte camera photo or full&#8209;resolution screenshot, shrink it with one click to something you can actually attach to an email or drop into a chat, ticket or forum — then edit or fine&#8209;tune it along the way, all on a server you control. Get images in from anywhere: share straight from your phone with the Android app, capture with the browser extensions, drag&#8209;and&#8209;drop, or let your AI coding agent pull them in via MCP.</p>
+          <div class="btn-row">
+            <a class="btn btn-primary" href="https://image-tools.a42r.com" rel="noopener">Open the live app ↗</a>
+            <a class="btn btn-secondary" href="install.html">Get started</a>
+            <a class="btn btn-secondary" href="https://github.com/githuba42r/ImageTools" rel="noopener">GitHub ↗</a>
+          </div>
+        </div>
+        <div class="hero-art">
+          <div class="hero-card">
+            <img src="assets/logo.svg" alt="ImageTools logo">
+            <div class="meta"><strong>ImageTools</strong><br>Vue 3 · FastAPI · SQLite<br>Compression · Editing · AI</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="container">
+        <h2 class="section-title">Key features</h2>
+        <p class="section-sub">The job it exists for: turn a huge camera&#8209;size photo or screenshot into a small, sendable file — for an email attachment, a chat message, a support ticket or a forum post — without losing what you actually need to see.</p>
+        <div class="grid grid-3">
+          <div class="card">
+            <div class="icon">🗜️</div>
+            <h3>Compression presets</h3>
+            <p>One&#8209;click presets built for actually sending things on: <strong>Email</strong> (800×600, 85% quality), <strong>Web</strong> (1200×900, 80%), <strong>Thumbnail</strong> (200×200, 75%), plus a Custom preset for precise control of dimensions, quality and format. Before/after sizes, savings % and ratio shown per image, so you can see it's small enough to attach before you send it.</p>
+          </div>
+          <div class="card">
+            <div class="icon">📦</div>
+            <h3>Bulk operations</h3>
+            <p>Select multiple images with checkboxes and apply a preset to all of them simultaneously, with individual results on each card. Export everything as a ZIP, download individually, or copy to clipboard.</p>
+          </div>
+          <div class="card">
+            <div class="icon">🎨</div>
+            <h3>Image editing</h3>
+            <p>Built-in editor (TUI Image Editor) with crop and aspect ratios, flip/rotate, freehand drawing, text overlays, shapes, filters (grayscale, sepia, blur, sharpen, emboss…) and adjustments (brightness, contrast, saturation, exposure, hue).</p>
+          </div>
+          <div class="card">
+            <div class="icon">✨</div>
+            <h3>AI features</h3>
+            <p>Background removal, advanced filters and an AI chat interface for natural-language image manipulation — powered by your own OpenRouter account via OAuth2 PKCE. Keys are encrypted at rest and never exposed to the frontend.</p>
+          </div>
+          <div class="card">
+            <div class="icon">↩️</div>
+            <h3>Undo / redo</h3>
+            <p>Full history tracking for every modification. Compress, edit, remove a background — then revert any step. The original is always preserved.</p>
+          </div>
+          <div class="card">
+            <div class="icon">🌐</div>
+            <h3>Get images in, from anywhere</h3>
+            <p>Drag&#8209;and&#8209;drop in the web UI, or share photos straight from your phone's gallery, camera or any other app to the server with the <a href="install.html#android">Android app</a> (paired once via QR code). Capture screenshots with the <a href="extensions.html">browser extensions</a>, or let your AI coding agent pull images in via the <a href="mcp.html">MCP server</a> — everything lands in the same gallery, ready to shrink.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="container">
+        <h2 class="section-title">A capture pipeline for every workflow</h2>
+        <p class="section-sub">Get images into ImageTools however you work — then compress, edit and export in one place.</p>
+        <div class="grid grid-2">
+          <figure class="shot">
+            <div class="frame">
+              <img src="assets/logo.svg" alt="">
+              <span>Screenshot placeholder — web UI gallery</span>
+            </div>
+            <figcaption>The web interface: drag-and-drop upload, per-image presets, editing, AI tools and undo/redo.</figcaption>
+          </figure>
+          <figure class="shot">
+            <div class="frame">
+              <img src="assets/logo.svg" alt="">
+              <span>Screenshot placeholder — selection capture overlay</span>
+            </div>
+            <figcaption>Browser extension selection overlay: tag the capture, then 📋 Copy to clipboard or ✓ Capture to lodge it with your instance.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="container">
+        <h2 class="section-title">Explore the ecosystem</h2>
+        <p class="section-sub">The web app is just the centre of the project — get images in from your phone, your browser or your agent.</p>
+        <div class="grid grid-3">
+          <a class="card link-card" href="https://image-tools.a42r.com" rel="noopener">
+            <h3>Web app</h3>
+            <p>Drag&#8209;and&#8209;drop upload, compression presets, the built&#8209;in editor, AI tools and undo/redo — the core of ImageTools, in your browser.</p>
+            <p class="arrow">→ Open live app ↗</p>
+          </a>
+          <a class="card link-card" href="install.html#android">
+            <h3>Android app</h3>
+            <p>Share photos from your gallery, camera or any app directly to your ImageTools server — paired once with a QR code, then it's just the normal Android share sheet. Grab the APK from GitHub Releases on the setup page.</p>
+            <p class="arrow">→ Android setup</p>
+          </a>
+          <a class="card link-card" href="extensions.html">
+            <h3>Browser extensions</h3>
+            <p>Capture visible area, full page or a selected region in Chrome &amp; Firefox. Copy to clipboard or upload with tags.</p>
+            <p class="arrow">→ Extensions</p>
+          </a>
+          <a class="card link-card" href="mcp.html">
+            <h3>MCP server</h3>
+            <p>Give Claude Code and other AI agents access to your last screenshots over streamable HTTP.</p>
+            <p class="arrow">→ MCP server</p>
+          </a>
+          <a class="card link-card" href="docker.html">
+            <h3>Docker deployment</h3>
+            <p>One container, one volume. <code>docker-compose up</code> and you have the full app with frontend included.</p>
+            <p class="arrow">→ Docker</p>
+          </a>
+          <a class="card link-card" href="install.html">
+            <h3>Get started</h3>
+            <p>Run locally with <code>./run-all.sh</code>, self-host with Docker, or use the hosted instance.</p>
+            <p class="arrow">→ Install</p>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="container">
+        <h2 class="section-title">Built on boring, reliable tech</h2>
+        <p class="section-sub">No external databases, no cloud dependencies you don't control.</p>
+        <div class="grid grid-2">
+          <div class="card">
+            <h3>Architecture</h3>
+            <ul>
+              <li><strong>Frontend:</strong> Vue 3 + Vite + TUI Image Editor</li>
+              <li><strong>Backend:</strong> Python FastAPI with async operations</li>
+              <li><strong>Database:</strong> SQLite (file-based, no external dependencies)</li>
+              <li><strong>Image processing:</strong> PIL (Pillow), rembg for background removal</li>
+              <li><strong>AI integration:</strong> OpenRouter API with OAuth2 PKCE</li>
+              <li><strong>Real-time:</strong> WebSocket support for live updates</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Project links</h3>
+            <ul>
+              <li><a href="https://github.com/githuba42r/ImageTools" rel="noopener">Source code on GitHub</a></li>
+              <li><a href="https://github.com/githuba42r/ImageTools/blob/master/USER_GUIDE.md" rel="noopener">User guide</a></li>
+              <li><a href="https://github.com/githuba42r/ImageTools/blob/master/QUICKSTART.md" rel="noopener">Quick start (local dev)</a></li>
+              <li><a href="https://github.com/githuba42r/ImageTools/blob/master/docs/DOCKER_DEPLOYMENT.md" rel="noopener">Docker deployment guide</a></li>
+              <li><a href="https://github.com/githuba42r/ImageTools/blob/master/LICENSE" rel="noopener">GPL-3.0 license</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="container">
+        <div class="cta-band">
+          <div>
+            <h2>Ready to stop emailing 8 MP photos?</h2>
+            <p>Use the hosted instance, or run your own in a couple of minutes.</p>
+          </div>
+          <div class="btn-row">
+            <a class="btn btn-primary" href="https://image-tools.a42r.com" rel="noopener">Open live app ↗</a>
+            <a class="btn btn-secondary" href="install.html">Get started</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><img src="assets/logo.svg" alt=""> ImageTools</div>
+          <p>Self-hosted image compression, editing and multi-platform capture. Vue 3 + FastAPI in a single Docker container.</p>
+        </div>
+        <div>
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="install.html">Get started</a></li>
+            <li><a href="docker.html">Docker deployment</a></li>
+            <li><a href="extensions.html">Browser extensions</a></li>
+            <li><a href="mcp.html">MCP server</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/githuba42r/ImageTools" rel="noopener">GitHub repository</a></li>
+            <li><a href="https://image-tools.a42r.com" rel="noopener">Live instance</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/USER_GUIDE.md" rel="noopener">User guide</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/LICENSE" rel="noopener">GPL-3.0 license</a></li>
+            <li><a href="privacy.html" data-nav="privacy.html">Privacy policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Version v1.12.0 · GPL-3.0</span>
+        <span>Self-hosted · No cloud lock-in</span>
+      </div>
+    </div>
+  </footer>
+  <script src="assets/site.js"></script>
+</body>
+</html>

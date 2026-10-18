@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCP server — ImageTools</title>
+  <meta name="description" content="The ImageTools MCP server exposes your recent screenshots to Claude Code and other AI agents over streamable HTTP, so you can say 'use my last 2 screenshots' and have the model reason about them.">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt=""> ImageTools</a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle navigation">☰</button>
+      <nav class="site-nav" id="site-nav">
+        <ul>
+          <li><a href="index.html" data-nav="index.html">Home</a></li>
+          <li><a href="install.html" data-nav="install.html">Get started</a></li>
+          <li><a href="extensions.html" data-nav="extensions.html">Extensions</a></li>
+          <li><a href="mcp.html" data-nav="mcp.html">MCP server</a></li>
+          <li><a href="docker.html" data-nav="docker.html">Docker</a></li>
+          <li><a class="nav-cta" href="https://image-tools.a42r.com" rel="noopener">Open app ↗</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container doc-hero">
+      <h1>MCP server <span class="grad-text">for AI coding agents</span></h1>
+      <p>Expose your recent ImageTools screenshots to Claude Code (and any other <a href="https://modelcontextprotocol.io" rel="noopener">MCP</a> client) so you can ask the LLM to reason about them: <em>"use my last 2 screenshots; the first shows the bug, the second shows the expected layout."</em></p>
+      <div class="btn-row" style="margin-top:1.5rem">
+        <a class="btn btn-primary" href="#http">HTTP setup</a>
+        <a class="btn btn-secondary" href="#stdio">stdio setup</a>
+        <a class="btn btn-secondary" href="#tokens">Mint a token</a>
+      </div>
+    </div>
+
+    <section>
+      <div class="container prose">
+        <h2>What it does</h2>
+        <p>The ImageTools backend doubles as an MCP server. Your agent can list your recent captures and pull them into the conversation as image content blocks — perfect right after a browser-extension selection capture, when you want the model to <em>see</em> what you're looking at instead of pasting files around.</p>
+        <ul>
+          <li><strong>Streamable HTTP transport</strong> served by the existing backend at <code>/mcp/</code> — nothing extra to install on the server, no extra port to open.</li>
+          <li><strong>stdio transport</strong> via a small Python package (<code>mcp-server/</code>) that calls the ImageTools REST API — useful for local dev or tunnelling.</li>
+          <li><strong>Bearer-token auth</strong> with tokens you mint and revoke yourself in the web UI.</li>
+        </ul>
+
+        <h3>Example prompts</h3>
+        <ul>
+          <li>"Use my last 2 screenshots; the first shows the bug, the second shows the expected layout."</li>
+          <li>"List my 3 most recent ImageTools screenshots."</li>
+          <li>"Grab my latest screenshot and describe the UI regression you see in it."</li>
+        </ul>
+
+        <h2 id="tokens">Minting a token</h2>
+        <ol class="steps">
+          <li><strong>Open Settings → MCP Access Tokens</strong>In the ImageTools web UI, as the user whose images the agent should read.</li>
+          <li><strong>New Token</strong>Give it a label that identifies the client, e.g. <em>laptop claude-code</em>, <em>dev box</em>.</li>
+          <li><strong>Copy the <code>imt_…</code> token immediately</strong>It is shown <strong>exactly once</strong> — only its sha256 hash is stored server-side (table <code>mcp_authorizations</code>).</li>
+        </ol>
+        <div class="note">
+          <strong>Revoking</strong>
+          Settings → MCP Access Tokens → <em>Revoke</em> on the row. Revocation is immediate; subsequent MCP calls with that token return 401. (stdio clients resolve the user once at process start, so restart the process to fully apply revocation; the HTTP transport revalidates on every request.)
+        </div>
+        <p>Tokens are long-lived — there's no TTL — so treat them like passwords and revoke rather than rotate casually. Use one label per client so you can tell them apart in the list.</p>
+
+        <h2 id="http">Streamable HTTP transport (deployed backend)</h2>
+        <p>The MCP endpoint lives at <code>{INSTANCE_URL}/mcp/</code> on your ImageTools backend — e.g. <code>https://image-tools.a42r.com/mcp/</code> on the hosted instance.</p>
+        <div class="note warn">
+          <strong>The trailing slash on /mcp/ is required.</strong>
+          Without it the server returns <strong>HTTP 405</strong> — the FastMCP Starlette app is mounted at <code>/mcp</code> and its internal route is <code>/</code>.
+        </div>
+        <p>Add this entry to your Claude Code MCP config (<code>~/.claude.json</code> is the canonical location; or a project <code>.mcp.json</code>):</p>
+<pre><code>{
+  "mcpServers": {
+    "imagetools": {
+      "type": "http",
+      "url": "https://image-tools.a42r.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer imt_YOUR_TOKEN_HERE"
+      }
+    }
+  }
+}</code></pre>
+        <p>Or the equivalent README form with a plain <code>url</code> entry:</p>
+<pre><code>{
+  "mcpServers": {
+    "imagetools": {
+      "url": "https://YOUR-INSTANCE/mcp/",
+      "headers": { "Authorization": "Bearer imt_YOUR_TOKEN_HERE" }
+    }
+  }
+}</code></pre>
+        <p>Keep the token out of the config file by referencing an environment variable instead:</p>
+<pre><code>"headers": {
+  "Authorization": "Bearer ${IMAGETOOLS_TOKEN}"
+}</code></pre>
+        <p>…and export <code>IMAGETOOLS_TOKEN</code> in the environment the agent starts in. MCP config is read at startup only — restart Claude Code after editing. Then verify by asking: <em>"list my 3 most recent ImageTools screenshots."</em></p>
+
+        <h2 id="stdio">stdio transport (local dev / tunnelling)</h2>
+        <p>The stdio transport runs a small Python process on your machine (Python 3.11+) that calls the ImageTools REST API. Install the package from the repo:</p>
+<pre><code>pip install -e /path/to/ImageTools/mcp-server</code></pre>
+        <p>Mint a token as above, then configure Claude Code:</p>
+<pre><code>{
+  "mcpServers": {
+    "imagetools": {
+      "command": "python",
+      "args": ["-m", "mcp_server.stdio"],
+      "env": {
+        "IMAGETOOLS_URL": "http://localhost:8082",
+        "IMAGETOOLS_TOKEN": "imt_YOUR_TOKEN_HERE"
+      }
+    }
+  }
+}</code></pre>
+
+        <h2>Tools exposed</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tool</th><th>Args</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>list_recent_images</code></td><td><code>count: int = 10</code> (clamped 1–50)</td><td>Metadata only — id, filename, created_at, dimensions, format, size. Newest first. Cheap; no image bytes.</td></tr>
+              <tr><td><code>get_image</code></td><td><code>id: str</code></td><td>One image as an MCP image content block + metadata text block.</td></tr>
+              <tr><td><code>get_recent_images</code></td><td><code>count: int = 1</code> (clamped 1–6)</td><td>Up to N images as image content blocks + metadata, newest first — single round trip for the dominant workflow.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Counts are clamped server-side; oversized requests come back with a <code>"clamped": true</code> flag rather than an error.</p>
+
+        <h2>Verifying a deployment</h2>
+        <p>Two quick smoke tests with curl:</p>
+<pre><code>URL=https://image-tools.a42r.com
+TOK=imt_...
+
+# 1. token is valid → returns user_id
+curl -sS -H "Authorization: Bearer $TOK" "$URL/api/v1/mcp-tokens/whoami"
+
+# 2. MCP server responds → returns serverInfo + capabilities
+curl -sS -X POST "$URL/mcp/" \
+  -H "Authorization: Bearer $TOK" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}'</code></pre>
+
+        <h2>Deployment notes</h2>
+        <ul>
+          <li>The bearer token <em>is</em> the auth boundary for <code>/mcp/</code> — when fronting the backend with an authenticating proxy (Authelia, basic auth), bypass the proxy auth for the <code>/mcp</code> path so agent calls work.</li>
+          <li>On the hosted instance the backend sits behind Traefik + Authelia; <code>/mcp</code> has its own router without the auth middlewares, and the backend's internal-auth middleware already bypasses <code>/mcp</code> and <code>/api/v1/mcp-tokens/</code>.</li>
+          <li>Source: <a href="https://github.com/githuba42r/ImageTools/tree/master/mcp-server" rel="noopener"><code>mcp-server/</code></a> in the repo — README, stdio entrypoint and design docs under <code>docs/superpowers/</code>.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><img src="assets/logo.svg" alt=""> ImageTools</div>
+          <p>Self-hosted image compression, editing and multi-platform capture. Vue 3 + FastAPI in a single Docker container.</p>
+        </div>
+        <div>
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="install.html">Get started</a></li>
+            <li><a href="docker.html">Docker deployment</a></li>
+            <li><a href="extensions.html">Browser extensions</a></li>
+            <li><a href="mcp.html">MCP server</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/githuba42r/ImageTools" rel="noopener">GitHub repository</a></li>
+            <li><a href="https://image-tools.a42r.com" rel="noopener">Live instance</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/USER_GUIDE.md" rel="noopener">User guide</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/LICENSE" rel="noopener">GPL-3.0 license</a></li>
+            <li><a href="privacy.html" data-nav="privacy.html">Privacy policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Version v1.12.0 · GPL-3.0</span>
+        <span>Self-hosted · No cloud lock-in</span>
+      </div>
+    </div>
+  </footer>
+  <script src="assets/site.js"></script>
+</body>
+</html>

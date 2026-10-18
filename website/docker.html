@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docker deployment — ImageTools</title>
+  <meta name="description" content="Deploy ImageTools with Docker: one container with the FastAPI backend and built Vue frontend, docker-compose up in a minute, optional nginx reverse proxy with Basic Auth or Authelia.">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png">
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt=""> ImageTools</a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle navigation">☰</button>
+      <nav class="site-nav" id="site-nav">
+        <ul>
+          <li><a href="index.html" data-nav="index.html">Home</a></li>
+          <li><a href="install.html" data-nav="install.html">Get started</a></li>
+          <li><a href="extensions.html" data-nav="extensions.html">Extensions</a></li>
+          <li><a href="mcp.html" data-nav="mcp.html">MCP server</a></li>
+          <li><a href="docker.html" data-nav="docker.html">Docker</a></li>
+          <li><a class="nav-cta" href="https://image-tools.a42r.com" rel="noopener">Open app ↗</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container doc-hero">
+      <h1>Docker <span class="grad-text">deployment</span></h1>
+      <p>ImageTools ships as a single container: the FastAPI backend serves the API <em>and</em> the pre-built Vue frontend. One image, one volume, one <code>docker-compose up</code>.</p>
+      <div class="btn-row" style="margin-top:1.5rem">
+        <a class="btn btn-primary" href="#quickstart">Quick start</a>
+        <a class="btn btn-secondary" href="#env">Environment variables</a>
+        <a class="btn btn-secondary" href="#proxy">Reverse proxy</a>
+      </div>
+    </div>
+
+    <section>
+      <div class="container prose">
+        <h2>The image</h2>
+        <p>Published images are tagged from <code>version.json</code> by <code>./build.sh</code> (see <a href="https://github.com/githuba42r/ImageTools/blob/master/BUILD.md" rel="noopener">BUILD.md</a>):</p>
+<pre><code>ghcr.io/githuba42r/imagetools:1.12.0   # version-pinned (recommended)
+ghcr.io/githuba42r/imagetools:latest</code></pre>
+        <p>The image includes the built frontend — there is no separate frontend artifact to deploy. The container listens on <strong>8081</strong> internally; the compose file maps it to <strong>8082</strong> on the host to avoid clashes with common dev servers.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Endpoint</th><th>URL (default compose)</th></tr></thead>
+            <tbody>
+              <tr><td>Web UI</td><td><code>http://localhost:8082</code></td></tr>
+              <tr><td>API</td><td><code>http://localhost:8082/api/v1/</code></td></tr>
+              <tr><td>API docs (Swagger)</td><td><code>http://localhost:8082/api/v1/docs</code></td></tr>
+              <tr><td>Health check</td><td><code>http://localhost:8082/health</code> → <code>{"status":"healthy"}</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="quickstart">Quick start with docker compose</h2>
+        <p>From the repo root, the bundled <a href="https://github.com/githuba42r/ImageTools/blob/master/docker-compose.yml" rel="noopener"><code>docker-compose.yml</code></a> is all you need:</p>
+<pre><code>git clone https://github.com/githuba42r/ImageTools.git
+cd ImageTools
+
+# optional but recommended for anything non-local:
+export SESSION_SECRET_KEY=$(openssl rand -base64 32)
+export INSTANCE_URL=http://localhost:8082
+
+docker-compose up --build -d   # or: docker compose up --build -d
+# app at http://localhost:8082</code></pre>
+        <p>It builds the image locally (or swap <code>build:</code> for <code>image: ghcr.io/githuba42r/imagetools:1.12.0</code> to pull), maps <code>8082:8081</code>, persists everything under the <code>imagetools-storage</code> volume mounted at <code>/app/storage</code> (uploads, processed images, SQLite), and runs a <code>/health</code> healthcheck.</p>
+        <ul>
+          <li>Stop: <code>docker-compose down</code></li>
+          <li>Clean slate (deletes all data): <code>docker-compose down -v</code></li>
+          <li>Logs: <code>docker-compose logs -f</code></li>
+        </ul>
+
+        <h2 id="env">Key environment variables</h2>
+        <p>These are the variables the compose file passes through; the full reference is in <a href="https://github.com/githuba42r/ImageTools/blob/master/docs/ENV_CONFIG.md" rel="noopener">docs/ENV_CONFIG.md</a> and <a href="https://github.com/githuba42r/ImageTools/blob/master/docs/DOCKER_DEPLOYMENT.md" rel="noopener">docs/DOCKER_DEPLOYMENT.md</a>.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Variable</th><th>Default in compose</th><th>Why it matters</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>SESSION_SECRET_KEY</code></td>
+                <td><code>change-this-secret-key-in-production-min-32-chars</code> (override via env)</td>
+                <td>Encryption key for stored secrets (min 32 chars). <strong>Change it in production</strong> — e.g. <code>openssl rand -base64 32</code>.</td>
+              </tr>
+              <tr>
+                <td><code>CORS_ORIGINS</code></td>
+                <td><code>http://localhost:8082,http://127.0.0.1:8082</code></td>
+                <td>Comma-separated allowed origins. Add your public URL when accessing from other hosts, e.g. <code>https://imagetools.example.com</code>.</td>
+              </tr>
+              <tr>
+                <td><code>INSTANCE_URL</code></td>
+                <td><code>http://localhost:8082</code></td>
+                <td>Your deployment's public URL. Used for Android QR enrollment, browser-addon connection URLs and the OpenRouter OAuth callback (<code>{INSTANCE_URL}/oauth/callback</code>). <strong>Set this to your real URL.</strong></td>
+              </tr>
+              <tr>
+                <td><code>OPENROUTER_APP_URL</code></td>
+                <td><code>http://localhost:5173</code> (dev default; required for AI in prod)</td>
+                <td>Public URL for OAuth callbacks — callback is auto-derived as <code>{OPENROUTER_APP_URL}/oauth/callback</code>.</td>
+              </tr>
+              <tr>
+                <td><code>OPENROUTER_APP_NAME</code></td>
+                <td><code>ImageTools</code></td>
+                <td>App name shown in OpenRouter during authorization.</td>
+              </tr>
+              <tr>
+                <td><code>OPENROUTER_API_KEY</code></td>
+                <td>empty</td>
+                <td>Optional fallback key. Leave empty to make each user enroll their own account via OAuth (recommended).</td>
+              </tr>
+              <tr>
+                <td><code>SESSION_EXPIRY_DAYS</code> / <code>MAX_IMAGES_PER_SESSION</code> / <code>MAX_UPLOAD_SIZE_MB</code></td>
+                <td><code>7</code> / <code>5</code> / <code>20</code></td>
+                <td>Retention and upload limits.</td>
+              </tr>
+              <tr>
+                <td><code>DEBUG</code> / <code>LOG_LEVEL</code> / <code>SERVER_HOST</code> / <code>SERVER_PORT</code></td>
+                <td><code>False</code> / <code>INFO</code> / <code>0.0.0.0</code> / <code>8081</code></td>
+                <td>Server basics — the container port is 8081; only the compose port mapping changes what you see on the host.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note warn">
+          <strong>Production checklist</strong>
+          Set a strong <code>SESSION_SECRET_KEY</code>, set <code>INSTANCE_URL</code> (and <code>OPENROUTER_APP_URL</code>) to your real HTTPS domain, narrow <code>CORS_ORIGINS</code>, put the container behind a reverse proxy, and don't expose port 8082 directly to the internet.
+        </div>
+
+        <h3>Compose environment block (as shipped)</h3>
+<pre><code>services:
+  imagetools:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: imagetools
+    ports:
+      - "8082:8081"  # Using 8082 to avoid conflicts with existing services
+    volumes:
+      - imagetools-storage:/app/storage
+    environment:
+      - DEBUG=False
+      - LOG_LEVEL=INFO
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8081
+      - SESSION_EXPIRY_DAYS=7
+      - MAX_IMAGES_PER_SESSION=5
+      - MAX_UPLOAD_SIZE_MB=20
+      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY:-change-this-secret-key-in-production-min-32-chars}
+      - CORS_ORIGINS=http://localhost:8082,http://127.0.0.1:8082
+      - INSTANCE_URL=${INSTANCE_URL:-http://localhost:8082}
+      - OPENROUTER_APP_NAME=ImageTools
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  imagetools-storage:
+    driver: local</code></pre>
+
+        <h3>Or plain docker run</h3>
+<pre><code>docker run -d --name imagetools \
+  -p 8082:8081 \
+  -v imagetools-storage:/app/storage \
+  -e SESSION_SECRET_KEY="$(openssl rand -base64 32)" \
+  -e INSTANCE_URL=http://localhost:8082 \
+  ghcr.io/githuba42r/imagetools:1.12.0</code></pre>
+
+        <h2 id="proxy">Reverse proxy, Basic Auth &amp; Authelia</h2>
+        <p>For anything internet-facing, run the container on loopback and front it with nginx. The repo ships a complete option in <a href="https://github.com/githuba42r/ImageTools/tree/master/deployment" rel="noopener"><code>deployment/</code></a> — nginx reverse proxy with HTTP Basic Authentication, WebSocket support and persistent volumes:</p>
+<pre><code>cd deployment
+cp .env.example .env
+# set DFLT_USERNAME / DFLT_PASSWORD (single user), or mount a custom htpasswd
+docker-compose up -d
+# app at http://localhost</code></pre>
+        <p>Full documentation, including multi-user htpasswd management, HTTPS setup and troubleshooting, is in <a href="https://github.com/githuba42r/ImageTools/blob/master/deployment/README.md" rel="noopener">deployment/README.md</a>.</p>
+        <p>For enterprise-grade auth — MFA/2FA, SSO, LDAP — the <code>deployment/</code> stack also supports <strong>Authelia</strong> in front of nginx; see <a href="https://github.com/githuba42r/ImageTools/blob/master/docs/NGINX_AUTHELIA_DEPLOYMENT.md" rel="noopener">docs/NGINX_AUTHELIA_DEPLOYMENT.md</a> and the Authelia section of the main <a href="https://github.com/githuba42r/ImageTools/blob/master/README.md" rel="noopener">README</a>.</p>
+        <p>Behind any reverse proxy, remember to update the environment (example for <code>imagetools.example.com</code>):</p>
+<pre><code>OPENROUTER_APP_URL=https://imagetools.example.com
+INSTANCE_URL=https://imagetools.example.com
+CORS_ORIGINS=https://imagetools.example.com</code></pre>
+        <p>And give nginx a generous body size and timeouts for image work:</p>
+<pre><code>server {
+    listen 443 ssl;
+    server_name imagetools.example.com;
+    client_max_body_size 20M;
+
+    location / {
+        proxy_pass http://localhost:8082;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 600s;
+    }
+}</code></pre>
+
+        <h2>Notes &amp; requirements</h2>
+        <ul>
+          <li>Docker 20.10+ and Docker Compose 2.0+; 2&nbsp;GB+ RAM recommended for image processing (background-removal models), ~2.5&nbsp;GB image size.</li>
+          <li>Startup is typically 5–15 seconds (database init + model load); the compose healthcheck waits with a 40&nbsp;s start period.</li>
+          <li>Back up the <code>imagetools-storage</code> volume — it holds uploads and the SQLite database.</li>
+          <li>SQLite is file-based: fine for a single container; consider PostgreSQL for multi-replica setups (requires code changes).</li>
+          <li>Update by pulling latest code (or the next image tag) and <code>docker-compose up -d</code> again; verify with <code>curl http://localhost:8082/health</code>.</li>
+        </ul>
+        <p>See <a href="https://github.com/githuba42r/ImageTools/blob/master/docs/DOCKER_DEPLOYMENT.md" rel="noopener">docs/DOCKER_DEPLOYMENT.md</a> for the complete guide: multi-stage build details, OAuth setup, backup/restore, troubleshooting and performance tuning.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-brand"><img src="assets/logo.svg" alt=""> ImageTools</div>
+          <p>Self-hosted image compression, editing and multi-platform capture. Vue 3 + FastAPI in a single Docker container.</p>
+        </div>
+        <div>
+          <h4>Docs</h4>
+          <ul>
+            <li><a href="install.html">Get started</a></li>
+            <li><a href="docker.html">Docker deployment</a></li>
+            <li><a href="extensions.html">Browser extensions</a></li>
+            <li><a href="mcp.html">MCP server</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Project</h4>
+          <ul>
+            <li><a href="https://github.com/githuba42r/ImageTools" rel="noopener">GitHub repository</a></li>
+            <li><a href="https://image-tools.a42r.com" rel="noopener">Live instance</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/USER_GUIDE.md" rel="noopener">User guide</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/blob/master/LICENSE" rel="noopener">GPL-3.0 license</a></li>
+            <li><a href="privacy.html" data-nav="privacy.html">Privacy policy</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Version v1.12.0 · GPL-3.0</span>
+        <span>Self-hosted · No cloud lock-in</span>
+      </div>
+    </div>
+  </footer>
+  <script src="assets/site.js"></script>
+</body>
+</html>
