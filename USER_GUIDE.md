@@ -440,15 +440,19 @@ See [browser-addons/README.md](browser-addons/README.md)
    - **Visible Area**: Current viewport only
    - **Full Page**: Entire scrolling page
    - **Selected Region**: Draw a selection box
-3. Screenshot is captured and uploaded automatically
-4. Check ImageTools web interface to see the image
+3. A preview appears (Visible Area / Full Page) or an action panel appears
+   next to your selection. Choose:
+   - **📋 Copy**: puts the image on your system clipboard (nothing is uploaded)
+   - **✓ Upload** / **✓ Capture**: lodges the screenshot with ImageTools
+   - **✕ Discard** / **✕ Cancel**: throw it away
+4. After uploading, check the ImageTools web interface to see the image
 
 #### Method 2: Context Menu
 
 1. Right-click anywhere on a webpage
 2. Hover over "ImageTools"
 3. Select capture mode from submenu
-4. Screenshot uploads automatically
+4. Confirm with **✓ Upload** (or **📋 Copy**) in the preview that appears
 
 #### Method 3: Keyboard Shortcuts (if configured)
 
@@ -460,6 +464,7 @@ See [browser-addons/README.md](browser-addons/README.md)
 
 - Full page capture may take several seconds for long pages
 - Selected region: click and drag to select area
+- In a capture overlay, `Enter` captures, `Ctrl/Cmd+C` copies, `Esc` cancels
 - Screenshots are saved as PNG format
 - Filename includes timestamp and page title
 

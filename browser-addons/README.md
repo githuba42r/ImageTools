@@ -7,6 +7,7 @@ Browser extensions for capturing screenshots and sending them to ImageTools for 
 - Capture visible area of webpage
 - Capture full scrolling page
 - Capture selected region
+- Copy any capture to the system clipboard (instead of / as well as uploading)
 - OAuth2-style authorization flow
 - Secure token-based authentication
 - Direct upload to ImageTools
@@ -41,6 +42,9 @@ Browser extensions for capturing screenshots and sending them to ImageTools for 
 7. Once connected, you can:
    - Click the extension icon and choose a capture mode
    - Right-click on any page and use the context menu
+   - In the selection overlay and the capture preview, use **📋 Copy** to put the
+     image on the system clipboard, or **✓ Capture** / **✓ Upload** to lodge it
+     with ImageTools (Ctrl/Cmd+C also copies)
 
 ## OAuth2 Authorization Flow
 
