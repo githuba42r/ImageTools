@@ -70,7 +70,27 @@ function initSelectionCapture() {
     z-index: 1000000;
     pointer-events: none;
   `;
-  
+
+  const crosshair = document.createElement('div');
+  crosshair.id = 'imagetools-selection-crosshair';
+  crosshair.style.cssText = `
+    position: fixed;
+    width: 0;
+    height: 0;
+    display: none;
+    pointer-events: none;
+    z-index: 1000000;
+  `;
+  const crosshairLine = (css) => {
+    const line = document.createElement('div');
+    line.style.cssText = 'position: absolute; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.55);' + css;
+    return line;
+  };
+  crosshair.appendChild(crosshairLine('left: -16px; top: -1px; width: 11px; height: 2px;'));
+  crosshair.appendChild(crosshairLine('left: 5px; top: -1px; width: 11px; height: 2px;'));
+  crosshair.appendChild(crosshairLine('left: -1px; top: -16px; width: 2px; height: 11px;'));
+  crosshair.appendChild(crosshairLine('left: -1px; top: 5px; width: 2px; height: 11px;'));
+
   // Create action buttons container
   const actionsContainer = document.createElement('div');
   actionsContainer.id = 'imagetools-selection-actions';
@@ -89,7 +109,7 @@ function initSelectionCapture() {
 
   const tagPicker = createTagPicker();
   const buttonsRow = document.createElement('div');
-  buttonsRow.style.cssText = 'display: flex; gap: 10px;';
+  buttonsRow.style.cssText = 'display: flex; gap: 10px; flex-wrap: wrap;';
   
   // Create OK button
   const okButton = document.createElement('button');
@@ -108,7 +128,14 @@ function initSelectionCapture() {
   `;
   okButton.onmouseover = () => okButton.style.background = '#059669';
   okButton.onmouseout = () => okButton.style.background = '#10b981';
-  
+
+  // Create Copy button - puts the crop on the system clipboard instead of
+  // lodging it with the service
+  const copyButton = document.createElement('button');
+  copyButton.id = 'imagetools-selection-copy';
+  copyButton.textContent = '📋 Copy';
+  styleOverlayButton(copyButton, '#3b82f6', '#2563eb');
+
   // Create Cancel button
   const cancelButton = document.createElement('button');
   cancelButton.id = 'imagetools-selection-cancel';
@@ -145,6 +172,7 @@ function initSelectionCapture() {
   reselectButton.onmouseover = () => reselectButton.style.background = '#4f46e5';
   reselectButton.onmouseout = () => reselectButton.style.background = '#6366f1';
   
+  buttonsRow.appendChild(copyButton);
   buttonsRow.appendChild(okButton);
   buttonsRow.appendChild(reselectButton);
   buttonsRow.appendChild(cancelButton);
@@ -154,6 +182,7 @@ function initSelectionCapture() {
   document.body.appendChild(overlay);
   document.body.appendChild(selectionBox);
   document.body.appendChild(actionsContainer);
+  document.body.appendChild(crosshair);
 
   // Prevent mouse events from bubbling to page-level listeners (e.g. click-outside
   // handlers that dismiss modals). Applied to both the overlay and the actions
@@ -183,14 +212,21 @@ function initSelectionCapture() {
   // text/content selection that otherwise highlights the whole page.
   overlay.addEventListener('pointerdown', (e) => {
     if (actionsContainer.style.display === 'flex') {
-      // Already have a selection, ignore
-      return;
+      actionsContainer.style.display = 'none';
+      selectionBox.style.display = 'none';
+      overlay.style.cursor = 'crosshair';
+      currentRect = null;
+      startX = null;
+      startY = null;
     }
 
     e.preventDefault();
     try { overlay.setPointerCapture(e.pointerId); } catch (_) { /* not supported */ }
 
     isDrawing = true;
+    crosshair.style.left = e.clientX + 'px';
+    crosshair.style.top = e.clientY + 'px';
+    crosshair.style.display = 'block';
     startX = clampX(e.clientX);
     startY = clampY(e.clientY);
     selectionBox.style.left = startX + 'px';
@@ -200,8 +236,17 @@ function initSelectionCapture() {
     selectionBox.style.display = 'block';
   });
 
-  // Pointer move - draw selection
-  overlay.addEventListener('pointermove', (e) => {
+  // Pointer move - draw selection, or track the crosshair when idle
+  const handlePointerMove = (e) => {
+    if (!document.getElementById('imagetools-selection-overlay')) {
+      document.removeEventListener('pointermove', handlePointerMove, true);
+      return;
+    }
+    crosshair.style.left = e.clientX + 'px';
+    crosshair.style.top = e.clientY + 'px';
+    if (actionsContainer.style.display !== 'flex' && overlay.style.display !== 'none') {
+      crosshair.style.display = 'block';
+    }
     if (!isDrawing || startX === null) return;
 
     const currentX = clampX(e.clientX);
@@ -215,10 +260,21 @@ function initSelectionCapture() {
     selectionBox.style.top = top + 'px';
     selectionBox.style.width = width + 'px';
     selectionBox.style.height = height + 'px';
+  };
+  document.addEventListener('pointermove', handlePointerMove, true);
+
+  overlay.addEventListener('pointerleave', () => {
+    if (!isDrawing) {
+      crosshair.style.display = 'none';
+    }
   });
 
   // Pointer up - finish selection and show actions
-  overlay.addEventListener('pointerup', (e) => {
+  const finishSelection = (e) => {
+    if (!document.getElementById('imagetools-selection-overlay')) {
+      document.removeEventListener('pointerup', finishSelection, true);
+      return;
+    }
     if (!isDrawing) return;
 
     isDrawing = false;
@@ -226,7 +282,7 @@ function initSelectionCapture() {
 
     const width = parseInt(selectionBox.style.width);
     const height = parseInt(selectionBox.style.height);
-    
+
     // Only show actions if selection is large enough
     if (width > 10 && height > 10) {
       currentRect = {
@@ -235,9 +291,10 @@ function initSelectionCapture() {
         width: width,
         height: height
       };
-      
+
       positionActionsContainer(actionsContainer, currentRect);
-      
+      crosshair.style.display = 'none';
+
       // Change cursor to default
       overlay.style.cursor = 'default';
     } else {
@@ -246,7 +303,8 @@ function initSelectionCapture() {
       startX = null;
       startY = null;
     }
-  });
+  };
+  document.addEventListener('pointerup', finishSelection, true);
   
   // OK button - capture and cleanup
   const confirmCapture = async () => {
@@ -260,6 +318,24 @@ function initSelectionCapture() {
     cleanupSelectionUI();
   };
   okButton.addEventListener('click', confirmCapture);
+
+  // Copy button - crop the selection and put it on the system clipboard
+  copyButton.addEventListener('click', async () => {
+    if (!currentRect) return;
+    actionsContainer.style.display = 'none';
+    overlay.style.display = 'none';
+    selectionBox.style.display = 'none';
+    await new Promise(resolve => setTimeout(resolve, 100));
+    try {
+      const croppedDataUrl = await cropSelection(currentRect);
+      await copyImageToClipboard(croppedDataUrl);
+      showClipboardToast('Selection copied to clipboard');
+    } catch (error) {
+      console.error('[ImageTools] Failed to copy selection:', error);
+      showClipboardToast(`Copy failed: ${error.message}`, true);
+    }
+    cleanupSelectionUI();
+  });
   
   // Cancel button - cleanup
   cancelButton.addEventListener('click', () => {
@@ -276,8 +352,13 @@ function initSelectionCapture() {
     currentRect = null;
   });
   
-  // Enter to capture, Escape to cancel
+  // Enter to capture, Escape to cancel, Ctrl/Cmd+C to copy
   const keyHandler = (e) => {
+    // Overlay was dismissed (e.g. mouse click on a button) - stop listening
+    if (!document.getElementById('imagetools-selection-overlay')) {
+      document.removeEventListener('keydown', keyHandler);
+      return;
+    }
     if (e.key === 'Escape') {
       e.preventDefault();
       document.removeEventListener('keydown', keyHandler);
@@ -286,6 +367,10 @@ function initSelectionCapture() {
       e.preventDefault();
       document.removeEventListener('keydown', keyHandler);
       confirmCapture();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C') && currentRect) {
+      e.preventDefault();
+      document.removeEventListener('keydown', keyHandler);
+      copyButton.click();
     }
   };
   document.addEventListener('keydown', keyHandler);
@@ -294,6 +379,10 @@ function initSelectionCapture() {
 // Position the actions container relative to the selection, keeping it in viewport.
 function positionActionsContainer(actionsContainer, rect) {
   const margin = 10;
+  // Cap the panel to the viewport before measuring, otherwise a panel wider
+  // than the viewport (narrow emulated devices) clamps to the left margin and
+  // pushes the trailing buttons off-screen where they cannot be clicked.
+  actionsContainer.style.maxWidth = Math.max(0, window.innerWidth - margin * 2) + 'px';
   // Reveal off-screen to measure size, then place.
   actionsContainer.style.visibility = 'hidden';
   actionsContainer.style.left = '0px';
@@ -330,69 +419,79 @@ function cleanupSelectionUI() {
   const overlay = document.getElementById('imagetools-selection-overlay');
   const selectionBox = document.getElementById('imagetools-selection-box');
   const actionsContainer = document.getElementById('imagetools-selection-actions');
+  const crosshair = document.getElementById('imagetools-selection-crosshair');
   
   if (overlay) overlay.remove();
   if (selectionBox) selectionBox.remove();
   if (actionsContainer) actionsContainer.remove();
+  if (crosshair) crosshair.remove();
 }
 
-// Capture selected area
+// Crop the current selection out of a capture of the visible tab. Returns
+// the cropped PNG as a data URL.
+async function cropSelection(rect) {
+  // First, temporarily hide the overlay elements
+  const overlay = document.getElementById('imagetools-selection-overlay');
+  const selectionBox = document.getElementById('imagetools-selection-box');
+  const crosshair = document.getElementById('imagetools-selection-crosshair');
+  if (overlay) overlay.style.display = 'none';
+  if (selectionBox) selectionBox.style.display = 'none';
+  if (crosshair) crosshair.style.display = 'none';
+
+  // Wait a moment for DOM to update
+  await new Promise(resolve => setTimeout(resolve, 50));
+
+  // Capture the visible tab
+  const dataUrl = await chrome.runtime.sendMessage({
+    action: 'captureVisibleTab'
+  });
+
+  // Create canvas to crop the selection
+  const canvas = document.createElement('canvas');
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+  const ctx = canvas.getContext('2d');
+
+  // Load captured image
+  const img = await loadImage(dataUrl);
+
+  // Derive the real scale between CSS pixels (the selection rect, which is
+  // in clientX/Y units) and the captured bitmap. Measuring from the actual
+  // image is correct under normal DPR, browser zoom AND DevTools device
+  // emulation - in device-toolbar mode window.devicePixelRatio reports the
+  // *emulated* device ratio while captureVisibleTab renders at the host
+  // scale, so the old `* devicePixelRatio` math cropped the wrong region.
+  const scaleX = img.naturalWidth / window.innerWidth;
+  const scaleY = img.naturalHeight / window.innerHeight;
+
+  console.log('[ImageTools] selection capture scale diag:', {
+    imgW: img.naturalWidth, imgH: img.naturalHeight,
+    innerW: window.innerWidth, innerH: window.innerHeight,
+    devicePixelRatio: window.devicePixelRatio, scaleX, scaleY, rect
+  });
+
+  // Draw the selected portion
+  ctx.drawImage(
+    img,
+    rect.x * scaleX,
+    rect.y * scaleY,
+    rect.width * scaleX,
+    rect.height * scaleY,
+    0,
+    0,
+    rect.width,
+    rect.height
+  );
+
+  // Get cropped image as data URL
+  return canvas.toDataURL('image/png');
+}
+
+// Capture selected area and lodge it with the service
 async function captureSelection(rect, tag) {
   try {
-    // First, temporarily hide the overlay elements
-    const overlay = document.getElementById('imagetools-selection-overlay');
-    const selectionBox = document.getElementById('imagetools-selection-box');
-    if (overlay) overlay.style.display = 'none';
-    if (selectionBox) selectionBox.style.display = 'none';
-    
-    // Wait a moment for DOM to update
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // Capture the visible tab
-    const dataUrl = await chrome.runtime.sendMessage({ 
-      action: 'captureVisibleTab' 
-    });
-    
-    // Create canvas to crop the selection
-    const canvas = document.createElement('canvas');
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    const ctx = canvas.getContext('2d');
-    
-    // Load captured image
-    const img = await loadImage(dataUrl);
+    const croppedDataUrl = await cropSelection(rect);
 
-    // Derive the real scale between CSS pixels (the selection rect, which is
-    // in clientX/Y units) and the captured bitmap. Measuring from the actual
-    // image is correct under normal DPR, browser zoom AND DevTools device
-    // emulation - in device-toolbar mode window.devicePixelRatio reports the
-    // *emulated* device ratio while captureVisibleTab renders at the host
-    // scale, so the old `* devicePixelRatio` math cropped the wrong region.
-    const scaleX = img.naturalWidth / window.innerWidth;
-    const scaleY = img.naturalHeight / window.innerHeight;
-
-    console.log('[ImageTools] selection capture scale diag:', {
-      imgW: img.naturalWidth, imgH: img.naturalHeight,
-      innerW: window.innerWidth, innerH: window.innerHeight,
-      devicePixelRatio: window.devicePixelRatio, scaleX, scaleY, rect
-    });
-
-    // Draw the selected portion
-    ctx.drawImage(
-      img,
-      rect.x * scaleX,
-      rect.y * scaleY,
-      rect.width * scaleX,
-      rect.height * scaleY,
-      0,
-      0,
-      rect.width,
-      rect.height
-    );
-    
-    // Get cropped image as data URL
-    const croppedDataUrl = canvas.toDataURL('image/png');
-    
     // Send to background script for upload
     await chrome.runtime.sendMessage({ 
       action: 'uploadSelection', 
@@ -403,6 +502,86 @@ async function captureSelection(rect, tag) {
   } catch (error) {
     console.error('[ImageTools] Failed to capture selection:', error);
   }
+}
+
+// Put an image on the system clipboard. navigator.clipboard needs a focused
+// document in a secure context, so fall back to the deprecated copy command
+// (selecting a throwaway <img>) on insecure pages or when the API is blocked.
+async function copyImageToClipboard(dataUrl) {
+  const blob = dataUrlToBlob(dataUrl);
+
+  if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      return;
+    } catch (error) {
+      console.warn('[ImageTools] navigator.clipboard.write failed, trying fallback:', error);
+    }
+  }
+
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.alt = '';
+  img.style.cssText = 'position: fixed; left: -9999px; top: 0;';
+  document.body.appendChild(img);
+
+  const range = document.createRange();
+  range.selectNode(img);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch (_) {
+    copied = false;
+  }
+
+  selection.removeAllRanges();
+  img.remove();
+
+  if (!copied) throw new Error('clipboard write was blocked by the browser');
+}
+
+// Convert a data URL to a Blob. Done with atob rather than fetch() because
+// the page's CSP connect-src can block a fetch of a data: URL from the
+// content script (e.g. strict-CSP sites like github.com).
+function dataUrlToBlob(dataUrl) {
+  const [header, base64] = dataUrl.split(',');
+  const mime = (header.match(/data:(.*?);/) || [])[1] || 'image/png';
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
+// Transient in-page toast used for clipboard feedback
+function showClipboardToast(message, isError) {
+  const existing = document.getElementById('imagetools-clipboard-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'imagetools-clipboard-toast';
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: ${isError ? '#ef4444' : '#111827'};
+    color: white;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 2147483647;
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
 }
 
 // Maximum number of recently used tags offered as chips
@@ -435,7 +614,7 @@ function createTagPicker() {
   input.placeholder = 'New or recent tag (optional)';
   input.style.cssText = `
     flex: 1;
-    min-width: 180px;
+    min-width: 0;
     padding: 6px 8px;
     border: 2px solid #e5e7eb;
     border-radius: 6px;
@@ -597,10 +776,16 @@ function showCapturePreview(dataUrl, filename, title) {
   uploadButton.textContent = '✓ Upload';
   styleOverlayButton(uploadButton, '#10b981', '#059669');
 
+  const copyButton = document.createElement('button');
+  copyButton.textContent = '📋 Copy';
+  copyButton.title = 'Copy image to the system clipboard';
+  styleOverlayButton(copyButton, '#3b82f6', '#2563eb');
+
   const discardButton = document.createElement('button');
   discardButton.textContent = '✕ Discard';
   styleOverlayButton(discardButton, '#ef4444', '#dc2626');
 
+  buttonsRow.appendChild(copyButton);
   buttonsRow.appendChild(uploadButton);
   buttonsRow.appendChild(discardButton);
 
@@ -647,12 +832,28 @@ function showCapturePreview(dataUrl, filename, title) {
       throw new Error((response && response.error) || 'Upload failed');
     } catch (error) {
       console.error('[ImageTools] Preview upload failed:', error);
-      status.textContent = `Upload failed: ${error.message}`;
-      status.style.display = 'block';
+      setStatus(`Upload failed: ${error.message}`);
       uploadButton.textContent = '✓ Retry upload';
       uploadButton.disabled = false;
       discardButton.disabled = false;
       uploading = false;
+    }
+  };
+
+  const setStatus = (message, color) => {
+    status.textContent = message;
+    status.style.color = color || '#dc2626';
+    status.style.display = 'block';
+  };
+
+  const copy = async () => {
+    if (uploading) return;
+    try {
+      await copyImageToClipboard(dataUrl);
+      setStatus('Copied to clipboard', '#10b981');
+    } catch (error) {
+      console.error('[ImageTools] Preview copy failed:', error);
+      setStatus(`Copy failed: ${error.message}`);
     }
   };
 
@@ -668,10 +869,14 @@ function showCapturePreview(dataUrl, filename, title) {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       upload();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      copy();
     }
   };
 
   uploadButton.addEventListener('click', upload);
+  copyButton.addEventListener('click', copy);
   discardButton.addEventListener('click', close);
   document.addEventListener('keydown', keyHandler);
 }

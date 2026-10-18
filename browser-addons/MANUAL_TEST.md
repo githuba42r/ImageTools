@@ -15,7 +15,7 @@ Trigger **Capture Selection** on a normal page, then:
 
 | Case | Steps | Expected |
 |------|-------|----------|
-| 1a | Drag from inside the page **off the left edge**, release the mouse button **outside the browser window**, move back in | Selection completes; ✓ Capture / Reselect / Cancel buttons appear; no page text/content is highlighted |
+| 1a | Drag from inside the page **off the left edge**, release the mouse button **outside the browser window**, move back in | Selection completes; 📋 Copy / ✓ Capture / Reselect / Cancel buttons appear; no page text/content is highlighted |
 | 1b | Same dragging off the **right**, **top**, and **bottom** edges | Same as 1a for each edge |
 | 1c | Drag a selection that spans content right at the page edge, Capture | Uploaded crop includes the edge content (selection rect was clamped to the viewport, not lost) |
 | 1d | Press **Esc** mid-selection and after a selection is drawn | Overlay is removed, no capture |
@@ -28,7 +28,8 @@ selection) and/or the action buttons never appear after dragging off the edge.
 ## 2. DevTools Device Toolbar (Bug: capture broken under device emulation)
 
 Open DevTools → toggle **Device Toolbar**. Test at: iPhone preset,
-iPad preset, and **Responsive** with a custom width and a non-1 DPR.
+iPad preset, **Samsung Galaxy S20 Ultra** (touch emulation) and
+**Responsive** with a custom width and a non-1 DPR.
 
 | Case | Steps | Expected |
 |------|-------|----------|
@@ -38,6 +39,11 @@ iPad preset, and **Responsive** with a custom width and a non-1 DPR.
 | 2d | Responsive mode, custom DPR (e.g. 2 or 3) → repeat 2b and 2c | Same as 2b/2c |
 | 2e | Device Toolbar **off** (normal) → repeat 2b and 2c | Still correct (no regression on the normal path) |
 | 2f | Retina/HiDPI host display, Device Toolbar off → 2b and 2c | Correct (regression check for real high-DPI displays) |
+| 2g | Device Toolbar on (Samsung Galaxy S20 Ultra) → Capture Selection → move the mouse over the page without clicking | Page dims and a **white crosshair reticle follows the pointer**. Touch emulation hides the OS cursor, so this reticle is the only aiming aid. Note: with touch emulation the browser may not deliver hover events at all — if the reticle does not appear until you press, see 2h |
+| 2h | 2g → click-drag a region | Selection rectangle tracks the pointer, the **crosshair reticle stays visible and follows the pointer for the whole drag**, and the action panel appears on release |
+| 2i | Responsive width **360** → Capture Selection, drag a region | Action panel fits the viewport and **all four buttons (Copy/Capture/Reselect/Cancel) are clickable** — none clipped off-screen |
+| 2j | Device Toolbar on → Capture Selection → start the drag inside the device screen and **drag past its edge into the grey letterbox (or past the browser window edge)**, then release | The rectangle keeps tracking and the action panel still appears — the drag must not die at the page boundary |
+| 2k | After 2h/2j, make a second selection without clicking Reselect | Dragging again starts a fresh selection (panel dismisses) instead of being ignored |
 
 In the console diag log, `scaleX`/`scaleY` should equal
 `capturedImageWidth / window.innerWidth`. Under device emulation this will
@@ -57,11 +63,11 @@ tag in the popup ("Tag uploads as") before starting.
 
 | Case | Steps | Expected |
 |------|-------|----------|
-| 4a | Capture Selection, draw a region | Action panel shows a **Tag** input pre-filled with the popup's current tag, and up to 8 recent-tag chips (most recent first) above ✓ Capture / Reselect / Cancel |
+| 4a | Capture Selection, draw a region | Action panel shows a **Tag** input pre-filled with the popup's current tag, and up to 8 recent-tag chips (most recent first) above 📋 Copy / ✓ Capture / Reselect / Cancel |
 | 4b | 4a → click a chip → ✓ Capture | Chip highlights and fills the input; uploaded image carries that tag; popup now shows it as the current tag |
 | 4c | 4a → type a brand-new tag → press **Enter** | Captures with the new tag; typing in the input does not trigger page keyboard shortcuts (e.g. `s`/`/` on GitHub) |
 | 4d | 4a → clear the tag (×) → Capture | Image uploaded untagged; popup's current tag is cleared |
-| 4e | Capture Visible Area (context menu **and** popup button) | Nothing uploads yet; a modal shows the captured image preview, tag picker, ✓ Upload / ✕ Discard. The modal itself is not in the captured image |
+| 4e | Capture Visible Area (context menu **and** popup button) | Nothing uploads yet; a modal shows the captured image preview, tag picker, 📋 Copy / ✓ Upload / ✕ Discard. The modal itself is not in the captured image |
 | 4f | Capture Full Page on a tall page | Same modal; the preview scrolls to show the whole page |
 | 4g | 4e/4f → pick or type a tag → ✓ Upload (or **Enter**) | Button shows "Uploading…", modal closes, "Screenshot uploaded!" notification, image has the tag, popup current tag updated |
 | 4h | 4e/4f → ✕ Discard (or **Esc**) | Modal closes, nothing uploaded |
@@ -69,4 +75,23 @@ tag in the popup ("Tag uploads as") before starting.
 | 4j | Repeat any capture several times on the same tab without reloading | Only one overlay/modal at a time; each action handled once (no duplicate uploads) |
 | 4k | Addon paired before `user_id` was stored, or tags endpoint unreachable | Tag input still works; chips are simply absent |
 | 4l | Strict-CSP site (e.g. github.com) → 4e | Preview image renders |
+
+## 5. Clipboard copy
+
+Copy works entirely client-side — pairing is not required for the preview
+modal path, and copying never uploads anything or changes the popup's current
+tag. Paste into an image-capable target (e.g. an image editor, Slack, or
+`xclip -selection clipboard -t TARGETS -o` on Linux).
+
+| Case | Steps | Expected |
+|------|-------|----------|
+| 5a | Capture Selection, draw a region, click 📋 Copy | Toast "Selection copied to clipboard"; pasting gives exactly the selected region as a PNG |
+| 5b | 5a → paste into an image editor | Dimensions match the selection (not blank, not offset) |
+| 5c | 5a with a tag set in the popup | Popup's current tag is unchanged; nothing is uploaded; the tag endpoint is not called on copy |
+| 5d | Draw a selection, press **Ctrl/Cmd+C** | Same as clicking 📋 Copy |
+| 5e | Capture Visible Area → 📋 Copy in the preview modal | Status line shows green "Copied to clipboard"; modal stays open; paste gives the full visible area |
+| 5f | 5e → then ✓ Upload | Upload proceeds normally after the copy |
+| 5g | Capture Full Page → 📋 Copy | Status shows copied; paste gives the assembled full-page image |
+| 5h | HTTP (insecure) page → 📋 Copy | Still copies via the fallback path, or shows "Copy failed: …" if the browser blocks it |
+| 5i | Page open in a background/unfocused window where possible, trigger copy right after the click | Copy succeeds (clipboard write needs the click's user activation) |
 
