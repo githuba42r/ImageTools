@@ -35,7 +35,8 @@ async def test_connect_sets_state_cookie_and_redirects(client):
     r = await client.get("/api/v1/oauth2/connect")
     assert r.status_code == 302
     loc = r.headers["location"]
-    assert loc.startswith("https://idp.test/oauth2/authorize?")
+    # vinCreative IdP authorize endpoint is /oauth2/connect (not /oauth2/authorize)
+    assert loc.startswith("https://idp.test/oauth2/connect?")
     qs = urllib.parse.parse_qs(urllib.parse.urlparse(loc).query)
     assert qs["client_id"] == ["imagetools"]
     assert qs["scope"] == ["auth"]

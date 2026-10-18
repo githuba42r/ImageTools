@@ -20,7 +20,9 @@ async def client():
     app = FastAPI()
     app.add_middleware(OAuth2SessionMiddleware)
 
-    @app.get("/probe")
+    # OAuth2SessionMiddleware only guards /api/* — probe must live under /api/
+    # for the session cookie to be parsed (non-/api/ paths bypass entirely).
+    @app.get("/api/probe")
     async def probe(request: Request):
         return {
             "remote_user": getattr(request.state, "remote_user", None),
@@ -46,13 +48,13 @@ async def client():
 
 async def test_valid_cookie_populates_request_state(client):
     cookie = session_service.sign_session({"u": "u@x.test", "d": "U X", "exp": int(time.time()) + 60})
-    r = await client.get("/probe", cookies={"imagetools_session": cookie})
+    r = await client.get("/api/probe", cookies={"imagetools_session": cookie})
     assert r.status_code == 200
     assert r.json() == {"remote_user": "u@x.test", "remote_name": "U X"}
 
 
 async def test_no_cookie_returns_401_with_login_url(client):
-    r = await client.get("/probe")
+    r = await client.get("/api/probe")
     assert r.status_code == 401
     assert "OAuth2" in r.headers["www-authenticate"]
     assert "/api/v1/oauth2/connect" in r.headers["www-authenticate"]
@@ -60,13 +62,13 @@ async def test_no_cookie_returns_401_with_login_url(client):
 
 async def test_expired_cookie_returns_401(client):
     cookie = session_service.sign_session({"u": "u@x.test", "d": "U", "exp": int(time.time()) - 10})
-    r = await client.get("/probe", cookies={"imagetools_session": cookie})
+    r = await client.get("/api/probe", cookies={"imagetools_session": cookie})
     assert r.status_code == 401
 
 
 async def test_tampered_cookie_returns_401(client):
     cookie = session_service.sign_session({"u": "u@x.test", "d": "U", "exp": int(time.time()) + 60})
-    r = await client.get("/probe", cookies={"imagetools_session": cookie[:-2] + "ZZ"})
+    r = await client.get("/api/probe", cookies={"imagetools_session": cookie[:-2] + "ZZ"})
     assert r.status_code == 401
 
 
