@@ -115,6 +115,8 @@ LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
 LABEL org.opencontainers.image.title="ImageTools"
 LABEL org.opencontainers.image.description="Multi-user image sharing and management platform"
+# Lets GHCR link the package to this repository automatically.
+LABEL org.opencontainers.image.source="https://github.com/githuba42r/ImageTools"
 
 # Run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8081"]
