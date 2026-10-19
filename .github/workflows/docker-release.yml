@@ -1,0 +1,145 @@
+name: docker-release
+
+# Build and publish the ImageTools container whenever the service changes on
+# master.
+#
+#   1. bump version.json (patch + versionCode + buildDate)
+#   2. commit and push the bump with GITHUB_TOKEN ([skip ci], so no loop)
+#   3. build the root Dockerfile and push to GHCR as:
+#        ghcr.io/<owner>/imagetools:<version>
+#        ghcr.io/<owner>/imagetools:latest
+#
+# version.json is the runtime source of truth: the Dockerfile copies it to
+# /version.json and the backend serves it from /version. Android and extension
+# versions are independent and are not touched here.
+#
+# The tag-triggered release.yml still builds the same image for a formal app
+# release; these two can run independently (the last push to :latest wins).
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "mcp-server/**"
+      - "Dockerfile"
+      - ".dockerignore"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump version.json before building"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: docker-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Bump the version and push the commit
+        id: version
+        env:
+          BUMP_INPUT: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+
+          last_subject=$(git log -1 --format=%s)
+
+          if [ "$BUMP_INPUT" = "false" ]; then
+            echo "Bump disabled by workflow_dispatch input; building the current version"
+          elif [[ "$last_subject" == "chore(docker): bump version to "* ]]; then
+            # A retry of a run whose bump commit is already on master: rebuild
+            # that version instead of bumping again.
+            echo "HEAD is already the auto-bump commit; rebuilding the current version"
+          else
+            python3 .github/scripts/bump_docker_version.py
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add version.json
+
+            version=$(jq -r .version version.json)
+            git commit -m "chore(docker): bump version to ${version} [skip ci]"
+
+            pushed=false
+            for attempt in 1 2 3; do
+              if git push origin HEAD:master; then
+                pushed=true
+                break
+              fi
+              git pull --rebase origin master
+            done
+
+            if [ "$pushed" != true ]; then
+              echo "::error::Could not push the version bump commit to master"
+              exit 1
+            fi
+          fi
+
+          version=$(jq -r .version version.json)
+          build_date=$(jq -r .buildDate version.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_date=$build_date" >> "$GITHUB_OUTPUT"
+          echo "### Docker release ${version}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- build date: \`${build_date}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Lowercase the image owner (GHCR requires it)
+        id: owner
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.owner.outputs.owner }}/imagetools
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ steps.version.outputs.build_date }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record the outcome
+        run: |
+          {
+            echo ""
+            echo "Pushed \`ghcr.io/${{ steps.owner.outputs.owner }}/imagetools:${{ steps.version.outputs.version }}\` and \`:latest\`"
+            echo ""
+            echo "Digest: \`${{ steps.build.outputs.digest }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
