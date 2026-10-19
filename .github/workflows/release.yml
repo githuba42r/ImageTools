@@ -247,9 +247,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          (cd browser-addons/firefox && zip -q -r "../../dist/imagetools-firefox-${VERSION}.xpi" \
+          # Extension versions are independent of version.json; name the release
+          # assets after the version actually inside each manifest.
+          FIREFOX_VERSION=$(jq -r .version browser-addons/firefox/manifest.json)
+          CHROME_VERSION=$(jq -r .version browser-addons/chrome/manifest.json)
+          (cd browser-addons/firefox && zip -q -r "../../dist/imagetools-firefox-${FIREFOX_VERSION}.xpi" \
             manifest.json popup.html popup.js background.js content.js icons)
-          (cd browser-addons/chrome && zip -q -r "../../dist/imagetools-chrome-${VERSION}.zip" \
+          (cd browser-addons/chrome && zip -q -r "../../dist/imagetools-chrome-${CHROME_VERSION}.zip" \
             manifest.json popup.html popup.js background.js content.js icons)
           ls -l dist/
       - uses: actions/upload-artifact@v4

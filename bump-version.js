@@ -156,17 +156,41 @@ function updateBackendMain(newVersion) {
 }
 
 /**
+ * Compare two dotted numeric versions. Returns <0, 0 or >0.
+ */
+function compareVersions(a, b) {
+  const left = a.split('.').map(Number);
+  const right = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const diff = (left[i] || 0) - (right[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
  * Update browser addon manifest.json
+ *
+ * Extension versions are released independently of the app (see
+ * .github/workflows/extension-release.yml). Only ever raise the manifest
+ * version: lowering it would make every future store upload fail because the
+ * store already has a higher version.
  */
 function updateManifest(manifestPath, addonName, newVersion) {
   console.log(`📝 Updating ${addonName} manifest.json...`);
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  
+
   // Browser extensions don't support prerelease versions in manifest
   // Strip prerelease suffix for manifest
   const cleanVersion = newVersion.split('-')[0];
+
+  if (compareVersions(cleanVersion, manifest.version) <= 0) {
+    console.log(`   ✓ Keeping ${manifest.version} (already at or ahead of ${cleanVersion})`);
+    return;
+  }
+
   manifest.version = cleanVersion;
-  
+
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
   console.log(`   ✓ Updated to ${cleanVersion}`);
 }

@@ -1,0 +1,295 @@
+name: extension-release
+
+# Publish a browser extension whenever its folder changes on master.
+#
+#   prepare  -> work out which add-on changed, ask the stores what versions
+#               they already have, allocate a new version when needed, and push
+#               one [skip ci] version-bump commit
+#   chrome   -> package the zip and upload + publish via the Chrome Web Store API
+#   firefox  -> package and submit a listed version to AMO with web-ext
+#
+# Store versions are independent of version.json: an extension can be released
+# many times between app releases. bump-version.js only ever raises them.
+#
+# Required repository secrets (see docs/EXTENSION_RELEASE.md):
+#   CHROME_CLIENT_ID, CHROME_CLIENT_SECRET, CHROME_REFRESH_TOKEN,
+#   CHROME_EXTENSION_ID, CHROME_PUBLISHER_ID
+#   WEB_EXT_API_KEY, WEB_EXT_API_SECRET
+#
+# Pushes made with GITHUB_TOKEN do not trigger workflows, so the version-bump
+# commit cannot loop. [skip ci] is belt-and-braces.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "browser-addons/chrome/**"
+      - "browser-addons/firefox/**"
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: "Which extension to release (auto = whatever the latest commit changed)"
+        required: true
+        type: choice
+        default: auto
+        options:
+          - auto
+          - chrome
+          - firefox
+          - both
+
+permissions:
+  contents: write
+
+concurrency:
+  group: extension-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      chrome: ${{ steps.release.outputs.chrome }}
+      chrome_version: ${{ steps.release.outputs.chrome_version }}
+      firefox: ${{ steps.release.outputs.firefox }}
+      firefox_version: ${{ steps.release.outputs.firefox_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Detect changed extensions
+        id: changed
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          DISPATCH_BROWSER: ${{ inputs.browser }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "push" ] && [ -n "${BEFORE_SHA:-}" ] && [[ ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+            if ! paths=$(git diff --name-only "$BEFORE_SHA" HEAD 2>/dev/null); then
+              paths=$(git diff --name-only HEAD^ HEAD)
+            fi
+          else
+            paths=$(git diff --name-only HEAD^ HEAD)
+          fi
+
+          chrome=false
+          firefox=false
+          grep -q '^browser-addons/chrome/' <<<"$paths" && chrome=true || true
+          grep -q '^browser-addons/firefox/' <<<"$paths" && firefox=true || true
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            case "${DISPATCH_BROWSER:-auto}" in
+              chrome) chrome=true; firefox=false ;;
+              firefox) chrome=false; firefox=true ;;
+              both) chrome=true; firefox=true ;;
+            esac
+          fi
+
+          echo "chrome=$chrome" >> "$GITHUB_OUTPUT"
+          echo "firefox=$firefox" >> "$GITHUB_OUTPUT"
+
+          # If the last commit touching an add-on is the workflow's own bump
+          # commit, this run is a retry/resume: never bump the same change twice.
+          for ext in chrome firefox; do
+            subject=$(git log -1 --format=%s -- "browser-addons/$ext" || true)
+            case "$subject" in
+              "chore(extensions): bump "*) bumped=true ;;
+              *) bumped=false ;;
+            esac
+            echo "${ext}_bumped=$bumped" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Plan the release
+        env:
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+          DISPATCH_BROWSER: ${{ inputs.browser }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/plan_release.py \
+            --chrome-changed "${{ steps.changed.outputs.chrome }}" \
+            --firefox-changed "${{ steps.changed.outputs.firefox }}" \
+            --chrome-already-bumped "${{ steps.changed.outputs.chrome_bumped }}" \
+            --firefox-already-bumped "${{ steps.changed.outputs.firefox_bumped }}" \
+            --dispatch-browser "${DISPATCH_BROWSER:-auto}" \
+            | tee plan.json
+          jq -e . plan.json >/dev/null
+
+      - name: Apply version bumps and push
+        id: release
+        run: |
+          set -euo pipefail
+
+          chrome_action=$(jq -r '.chrome.action' plan.json)
+          firefox_action=$(jq -r '.firefox.action' plan.json)
+          chrome_target=$(jq -r '.chrome.target // empty' plan.json)
+          firefox_target=$(jq -r '.firefox.target // empty' plan.json)
+
+          if [ "$chrome_action" = "bump" ]; then
+            python3 .github/scripts/bump_extension.py chrome "$chrome_target"
+          fi
+          if [ "$firefox_action" = "bump" ]; then
+            python3 .github/scripts/bump_extension.py firefox "$firefox_target"
+          fi
+
+          if [ "$chrome_action" = "bump" ] || [ "$firefox_action" = "bump" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+            parts=""
+            if [ "$chrome_action" = "bump" ]; then
+              parts="chrome $chrome_target"
+              git add browser-addons/chrome/manifest.json browser-addons/chrome/popup.js
+            fi
+            if [ "$firefox_action" = "bump" ]; then
+              if [ -n "$parts" ]; then
+                parts="$parts, "
+              fi
+              parts="${parts}firefox $firefox_target"
+              git add browser-addons/firefox/manifest.json browser-addons/firefox/popup.js
+            fi
+
+            git commit -m "chore(extensions): bump ${parts} [skip ci]"
+
+            pushed=false
+            for attempt in 1 2 3; do
+              if git push origin HEAD:master; then
+                pushed=true
+                break
+              fi
+              git pull --rebase origin master
+            done
+
+            if [ "$pushed" != true ]; then
+              echo "::error::Could not push the version bump commit to master"
+              exit 1
+            fi
+          fi
+
+          sha=$(git rev-parse HEAD)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+          if [ "$chrome_action" = "bump" ] || [ "$chrome_action" = "publish" ]; then
+            echo "chrome=true" >> "$GITHUB_OUTPUT"
+            echo "chrome_version=$chrome_target" >> "$GITHUB_OUTPUT"
+          else
+            echo "chrome=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "$firefox_action" = "bump" ] || [ "$firefox_action" = "publish" ]; then
+            echo "firefox=true" >> "$GITHUB_OUTPUT"
+            echo "firefox_version=$firefox_target" >> "$GITHUB_OUTPUT"
+          else
+            echo "firefox=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### Extension release plan"
+            echo ""
+            if [ -f plan.json ] && jq -e . plan.json >/dev/null 2>&1; then
+              jq -r 'to_entries[] | "- **\(.key)** — `\(.value.action)` \(.value.target // ""): \(.value.reason)"' plan.json
+            else
+              echo "No plan was produced."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  chrome:
+    needs: prepare
+    if: needs.prepare.outputs.chrome == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.chrome_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - name: Stamp build date and package
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/bump_extension.py chrome "$VERSION" --build-date-only
+          mkdir -p dist
+          (
+            cd browser-addons/chrome
+            zip -q -r "$GITHUB_WORKSPACE/dist/imagetools-chrome-${VERSION}.zip" \
+              manifest.json popup.html popup.js background.js content.js icons
+          )
+          unzip -l "dist/imagetools-chrome-${VERSION}.zip"
+
+      - name: Upload and publish to the Chrome Web Store
+        env:
+          CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes --package chrome-webstore-upload-cli@4.0.2 chrome-webstore-upload upload \
+            --source "dist/imagetools-chrome-${VERSION}.zip" \
+            --extension-id "$EXTENSION_ID" \
+            --publisher-id "$PUBLISHER_ID"
+          npx --yes --package chrome-webstore-upload-cli@4.0.2 chrome-webstore-upload publish \
+            --extension-id "$EXTENSION_ID" \
+            --publisher-id "$PUBLISHER_ID"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chrome-extension-${{ needs.prepare.outputs.chrome_version }}
+          path: dist/imagetools-chrome-*.zip
+          if-no-files-found: error
+
+  firefox:
+    needs: prepare
+    if: needs.prepare.outputs.firefox == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.firefox_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+
+      - name: Stamp build date and package
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/bump_extension.py firefox "$VERSION" --build-date-only
+          mkdir -p dist
+          (
+            cd browser-addons/firefox
+            zip -q -r "$GITHUB_WORKSPACE/dist/imagetools-firefox-${VERSION}.xpi" \
+              manifest.json popup.html popup.js background.js content.js icons
+          )
+          unzip -l "dist/imagetools-firefox-${VERSION}.xpi"
+
+      - name: Submit the listed version to AMO
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+        run: |
+          set -euo pipefail
+          npx --yes --package web-ext@10.8.0 web-ext sign \
+            --source-dir browser-addons/firefox \
+            --artifacts-dir dist \
+            --channel listed \
+            --approval-timeout 0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firefox-extension-${{ needs.prepare.outputs.firefox_version }}
+          path: dist/imagetools-firefox-*.xpi
+          if-no-files-found: error
