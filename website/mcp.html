@@ -36,7 +36,7 @@
           <li><a href="extensions.html" data-nav="extensions.html">Extensions</a></li>
           <li><a href="mcp.html" data-nav="mcp.html">MCP server</a></li>
           <li><a href="docker.html" data-nav="docker.html">Docker</a></li>
-          <li><a class="nav-cta" href="https://image-tools.a42r.com" rel="noopener">Open app ↗</a></li>
+          <li><a class="nav-cta" href="https://github.com/githuba42r/ImageTools/releases" rel="noopener">Releases ↗</a></li>
         </ul>
       </nav>
     </div>
@@ -83,7 +83,7 @@
         <p>Tokens are long-lived — there's no TTL — so treat them like passwords and revoke rather than rotate casually. Use one label per client so you can tell them apart in the list.</p>
 
         <h2 id="http">Streamable HTTP transport (deployed backend)</h2>
-        <p>The MCP endpoint lives at <code>{INSTANCE_URL}/mcp/</code> on your ImageTools backend — e.g. <code>https://image-tools.a42r.com/mcp/</code> on the hosted instance.</p>
+        <p>The MCP endpoint lives at <code>{INSTANCE_URL}/mcp/</code> on your ImageTools backend — e.g. <code>https://imagetools.example.com/mcp/</code> for a server at that address.</p>
         <div class="note warn">
           <strong>The trailing slash on /mcp/ is required.</strong>
           Without it the server returns <strong>HTTP 405</strong> — the FastMCP Starlette app is mounted at <code>/mcp</code> and its internal route is <code>/</code>.
@@ -147,7 +147,7 @@
 
         <h2>Verifying a deployment</h2>
         <p>Two quick smoke tests with curl:</p>
-<pre><code>URL=https://image-tools.a42r.com
+<pre><code>URL=https://imagetools.example.com
 TOK=imt_...
 
 # 1. token is valid → returns user_id
@@ -163,7 +163,7 @@ curl -sS -X POST "$URL/mcp/" \
         <h2>Deployment notes</h2>
         <ul>
           <li>The bearer token <em>is</em> the auth boundary for <code>/mcp/</code> — when fronting the backend with an authenticating proxy (Authelia, basic auth), bypass the proxy auth for the <code>/mcp</code> path so agent calls work.</li>
-          <li>On the hosted instance the backend sits behind Traefik + Authelia; <code>/mcp</code> has its own router without the auth middlewares, and the backend's internal-auth middleware already bypasses <code>/mcp</code> and <code>/api/v1/mcp-tokens/</code>.</li>
+          <li>Behind Traefik + Authelia, for example, <code>/mcp</code> has its own router without the auth middlewares, and the backend's internal-auth middleware already bypasses <code>/mcp</code> and <code>/api/v1/mcp-tokens/</code>.</li>
           <li>Source: <a href="https://github.com/githuba42r/ImageTools/tree/master/mcp-server" rel="noopener"><code>mcp-server/</code></a> in the repo — README, stdio entrypoint and design docs under <code>docs/superpowers/</code>.</li>
         </ul>
       </div>
@@ -190,7 +190,7 @@ curl -sS -X POST "$URL/mcp/" \
           <h4>Project</h4>
           <ul>
             <li><a href="https://github.com/githuba42r/ImageTools" rel="noopener">GitHub repository</a></li>
-            <li><a href="https://image-tools.a42r.com" rel="noopener">Live instance</a></li>
+            <li><a href="https://github.com/githuba42r/ImageTools/releases" rel="noopener">Releases</a></li>
             <li><a href="https://github.com/githuba42r/ImageTools/blob/master/USER_GUIDE.md" rel="noopener">User guide</a></li>
             <li><a href="https://github.com/githuba42r/ImageTools/blob/master/LICENSE" rel="noopener">GPL-3.0 license</a></li>
             <li><a href="privacy.html" data-nav="privacy.html">Privacy policy</a></li>
