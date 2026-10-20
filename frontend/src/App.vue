@@ -19,16 +19,53 @@
               ℹ️
             </button>
             
-            <!-- Username display -->
-            <div v-if="username" class="username-display">
-              <span class="user-icon">👤</span>
-              <span class="username-text">{{ username }}</span>
-            </div>
+            <!-- Unified user chip: tooltip, menu and sign-out confirmation -->
+            <div
+              v-if="username || userStore.displayName"
+              class="user-menu-wrap"
+              @click.stop
+            >
+              <button
+                class="user-chip"
+                :aria-label="`Logged in as ${userDisplayName}`"
+                :aria-expanded="showUserMenu"
+                aria-haspopup="menu"
+                @click="toggleUserMenu"
+              >
+                <span class="user-avatar">{{ userInitials }}</span>
+                <span class="user-chip-name">{{ username || userStore.displayName }}</span>
+              </button>
 
-            <!-- OAuth2 logged-in badge with sign-out -->
-            <div v-if="userStore.displayName" class="user-badge">
-              Logged in as <strong>{{ userStore.displayName }}</strong>
-              <button class="logout-link" @click="userStore.logout">Sign out</button>
+              <span v-if="!showUserMenu" class="user-tooltip" role="tooltip">
+                Logged in as <strong>{{ userDisplayName }}</strong>
+              </span>
+
+              <div v-if="showUserMenu" class="user-dropdown" role="menu">
+                <template v-if="!confirmingSignOut">
+                  <div class="user-dropdown-head">
+                    <span class="user-avatar user-avatar-lg">{{ userInitials }}</span>
+                    <div class="user-dropdown-id">
+                      <strong>{{ userDisplayName }}</strong>
+                      <span>{{ username ? `${username} · signed in` : 'signed in' }}</span>
+                    </div>
+                  </div>
+                  <button
+                    v-if="userStore.displayName"
+                    class="user-dropdown-action danger"
+                    role="menuitem"
+                    @click="confirmingSignOut = true"
+                  >
+                    Sign out
+                  </button>
+                </template>
+                <div v-else class="user-confirm">
+                  <p><strong>Sign out of ImageTools?</strong><br>You will need to sign in again to manage images.</p>
+                  <div class="user-confirm-actions">
+                    <button class="btn-secondary-sm" @click="confirmingSignOut = false">Cancel</button>
+                    <button class="btn-danger-sm" @click="confirmSignOut">Sign out</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -50,15 +87,24 @@
           v-if="imageCount > 0 && imageStore.availableTags.length > 0"
           class="header-center"
         >
-          <div class="tag-filter-bar header-filter">
+          <!-- Desktop: two tags (active filters pinned) plus an overflow button -->
+          <div class="tag-filter-bar header-filter desktop-tag-filter">
             <span class="tag-filter-label">Filter by tag:</span>
             <button
-              v-for="t in imageStore.availableTags"
+              v-for="t in visibleTagFilters"
               :key="t"
               class="tag-filter-chip"
               :class="{ active: imageStore.selectedTagFilters.includes(t.toLowerCase()) }"
               @click="imageStore.toggleTagFilter(t)"
             >{{ t }}</button>
+            <button
+              v-if="hiddenTagCount > 0"
+              class="tag-filter-chip tag-filter-more"
+              :aria-expanded="showTagPopover"
+              aria-haspopup="dialog"
+              title="Show all tags"
+              @click.stop="toggleTagPopover"
+            >…<span class="tag-more-count">+{{ hiddenTagCount }}</span></button>
             <button
               v-if="imageStore.hasTagFilter"
               class="tag-filter-clear"
@@ -69,6 +115,21 @@
               {{ imageStore.filteredImageCount }} of {{ imageCount }}
             </span>
           </div>
+
+          <!-- Mobile: the tag row collapses to one filter control -->
+          <button
+            class="mobile-filter-button"
+            :class="{ active: imageStore.hasTagFilter }"
+            :aria-expanded="showTagPopover"
+            aria-haspopup="dialog"
+            @click.stop="toggleTagPopover"
+          >
+            <span class="mobile-filter-icon">⚲</span>
+            Filter
+            <span v-if="imageStore.hasTagFilter" class="mobile-filter-badge">
+              {{ imageStore.selectedTagFilters.length }}
+            </span>
+          </button>
         </div>
 
         <!-- Settings button - always visible -->
@@ -202,6 +263,43 @@
           <div class="header-spacer"></div>
 
           <UploadArea @upload-complete="handleUploadComplete" :compact="true" :inline="true" />
+        </div>
+
+        <!-- Tag filter popover: holds the full list so the header never scrolls -->
+        <div
+          v-if="showTagPopover && imageStore.availableTags.length > 0"
+          class="tag-popover"
+          role="dialog"
+          aria-label="Filter by tag"
+          @click.stop
+        >
+          <div class="tag-popover-head">
+            <strong>Filter by tag</strong>
+            <div class="tag-popover-actions">
+              <button
+                class="tag-popover-clear"
+                :disabled="!imageStore.hasTagFilter"
+                @click="imageStore.clearTagFilters()"
+              >Clear all</button>
+              <button class="tag-popover-close" aria-label="Close" @click="showTagPopover = false">✕</button>
+            </div>
+          </div>
+          <div class="tag-popover-grid">
+            <button
+              v-for="t in imageStore.availableTags"
+              :key="t"
+              class="tag-popover-chip"
+              :class="{ active: imageStore.selectedTagFilters.includes(t.toLowerCase()) }"
+              @click="imageStore.toggleTagFilter(t)"
+            >{{ t }}</button>
+          </div>
+          <div class="tag-popover-foot">
+            <span v-if="imageStore.hasTagFilter">
+              {{ imageStore.filteredImageCount }} of {{ imageCount }} images
+            </span>
+            <span v-else>{{ imageCount }} images · {{ imageStore.availableTags.length }} tags</span>
+            <button class="tag-popover-done" @click="showTagPopover = false">Done</button>
+          </div>
         </div>
       </div>
     </header>
@@ -1544,6 +1642,11 @@ const offlineModalRef = ref(null);
 
 // Settings menu state
 const showSettingsMenu = ref(false);
+
+// Header user menu and tag popover
+const showUserMenu = ref(false);
+const confirmingSignOut = ref(false);
+const showTagPopover = ref(false);
 const showAISettingsModal = ref(false);
 const showPresetSettingsModal = ref(false);
 const showAboutModal = ref(false);
@@ -1787,6 +1890,35 @@ const displayName = computed(() => {
   }
   return null;
 });
+
+// The single header user chip shows the short username, while the tooltip and
+// menu show the full name when the identity provider supplies one.
+const userDisplayName = computed(
+  () => userStore.displayName || displayName.value || username.value || ''
+);
+
+const userInitials = computed(() => {
+  const name = userDisplayName.value || username.value || '';
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length > 1) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+});
+
+// The header shows at most two tag chips. Active filters are always pinned
+// first so a filter can never disappear behind the overflow button.
+const VISIBLE_TAG_COUNT = 2;
+const visibleTagFilters = computed(() => {
+  const tags = imageStore.availableTags || [];
+  const active = tags.filter(t => imageStore.selectedTagFilters.includes(t.toLowerCase()));
+  const rest = tags.filter(t => !imageStore.selectedTagFilters.includes(t.toLowerCase()));
+  return [...active, ...rest].slice(0, VISIBLE_TAG_COUNT);
+});
+const hiddenTagCount = computed(() =>
+  Math.max(0, (imageStore.availableTags?.length || 0) - visibleTagFilters.value.length)
+);
 
 // Format QR code countdown timer
 const qrCodeTimeRemaining = computed(() => {
@@ -2943,12 +3075,41 @@ const handleDownloadZip = async () => {
   }
 };
 
+const toggleUserMenu = () => {
+  showUserMenu.value = !showUserMenu.value;
+  confirmingSignOut.value = false;
+  if (showUserMenu.value) {
+    showTagPopover.value = false;
+  }
+};
+
+const toggleTagPopover = () => {
+  showTagPopover.value = !showTagPopover.value;
+  if (showTagPopover.value) {
+    showUserMenu.value = false;
+    confirmingSignOut.value = false;
+  }
+};
+
+const confirmSignOut = async () => {
+  confirmingSignOut.value = false;
+  showUserMenu.value = false;
+  await userStore.logout();
+};
+
 const handleClickOutside = () => {
   if (showBulkPresetMenu.value) {
     showBulkPresetMenu.value = false;
   }
   if (showSettingsMenu.value) {
     showSettingsMenu.value = false;
+  }
+  if (showUserMenu.value) {
+    showUserMenu.value = false;
+    confirmingSignOut.value = false;
+  }
+  if (showTagPopover.value) {
+    showTagPopover.value = false;
   }
 };
 
@@ -3012,6 +3173,15 @@ const handleKeyboardShortcuts = (event) => {
     }
     if (showSettingsMenu.value) {
       showSettingsMenu.value = false;
+      return;
+    }
+    if (showUserMenu.value) {
+      showUserMenu.value = false;
+      confirmingSignOut.value = false;
+      return;
+    }
+    if (showTagPopover.value) {
+      showTagPopover.value = false;
       return;
     }
     if (showClearAllConfirm.value) {
@@ -3296,7 +3466,7 @@ body {
   display: flex;
   justify-content: center;
   padding: 0 1rem;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .title-container {
@@ -3389,25 +3559,192 @@ body {
   opacity: 0.9;
 }
 
-.username-display {
-  display: flex;
+/* --- header user chip + menu --- */
+.user-menu-wrap {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.7rem;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 500;
   margin-left: 0.5rem;
 }
 
-.user-icon {
-  font-size: 0.9rem;
-  line-height: 1;
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.username-text {
-  color: rgba(255, 255, 255, 0.95);
+.user-chip:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.user-avatar {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #4338ca;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.user-avatar-lg {
+  width: 2.25rem;
+  height: 2.25rem;
+  font-size: 0.8rem;
+}
+
+.user-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1002;
+  background: #1f2937;
+  color: #fff;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s, visibility 0.15s;
+}
+
+.user-tooltip::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 18px;
+  border: 6px solid transparent;
+  border-bottom-color: #1f2937;
+}
+
+.user-menu-wrap:hover .user-tooltip,
+.user-chip:focus-visible + .user-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 1001;
+  width: 250px;
+  background: #fff;
+  color: #333;
+  border-radius: 10px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+  animation: slideDown 0.18s ease-out;
+}
+
+.user-dropdown-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.user-dropdown-head .user-avatar {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.user-dropdown-id {
+  min-width: 0;
+}
+
+.user-dropdown-id strong {
+  display: block;
+  font-size: 0.88rem;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-dropdown-id span {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-dropdown-action {
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  border: 0;
+  background: #fff;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.user-dropdown-action.danger {
+  color: #dc2626;
+}
+
+.user-dropdown-action.danger:hover {
+  background: #fef2f2;
+}
+
+.user-confirm {
+  padding: 0.85rem;
+}
+
+.user-confirm p {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #374151;
+}
+
+.user-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.btn-secondary-sm,
+.btn-danger-sm {
+  padding: 0.4rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary-sm {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #374151;
+}
+
+.btn-danger-sm {
+  border: 1px solid #dc2626;
+  background: #dc2626;
+  color: #fff;
 }
 
 .image-stats {
@@ -3715,15 +4052,139 @@ body {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-.tag-filter-bar.header-filter::-webkit-scrollbar { height: 4px; }
-.tag-filter-bar.header-filter::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 2px;
+  overflow: visible;
 }
 .tag-filter-bar.header-filter > * { flex: 0 0 auto; }
+
+.tag-filter-more {
+  border-style: dashed;
+  font-weight: 700;
+}
+.tag-more-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.85;
+  margin-left: 0.15rem;
+}
+
+.mobile-filter-button {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mobile-filter-button.active {
+  background: #fff;
+  color: #4338ca;
+  border-color: #fff;
+}
+.mobile-filter-icon { font-size: 0.9rem; }
+.mobile-filter-badge {
+  min-width: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #4338ca;
+  color: #fff;
+  font-size: 0.68rem;
+  line-height: 1.1rem;
+  text-align: center;
+}
+
+/* Tag popover: the full list lives here, so the header never scrolls */
+.tag-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  background: #fff;
+  color: #1f2937;
+  border-radius: 12px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.3);
+  z-index: 1000;
+  overflow: hidden;
+  animation: slideDown 0.18s ease-out;
+}
+.tag-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+.tag-popover-head strong { font-size: 0.88rem; }
+.tag-popover-actions { display: flex; align-items: center; gap: 0.5rem; }
+.tag-popover-clear {
+  border: 0;
+  background: none;
+  color: #4338ca;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tag-popover-clear:disabled { color: #cbd5e1; cursor: default; }
+.tag-popover-close {
+  border: 0;
+  background: #f1f5f9;
+  color: #475569;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+.tag-popover-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.75rem 0.9rem;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.tag-popover-chip {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.tag-popover-chip:hover { background: #e2e8f0; }
+.tag-popover-chip.active {
+  background: #4338ca;
+  color: #fff;
+  border-color: #4338ca;
+  font-weight: 600;
+}
+.tag-popover-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-top: 1px solid #f0f0f0;
+  background: #f8fafc;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+.tag-popover-done {
+  border: 1px solid #4338ca;
+  background: #4338ca;
+  color: #fff;
+  border-radius: 6px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
 .tag-filter-label {
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.85);
@@ -3738,6 +4199,10 @@ body {
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tag-filter-chip:hover { background: rgba(255, 255, 255, 0.22); }
 .tag-filter-chip.active {
@@ -5114,29 +5579,89 @@ body {
   margin-bottom: 0;
 }
 
+@media (max-width: 1024px) {
+  .tag-filter-label,
+  .tag-filter-count {
+    display: none;
+  }
+}
+
 /* Responsive Design - Mobile Optimization */
 @media (max-width: 768px) {
-  /* Header adjustments */
+  /* Header adjustments: two rows, no horizontal scrolling */
   .header-content {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 0.35rem;
+  }
+
+  .header-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: 2.75rem;
+  }
+
+  .header-left .btn-info-icon {
+    display: none;
+  }
+
+  .user-menu-wrap {
+    margin-left: auto;
+  }
+
+  .header-center {
+    order: 2;
+    flex: 1 0 100%;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  .header-right {
+    order: 3;
+    flex: 1 0 100%;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .header-spacer {
+    display: none;
   }
 
   .settings-menu-container {
     position: absolute;
-    top: 1rem;
-    right: 1rem;
-    margin-left: 0;
-  }
-
-  .header-right {
-    width: 100%;
+    top: 0.55rem;
+    right: 0.6rem;
     margin-left: 0;
   }
 
   .toolbar-actions {
     flex-wrap: wrap;
+  }
+
+  .desktop-tag-filter {
+    display: none;
+  }
+
+  .mobile-filter-button {
+    display: inline-flex;
+  }
+
+  .tag-popover {
+    left: 0.5rem;
+    right: 0.5rem;
+    width: auto;
+    transform: none;
+    top: calc(100% + 6px);
+    max-height: 70vh;
+  }
+
+  .tag-popover-grid {
+    max-height: 45vh;
+  }
+
+  .user-dropdown {
+    left: auto;
+    right: 0;
   }
 
   /* Settings dropdown positioning for mobile */
@@ -5216,11 +5741,28 @@ body {
 @media (max-width: 480px) {
   /* Extra small devices */
   .app-header h1 {
-    font-size: 1.8rem;
+    font-size: 1.4rem;
   }
 
   .app-header.compact h1 {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
+  }
+
+  .user-chip {
+    padding: 0.3rem 0.45rem;
+  }
+
+  .user-chip-name {
+    display: none;
+  }
+
+  .mobile-filter-button {
+    font-size: 0.75rem;
+    padding: 0.28rem 0.6rem;
+  }
+
+  .toolbar-actions {
+    gap: 0.3rem;
   }
 
   /* Even smaller modals */
@@ -5578,21 +6120,4 @@ details[open] summary {
   background: #f3f4f6;
 }
 
-.user-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  opacity: 0.85;
-}
-.logout-link {
-  background: none;
-  border: 1px solid #888;
-  color: inherit;
-  padding: 0.1rem 0.5rem;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 0.8rem;
-}
-.logout-link:hover { background: rgba(255,255,255,0.06); }
 </style>
