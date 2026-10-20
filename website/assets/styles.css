@@ -33,8 +33,10 @@ body {
 }
 
 img, svg { max-width: 100%; }
+img { height: auto; }
 
 a { color: var(--accent); text-decoration: none; }
+p a:not([class]) { overflow-wrap: anywhere; }
 a:hover { text-decoration: underline; }
 
 .container {
@@ -286,7 +288,7 @@ figure.shot {
 
 /* ---------- Prose / docs pages ---------- */
 
-.doc-hero { padding: 3rem 0 1.5rem; }
+.doc-hero { padding-top: 3rem; padding-bottom: 1.5rem; }
 .doc-hero h1 { font-size: clamp(1.8rem, 3.5vw, 2.4rem); margin: 0 0 .75rem; letter-spacing: -0.02em; }
 .doc-hero p { color: var(--muted); font-size: 1.1rem; margin: 0; max-width: 46rem; }
 

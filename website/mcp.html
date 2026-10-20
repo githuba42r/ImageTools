@@ -3,16 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MCP server — ImageTools</title>
-  <meta name="description" content="The ImageTools MCP server exposes your recent screenshots to Claude Code and other AI agents over streamable HTTP, so you can say 'use my last 2 screenshots' and have the model reason about them.">
-  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png">
+  <title>ImageTools MCP server — screenshots for AI coding agents</title>
+  <meta name="description" content="The ImageTools MCP server gives Claude Code and other AI agents your recent screenshots over streamable HTTP, so you can say &quot;use my last 2 screenshots&quot;.">
+  <link rel="canonical" href="https://image-tools.a42r.com/mcp.html">
+  <meta name="theme-color" content="#6366f1">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ImageTools">
+  <meta property="og:locale" content="en_AU">
+  <meta property="og:title" content="ImageTools MCP server — screenshots for AI coding agents">
+  <meta property="og:description" content="The ImageTools MCP server gives Claude Code and other AI agents your recent screenshots over streamable HTTP, so you can say &quot;use my last 2 screenshots&quot;.">
+  <meta property="og:url" content="https://image-tools.a42r.com/mcp.html">
+  <meta property="og:image" content="https://image-tools.a42r.com/images/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="ImageTools app icon: self-hosted image compression and editing, with Android, browser and MCP capture.">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+  <link rel="icon" href="images/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
   <header class="site-header">
     <div class="container">
-      <a class="brand" href="index.html"><img src="assets/logo.svg" alt=""> ImageTools</a>
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt="" width="32" height="32"> ImageTools</a>
       <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle navigation">☰</button>
       <nav class="site-nav" id="site-nav">
         <ul>
@@ -159,7 +174,7 @@ curl -sS -X POST "$URL/mcp/" \
     <div class="container">
       <div class="footer-grid">
         <div>
-          <div class="footer-brand"><img src="assets/logo.svg" alt=""> ImageTools</div>
+          <div class="footer-brand"><img src="assets/logo.svg" alt="" width="28" height="28"> ImageTools</div>
           <p>Self-hosted image compression, editing and multi-platform capture. Vue 3 + FastAPI in a single Docker container.</p>
         </div>
         <div>
