@@ -1191,7 +1191,7 @@
                   
                   <a 
                     v-if="currentBrowser.name !== 'Chrome'"
-                    href="https://chromewebstore.google.com/detail/image-tools/hfifkjkojcembklphdammicpfllolooa?hl=en"
+                    href="https://chromewebstore.google.com/detail/imagetools-screenshot-cap/jhgggfgfnpcmifijjijlmpeoimjfdmpo"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="addon-install-link other-browser chrome"
@@ -1935,7 +1935,7 @@ const currentBrowser = computed(() => {
     return { name: 'Firefox', icon: '🦊', storeUrl: 'https://addons.mozilla.org/en-US/firefox/addon/imagetools-screenshot-capture/' };
   } else if (userAgent.indexOf('Chrome/') > -1 || userAgent.indexOf('Edg/') > -1) {
     // Chrome or Edge (Edge users will get Chrome extension)
-    return { name: 'Chrome', icon: '🔵', storeUrl: 'https://chromewebstore.google.com/detail/image-tools/hfifkjkojcembklphdammicpfllolooa?hl=en' };
+    return { name: 'Chrome', icon: '🔵', storeUrl: 'https://chromewebstore.google.com/detail/imagetools-screenshot-cap/jhgggfgfnpcmifijjijlmpeoimjfdmpo' };
   } else if (userAgent.indexOf('Safari/') > -1 && userAgent.indexOf('Chrome') === -1) {
     return { name: 'Safari', icon: '🧭', storeUrl: null };
   } else {
