@@ -1180,7 +1180,7 @@
                 <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
                   <a 
                     v-if="currentBrowser.name !== 'Firefox'"
-                    href="https://addons.mozilla.org/firefox/addon/[addon-slug-here]" 
+                    href="https://addons.mozilla.org/en-US/firefox/addon/imagetools-screenshot-capture/"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="addon-install-link other-browser firefox"
@@ -1191,7 +1191,7 @@
                   
                   <a 
                     v-if="currentBrowser.name !== 'Chrome'"
-                    href="https://chrome.google.com/webstore/detail/[addon-id-here]" 
+                    href="https://chromewebstore.google.com/detail/image-tools/hfifkjkojcembklphdammicpfllolooa?hl=en"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="addon-install-link other-browser chrome"
@@ -1203,8 +1203,7 @@
               </details>
               
               <p style="margin-top: 15px; font-size: 0.85em; color: #666; line-height: 1.5;">
-                💡 <strong>Note:</strong> The addons are ready to use! Click the link above to install for your browser. 
-                The store URLs will be updated once the addons are published.
+                💡 <strong>Note:</strong> The addons are published and ready to use! Click the link above to install for your browser.
               </p>
             </div>
           </div>
@@ -1933,10 +1932,10 @@ const currentBrowser = computed(() => {
   const userAgent = navigator.userAgent;
   
   if (userAgent.indexOf('Firefox/') > -1) {
-    return { name: 'Firefox', icon: '🦊', storeUrl: 'https://addons.mozilla.org/firefox/addon/[addon-slug-here]' };
+    return { name: 'Firefox', icon: '🦊', storeUrl: 'https://addons.mozilla.org/en-US/firefox/addon/imagetools-screenshot-capture/' };
   } else if (userAgent.indexOf('Chrome/') > -1 || userAgent.indexOf('Edg/') > -1) {
     // Chrome or Edge (Edge users will get Chrome extension)
-    return { name: 'Chrome', icon: '🔵', storeUrl: 'https://chrome.google.com/webstore/detail/[addon-id-here]' };
+    return { name: 'Chrome', icon: '🔵', storeUrl: 'https://chromewebstore.google.com/detail/image-tools/hfifkjkojcembklphdammicpfllolooa?hl=en' };
   } else if (userAgent.indexOf('Safari/') > -1 && userAgent.indexOf('Chrome') === -1) {
     return { name: 'Safari', icon: '🧭', storeUrl: null };
   } else {

@@ -47,7 +47,12 @@
       <h1>Browser extensions <span class="grad-text">for Chrome &amp; Firefox</span></h1>
       <p>Capture screenshots from any page and send them straight to ImageTools — or just grab a region to your clipboard. Manifest V3 for Chrome, WebExtensions for Firefox, same capture UX in both.</p>
       <div class="btn-row" style="margin-top:1.5rem">
-        <a class="btn btn-primary" href="#install">Install instructions</a>
+        <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/image-tools/hfifkjkojcembklphdammicpfllolooa?hl=en" rel="noopener">
+          <img src="assets/icons/icon-32.png" alt="" style="height:1.2em;vertical-align:-0.25em"> Install for Chrome ↗
+        </a>
+        <a class="btn btn-primary" href="https://addons.mozilla.org/en-US/firefox/addon/imagetools-screenshot-capture/" rel="noopener">
+          🦊 Install for Firefox ↗
+        </a>
         <a class="btn btn-secondary" href="#pairing">Pairing flow</a>
         <a class="btn btn-secondary" href="https://github.com/githuba42r/ImageTools/tree/master/browser-addons" rel="noopener">Source on GitHub ↗</a>
       </div>
@@ -55,6 +60,23 @@
 
     <section>
       <div class="container prose">
+        <h2>Get the extensions</h2>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="icon">🔵</div>
+            <h3>Chrome / Chromium / Edge</h3>
+            <p>Published on the Chrome Web Store. Works in any Chromium-based browser including Edge and Brave.</p>
+            <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/image-tools/hfifkjkojcembklphdammicpfllolooa?hl=en" rel="noopener">Add to Chrome ↗</a>
+          </div>
+          <div class="card">
+            <div class="icon">🦊</div>
+            <h3>Firefox</h3>
+            <p>Published on Mozilla Add-ons (AMO). Signed by Mozilla — installs persist across restarts.</p>
+            <a class="btn btn-primary" href="https://addons.mozilla.org/en-US/firefox/addon/imagetools-screenshot-capture/" rel="noopener">Add to Firefox ↗</a>
+          </div>
+        </div>
+        <p style="margin-top:0.75rem">Alternatively grab the source from <a href="https://github.com/githuba42r/ImageTools/tree/master/browser-addons" rel="noopener">GitHub</a> and build manually — see the developer install notes below.</p>
+
         <h2>Features</h2>
         <div class="grid grid-3">
           <div class="card">
@@ -118,8 +140,8 @@
         </div>
         <p>The addon talks to these backend endpoints: <code>POST /api/v1/addon/authorize</code>, <code>/token</code>, <code>/refresh</code>, <code>/upload</code>, plus list/revoke endpoints for managing authorizations.</p>
 
-        <h2 id="install">Install instructions</h2>
-        <p>Store publishing is on the roadmap; for now both extensions are installed manually from the repo.</p>
+        <h2 id="install">Developer install</h2>
+        <p>Both extensions are published on the <a href="https://chromewebstore.google.com/detail/image-tools/hfifkjkojcembklphdammicpfllolooa?hl=en" rel="noopener">Chrome Web Store</a> and <a href="https://addons.mozilla.org/en-US/firefox/addon/imagetools-screenshot-capture/" rel="noopener">Mozilla Add-ons</a> — use those for normal installs. The steps below are for loading the development build directly from the repo.</p>
 
         <h3>Chrome / Chromium</h3>
         <ol>
@@ -136,7 +158,7 @@
           <li>Open <code>about:debugging</code> in Firefox.</li>
           <li>Click <strong>This Firefox</strong> → <strong>Load Temporary Add-on</strong>.</li>
           <li>Select the <code>manifest.json</code> file inside the <code>firefox</code> folder.</li>
-          <li>Note: temporary add-ons are removed when Firefox closes — reload the same way after a restart (signed XPI packaging is on the roadmap).</li>
+          <li>Note: temporary add-ons are removed when Firefox closes — for a persistent install, use the signed add-on from <a href="https://addons.mozilla.org/en-US/firefox/addon/imagetools-screenshot-capture/" rel="noopener">Mozilla Add-ons</a>.</li>
         </ol>
 
         <h2>Capture UX in detail</h2>
