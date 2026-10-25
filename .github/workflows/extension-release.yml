@@ -46,6 +46,11 @@ concurrency:
   group: extension-release-${{ github.ref }}
   cancel-in-progress: false
 
+# Optional success-notification secrets (email sent after a successful publish):
+#   RELEASE_NOTIFY_EMAIL / SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS / SMTP_FROM
+env:
+  NOTIFY_ENABLED: ${{ secrets.RELEASE_NOTIFY_EMAIL != '' && secrets.SMTP_HOST != '' && secrets.SMTP_USER != '' && secrets.SMTP_PASS != '' && secrets.SMTP_FROM != '' }}
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -293,3 +298,42 @@ jobs:
           name: firefox-extension-${{ needs.prepare.outputs.firefox_version }}
           path: dist/imagetools-firefox-*.xpi
           if-no-files-found: error
+
+  notify:
+    name: Publication notification
+    needs: [prepare, chrome, firefox]
+    if: >-
+      always() &&
+      (needs.chrome.result == 'success' || needs.firefox.result == 'success') &&
+      env.NOTIFY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send success email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT || 465 }}
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASS }}
+          from: "GitHub Actions <${{ secrets.SMTP_FROM }}>"
+          to: ${{ secrets.RELEASE_NOTIFY_EMAIL }}
+          subject: "[ImageTools] browser extension published"
+          html_body: |
+            <h2>ImageTools — browser extension publication</h2>
+            <ul>
+              <li>Chrome Web Store: ${{ needs.chrome.result == 'success' && format('published version {0}', needs.prepare.outputs.chrome_version) || 'not published this run' }}
+                — <a href="https://chromewebstore.google.com/detail/${{ secrets.CHROME_EXTENSION_ID }}" target="_blank">listing</a></li>
+              <li>Firefox Add-ons (AMO): ${{ needs.firefox.result == 'success' && format('submitted version {0}', needs.prepare.outputs.firefox_version) || 'not published this run' }}
+                — <a href="https://addons.mozilla.org/firefox/addon/imagetools/" target="_blank">listing</a></li>
+            </ul>
+            <p><u>Links</u></p>
+            <ul>
+              <li><b>Publish log:</b>
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">
+                  workflow run ${{ github.run_number }}</a></li>
+              <li><b>Chrome Web Store developer dashboard:</b>
+                <a href="https://chrome.google.com/webstore/devconsole" target="_blank">devconsole</a></li>
+              <li><b>AMO developer hub:</b>
+                <a href="https://addons.mozilla.org/developers/" target="_blank">addons.mozilla.org/developers</a></li>
+            </ul>
+          convert_markdown: false

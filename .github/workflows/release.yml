@@ -50,6 +50,7 @@ concurrency:
 
 env:
   RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
+  NOTIFY_ENABLED: ${{ secrets.RELEASE_NOTIFY_EMAIL != '' && secrets.SMTP_HOST != '' && secrets.SMTP_USER != '' && secrets.SMTP_PASS != '' && secrets.SMTP_FROM != '' }}
 
 jobs:
   plan:
@@ -323,3 +324,38 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" "${args[@]}"
           fi
           gh release upload "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Send success email
+        if: env.NOTIFY_ENABLED == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT || 465 }}
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASS }}
+          from: "GitHub Actions <${{ secrets.SMTP_FROM }}>"
+          to: ${{ secrets.RELEASE_NOTIFY_EMAIL }}
+          subject: "[ImageTools] v${{ env.VERSION }} built & released"
+          html_body: |
+            <h2>ImageTools — release v${{ env.VERSION }} is built and published</h2>
+            <p>Release <b>${{ env.TAG }}</b> was published as a <b>GitHub Release</b> carrying the
+            Android APK, the Docker image, the browser extension packages and the MCP server wheel.</p>
+            <h3>Publication links</h3>
+            <ul>
+              <li><b>Chrome Web Store</b> (ImageTools extension):
+                <a href="https://chromewebstore.google.com/detail/${{ secrets.CHROME_EXTENSION_ID }}" target="_blank">listing</a></li>
+              <li><b>Firefox Add-ons</b> (ImageTools extension):
+                <a href="https://addons.mozilla.org/firefox/addon/imagetools/" target="_blank">listing</a></li>
+              <li><b>Docker image:</b> <code>ghcr.io/githuba42r/imagetools:${{ env.VERSION }}</code></li>
+            </ul>
+            <p><u>Links</u></p>
+            <ul>
+              <li><b>GitHub Release</b> (downloads / release notes):
+                <a href="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ env.TAG }}">
+                  ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ env.TAG }}</a></li>
+              <li><b>Build log:</b>
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">
+                  ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}</a></li>
+              <li><b>Website:</b> <a href="https://image-tools.a42r.com/" target="_blank">https://image-tools.a42r.com/</a></li>
+            </ul>
+          convert_markdown: false
