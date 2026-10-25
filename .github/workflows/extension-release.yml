@@ -324,16 +324,16 @@ jobs:
               <li>Chrome Web Store: ${{ needs.chrome.result == 'success' && format('published version {0}', needs.prepare.outputs.chrome_version) || 'not published this run' }}
                 — <a href="https://chromewebstore.google.com/detail/${{ secrets.CHROME_EXTENSION_ID }}" target="_blank">listing</a></li>
               <li>Firefox Add-ons (AMO): ${{ needs.firefox.result == 'success' && format('submitted version {0}', needs.prepare.outputs.firefox_version) || 'not published this run' }}
-                — <a href="https://addons.mozilla.org/firefox/addon/imagetools/" target="_blank">listing</a></li>
+                — <a href="https://addons.mozilla.org/firefox/addon/imagetools-screenshot-capture/" target="_blank">listing</a></li>
             </ul>
             <p><u>Links</u></p>
             <ul>
               <li><b>Publish log:</b>
                 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">
                   workflow run ${{ github.run_number }}</a></li>
-              <li><b>Chrome Web Store developer dashboard:</b>
-                <a href="https://chrome.google.com/webstore/devconsole" target="_blank">devconsole</a></li>
-              <li><b>AMO developer hub:</b>
-                <a href="https://addons.mozilla.org/developers/" target="_blank">addons.mozilla.org/developers</a></li>
+              <li><b>Chrome Web Store developer console</b> (this extension):
+                <a href="https://chrome.google.com/webstore/devconsole/e3ff8f6a-e912-4266-a684-672effc30d28/${{ secrets.CHROME_EXTENSION_ID }}/edit" target="_blank">manage item</a></li>
+              <li><b>AMO developer hub</b> (this add-on):
+                <a href="https://addons.mozilla.org/en-US/developers/addon/imagetools-screenshot-capture/edit" target="_blank">manage add-on</a></li>
             </ul>
           convert_markdown: false
