@@ -347,6 +347,8 @@ jobs:
               <li><b>Firefox Add-ons</b> (ImageTools extension):
                 <a href="https://addons.mozilla.org/firefox/addon/imagetools/" target="_blank">listing</a></li>
               <li><b>Docker image:</b> <code>ghcr.io/githuba42r/imagetools:${{ env.VERSION }}</code></li>
+              <li><b>Google Play Console</b> (Android app internal-testing track):
+                <a href="${{ secrets.PLAY_CONSOLE_LINK || 'https://play.google.com/console/' }}" target="_blank">Open track</a></li>
             </ul>
             <p><u>Links</u></p>
             <ul>
